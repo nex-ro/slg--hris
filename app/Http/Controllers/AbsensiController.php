@@ -10,6 +10,9 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
+use App\Exports\AbsensiExport;
+use Maatwebsite\Excel\Facades\Excel;
+use App\Exports\KateringExport;
 
 class AbsensiController extends Controller
 {
@@ -136,4 +139,97 @@ public function storeInputTidak(Request $request)
         return redirect()->back()->with('error', 'Gagal menyimpan data: ' . $e->getMessage());
     }
 }
+   
+
+    public function printAbsensi(Request $request)
+{
+    try {
+        $data = $request->all();
+        $tanggal = $data['tanggal'] ?? null;
+        $tower = $data['tower'] ?? null;
+        $kehadiran = $data['kehadiran'] ?? [];        
+        $dataAbsensi = [];
+        foreach ($kehadiran as $item) {
+            // Ambil data user dari nested object
+            $user = $item['user'] ?? null;
+            
+            if ($user) {
+                $dataAbsensi[] = [
+                    'tanggal' => $item['tanggal'] ?? $tanggal,
+                    'tower' => $item['tower'] ?? $tower,
+                    'tmk' => $user['tmk'] ?? '-',
+                    'nama' => $user['name'] ?? '-',
+                    'divisi' => $user['divisi'] ?? '-',
+                    'jabatan' => $user['jabatan'] ?? '-',
+                    'status' => $item['status'] ?? 'N/A',
+                    'jam_kedatangan' => $item['jam_kedatangan'] ?? '-',
+                    'jam_pulang' => $item['jam_pulang'] ?? '-',
+                    'keterangan' => $item['keterangan'] ?? '-',
+                ];
+            }
+        }
+        
+        // Pastikan ada data sebelum export
+        if (empty($dataAbsensi)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak ada data untuk diekspor'
+            ], 400);
+        }
+        
+        // Generate file Excel
+        $fileName = 'Absensi_' . $tower . '_' . $tanggal . '.xlsx';
+
+        return Excel::download(
+            new AbsensiExport($dataAbsensi, $tanggal, $tower), 
+            $fileName
+        );
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
+    public function printKatering(Request $request)
+    {
+        $tanggal = $request->tanggal;
+        $tower = $request->tower;
+        $kehadiran = $request->kehadiran;
+        
+        // Validasi data
+        if (empty($kehadiran) || empty($tower) || empty($tanggal)) {
+            return response()->json([
+                'error' => 'Data tidak lengkap'
+            ], 400);
+        }
+
+        try {
+            // Generate nama file
+            $fileName = "Katering_{$tower}_" . date('Y-m-d', strtotime($tanggal)) . ".xlsx";
+            
+            // Export Excel
+            return Excel::download(
+                new KateringExport($kehadiran, $tower, $tanggal), 
+                $fileName
+            );
+            
+        } catch (\Exception $e) {
+            \Log::error('Error generating katering report: ' . $e->getMessage());
+            
+            return response()->json([
+                'error' => 'Gagal membuat laporan katering',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+
+
+
+ 
+    public function dokumen()
+    {
+        return Inertia::render('Hrd/Absen/Dokumen', []);
+    }
 }

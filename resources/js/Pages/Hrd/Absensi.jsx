@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Users, Clock, CheckCircle, XCircle, AlertCircle, Search, Filter, Layout } from 'lucide-react';
+import { Calendar, Users, Clock, CheckCircle, XCircle, AlertCircle, Search, Filter, Layout, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
 import LayoutTemplate from '@/Layouts/LayoutTemplate';
 
 function Absensi() {
@@ -11,7 +11,100 @@ function Absensi() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
+const handlePrintAbsensi = async () => {
+  try {
+    const response = await fetch('/print-absensi', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        tanggal: formatDateForAPI(selectedDate),
+        tower: activeTower,
+        kehadiran: currentKehadiran
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    
+    // Buat element anchor untuk download
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Absensi_${activeTower}_${formatDateForAPI(selectedDate)}.xlsx`;
+    
+    // Trigger download
+    document.body.appendChild(a);
+    a.click();
+    
+    // Cleanup
+    document.body.removeChild(a);
+    window.URL.revokeObjectURL(url);
+    
+    console.log('File downloaded successfully');
+    
+  } catch (error) {
+    console.error('Error print absensi:', error);
+    alert(`Error: ${error.message}`);
+  }
+};
+
+  const handlePrintKatering = async () => {
+    try {
+      const response = await fetch('/print-katering', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          tanggal: formatDateForAPI(selectedDate),
+          tower: activeTower,
+          kehadiran: currentKehadiran
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      
+      // Buat element anchor untuk download
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Katering_${activeTower}_${formatDateForAPI(selectedDate)}.xlsx`;
+      
+      // Trigger download
+      document.body.appendChild(a);
+      a.click();
+      
+      // Cleanup
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      
+      console.log('File katering downloaded successfully');
+      
+    } catch (error) {
+      console.error('Error print katering:', error);
+      alert(`Error: ${error.message}`);
+    }
+  };
   const statusOptions = [
     { value: 'all', label: 'Semua Status', desc: 'Tampilkan semua data', color: 'bg-gray-500', textColor: 'text-white', borderColor: 'border-gray-500' },
     { value: 'On Time', label: 'On Time', desc: 'Hadir tepat waktu', color: 'bg-green-600', textColor: 'text-white', borderColor: 'border-green-600' },
@@ -19,7 +112,6 @@ function Absensi() {
     { value: 'N/A', label: 'N/A', desc: 'Status tidak tersedia', color: 'bg-gray-600', textColor: 'text-white', borderColor: 'border-gray-600' },
     { value: 'C1', label: 'Cuti Full Day', desc: 'Mengambil cuti seharian penuh', color: 'bg-green-500', textColor: 'text-white', borderColor: 'border-green-500' },
     { value: 'C2', label: 'Cuti Setengah Hari', desc: 'Mengambil cuti setengah hari', color: 'bg-green-400', textColor: 'text-white', borderColor: 'border-green-400' },
-
     { value: 'P1', label: 'Ijin Full Day', desc: 'Izin tidak masuk kerja seharian', color: 'bg-blue-500', textColor: 'text-white', borderColor: 'border-blue-500' },
     { value: 'P2', label: 'Ijin Setengah Hari', desc: 'Izin tidak masuk setengah hari', color: 'bg-blue-400', textColor: 'text-white', borderColor: 'border-blue-400' },
     { value: 'P3', label: 'Ijin Keluar Kantor', desc: 'Izin keluar kantor sementara', color: 'bg-blue-300', textColor: 'text-blue-900', borderColor: 'border-blue-300' },
@@ -34,6 +126,11 @@ function Absensi() {
   useEffect(() => {
     fetchKehadiranData(selectedDate);
   }, [selectedDate]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, activeTower]);
 
   const fetchKehadiranData = async (date) => {
     setLoading(true);
@@ -61,7 +158,7 @@ function Absensi() {
       }
       
       const data = await response.json();
-      
+      console.log('Fetched kehadiran data:', data);
       const groupedByTower = data.reduce((acc, item) => {
         const tower = item.tower || 'Tanpa Tower';
         if (!acc[tower]) {
@@ -165,282 +262,406 @@ function Absensi() {
     });
   };
 
+  // Pagination logic
+  const getPaginatedData = (data) => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    const endIndex = startIndex + itemsPerPage;
+    return data.slice(startIndex, endIndex);
+  };
+
+  const getTotalPages = (totalItems) => {
+    return Math.ceil(totalItems / itemsPerPage);
+  };
+
+  const handlePageChange = (page) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const { daysInMonth, startingDayOfWeek } = getDaysInMonth(currentMonth);
   const days = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
   
   const towers = Object.keys(kehadiranData);
   const currentKehadiran = kehadiranData[activeTower] || [];
   const filteredKehadiran = filterKehadiranData(currentKehadiran);
+  const paginatedKehadiran = getPaginatedData(filteredKehadiran);
+  const totalPages = getTotalPages(filteredKehadiran.length);
 
   const activeStatusOption = statusOptions.find(s => s.value === statusFilter) || statusOptions[0];
 
   return (
     <LayoutTemplate>
-    <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header Section */}
-        <div className="mb-8">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="bg-indigo-600 p-2.5 rounded-xl shadow-lg">
-              <Calendar className="w-7 h-7 text-white" />
-            </div>
-            <h1 className="text-3xl font-bold text-gray-800">Data Kehadiran</h1>
-          </div>
-          <p className="text-gray-600 ml-14">Pilih tanggal untuk melihat data kehadiran karyawan</p>
-        </div>
-
-        <div className="grid lg:grid-cols-3 gap-6">
-          {/* Left Column - Calendar */}
-          <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-5 sticky top-4">
-              {/* Calendar Header */}
-              <div className="flex items-center justify-between mb-5 pb-4 border-b border-gray-100">
-                <button
-                  onClick={handlePrevMonth}
-                  className="p-2 hover:bg-indigo-50 rounded-lg transition text-indigo-600"
-                  title="Bulan Sebelumnya"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <h2 className="text-base font-bold text-gray-800">
-                  {currentMonth.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
-                </h2>
-                <button
-                  onClick={handleNextMonth}
-                  className="p-2 hover:bg-indigo-50 rounded-lg transition text-indigo-600"
-                  title="Bulan Berikutnya"
-                >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
+      <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          {/* Header Section */}
+          <div className="mb-8">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="bg-indigo-600 p-2.5 rounded-xl shadow-lg">
+                <Calendar className="w-7 h-7 text-white" />
               </div>
+              <h1 className="text-3xl font-bold text-gray-800">Data Kehadiran</h1>
+            </div>
+            <p className="text-gray-600 ml-14">Pilih tanggal untuk melihat data kehadiran karyawan</p>
+          </div>
 
-              {/* Calendar Grid */}
-              <div className="grid grid-cols-7 gap-1.5">
-                {days.map((day) => (
-                  <div key={day} className="text-center font-bold text-gray-500 py-2 text-xs">
-                    {day}
-                  </div>
-                ))}
-                
-                {Array.from({ length: startingDayOfWeek }).map((_, i) => (
-                  <div key={`empty-${i}`} className="aspect-square" />
-                ))}
-                
-                {Array.from({ length: daysInMonth }).map((_, i) => {
-                  const day = i + 1;
-                  return (
-                    <button
-                      key={day}
-                      onClick={() => handleDateClick(day)}
-                      className={`aspect-square rounded-lg flex items-center justify-center font-semibold transition-all text-sm
-                        ${isSelectedDate(day) 
-                          ? 'bg-indigo-600 text-white shadow-lg scale-105 ring-2 ring-indigo-300' 
-                          : isToday(day) 
-                          ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-400' 
-                          : 'bg-gray-50 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600'
-                        }`}
-                    >
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Left Column - Calendar */}
+            <div className="lg:col-span-1">
+              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-5 sticky top-4">
+                {/* Calendar Header */}
+                <div className="flex items-center justify-between mb-5 pb-4 border-b border-gray-100">
+                  <button
+                    onClick={handlePrevMonth}
+                    className="p-2 hover:bg-indigo-50 rounded-lg transition text-indigo-600"
+                    title="Bulan Sebelumnya"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                    </svg>
+                  </button>
+                  <h2 className="text-base font-bold text-gray-800">
+                    {currentMonth.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+                  </h2>
+                  <button
+                    onClick={handleNextMonth}
+                    className="p-2 hover:bg-indigo-50 rounded-lg transition text-indigo-600"
+                    title="Bulan Berikutnya"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Calendar Grid */}
+                <div className="grid grid-cols-7 gap-1.5">
+                  {days.map((day) => (
+                    <div key={day} className="text-center font-bold text-gray-500 py-2 text-xs">
                       {day}
-                    </button>
-                  );
-                })}
-              </div>
+                    </div>
+                  ))}
+                  
+                  {Array.from({ length: startingDayOfWeek }).map((_, i) => (
+                    <div key={`empty-${i}`} className="aspect-square" />
+                  ))}
+                  
+                  {Array.from({ length: daysInMonth }).map((_, i) => {
+                    const day = i + 1;
+                    return (
+                      <button
+                        key={day}
+                        onClick={() => handleDateClick(day)}
+                        className={`aspect-square rounded-lg flex items-center justify-center font-semibold transition-all text-sm
+                          ${isSelectedDate(day) 
+                            ? 'bg-indigo-600 text-white shadow-lg scale-105 ring-2 ring-indigo-300' 
+                            : isToday(day) 
+                            ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-400' 
+                            : 'bg-gray-50 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600'
+                          }`}
+                      >
+                        {day}
+                      </button>
+                    );
+                  })}
+                </div>
 
-              {/* Selected Date Info */}
-              <div className="mt-5 pt-5 border-t border-gray-100">
-                <p className="text-xs text-gray-500 mb-1">Tanggal Dipilih</p>
-                <p className="text-sm font-bold text-indigo-600">
-                  {formatDateDisplay(selectedDate)}
-                </p>
+                {/* Selected Date Info */}
+                <div className="mt-5 pt-5 border-t border-gray-100">
+                  <p className="text-xs text-gray-500 mb-1">Tanggal Dipilih</p>
+                  <p className="text-sm font-bold text-indigo-600">
+                    {formatDateDisplay(selectedDate)}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Right Column - Kehadiran Data */}
-          <div className="lg:col-span-2">
-            {loading ? (
-              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
-                <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600"></div>
-                <p className="mt-4 text-gray-600 font-medium">Memuat data kehadiran...</p>
-              </div>
-            ) : towers.length === 0 ? (
-              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
-                <div className="bg-gray-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <AlertCircle className="w-10 h-10 text-gray-400" />
+            {/* Right Column - Kehadiran Data */}
+            <div className="lg:col-span-2">
+              {loading ? (
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
+                  <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600"></div>
+                  <p className="mt-4 text-gray-600 font-medium">Memuat data kehadiran...</p>
                 </div>
-                <h3 className="text-lg font-bold text-gray-800 mb-2">Tidak Ada Data</h3>
-                <p className="text-gray-600">Tidak ada data kehadiran untuk tanggal yang dipilih</p>
-              </div>
-            ) : (
-              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
-                {/* Tower Navigation Tabs */}
-                <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 px-6 py-4">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {towers.map((tower) => (
-                      <button
-                        key={tower}
-                        onClick={() => setActiveTower(tower)}
-                        className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
-                          activeTower === tower
-                            ? 'bg-white text-indigo-600 shadow-lg'
-                            : 'bg-white/20 text-white hover:bg-white/30'
-                        }`}
-                      >
-                        {tower}
-                      </button>
-                    ))}
+              ) : towers.length === 0 ? (
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
+                  <div className="bg-gray-100 w-20 h-20 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <AlertCircle className="w-10 h-10 text-gray-400" />
                   </div>
-                  <div className="flex items-center gap-2 mt-3">
-                    <Users className="w-4 h-4 text-indigo-100" />
-                    <p className="text-indigo-100 text-sm">
-                      Total {filteredKehadiran.length} dari {currentKehadiran.length} karyawan
-                    </p>
-                  </div>
+                  <h3 className="text-lg font-bold text-gray-800 mb-2">Tidak Ada Data</h3>
+                  <p className="text-gray-600">Tidak ada data kehadiran untuk tanggal yang dipilih</p>
                 </div>
-
-                {/* Search and Filter Section */}
-                <div className="p-5 bg-gray-50 border-b border-gray-200">
-                  <div className="flex gap-3 flex-wrap">
-                    {/* Search Box */}
-                    <div className="flex-1 min-w-[200px]">
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                          type="text"
-                          placeholder="Cari nama atau ID karyawan..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
-                        />
-                      </div>
+              ) : (
+                <div className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden">
+                  {/* Tower Navigation Tabs */}
+                  <div className="bg-gradient-to-r from-indigo-600 to-indigo-500 px-6 py-4">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {towers.map((tower) => (
+                        <button
+                          key={tower}
+                          onClick={() => setActiveTower(tower)}
+                          className={`px-4 py-2 rounded-lg font-semibold text-sm transition-all ${
+                            activeTower === tower
+                              ? 'bg-white text-indigo-600 shadow-lg'
+                              : 'bg-white/20 text-white hover:bg-white/30'
+                          }`}
+                        >
+                          {tower}
+                        </button>
+                      ))}
                     </div>
-
-                    {/* Status Filter Dropdown */}
-                    <div className="relative">
-                      <button
-                        onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                        className={`flex items-center gap-2 px-4 py-2.5 border rounded-lg font-medium text-sm transition-all ${
-                          statusFilter === 'all' 
-                            ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50' 
-                            : `${activeStatusOption.color} ${activeStatusOption.textColor} border-transparent shadow-md`
-                        }`}
-                      >
-                        <Filter className="w-4 h-4" />
-                        <span>{activeStatusOption.label}</span>
-                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                        </svg>
-                      </button>
-
-                      {showFilterDropdown && (
-                        <>
-                          <div 
-                            className="fixed inset-0 z-10" 
-                            onClick={() => setShowFilterDropdown(false)}
-                          />
-                          <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 z-20 max-h-[400px] overflow-y-auto">
-                            <div className="p-2">
-                              {statusOptions.map((option) => (
-                                <button
-                                  key={option.value}
-                                  onClick={() => {
-                                    setStatusFilter(option.value);
-                                    setShowFilterDropdown(false);
-                                  }}
-                                  className={`w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-all ${
-                                    statusFilter === option.value ? 'bg-indigo-50' : ''
-                                  }`}
-                                >
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="font-semibold text-sm text-gray-800">{option.label}</span>
-                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${option.color} ${option.textColor}`}>
-                                      {option.value === 'all' ? 'All' : option.value}
-                                    </span>
-                                  </div>
-                                  <p className="text-xs text-gray-500">{option.desc}</p>
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Reset Filters */}
-                    {(searchQuery || statusFilter !== 'all') && (
-                      <button
-                        onClick={() => {
-                          setSearchQuery('');
-                          setStatusFilter('all');
-                        }}
-                        className="px-4 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all text-sm font-medium"
-                      >
-                        Reset
-                      </button>
-                    )}
-                  </div>
-                </div>
-                
-                {/* Kehadiran List */}
-                <div className="p-5 space-y-3">
-                  {filteredKehadiran.length === 0 ? (
-                    <div className="text-center py-8 text-gray-500">
-                      <AlertCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                      <p className="font-medium">
-                        {searchQuery || statusFilter !== 'all' 
-                          ? 'Tidak ada data yang sesuai dengan filter' 
-                          : 'Tidak ada data kehadiran untuk tower ini'}
+                    <div className="flex items-center gap-2 mt-3">
+                      <Users className="w-4 h-4 text-indigo-100" />
+                      <p className="text-indigo-100 text-sm">
+                        Menampilkan {paginatedKehadiran.length} dari {filteredKehadiran.length} karyawan
+                        {filteredKehadiran.length !== currentKehadiran.length && ` (Total: ${currentKehadiran.length})`}
                       </p>
                     </div>
-                  ) : (
-                    filteredKehadiran.map((item, idx) => (
-                      <div 
-                        key={idx} 
-                        className="border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-indigo-200 transition-all bg-gradient-to-r from-gray-50 to-white"
+                  </div>
+
+                  {/* Print Buttons Row */}
+                  <div className="p-5 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200">
+                    <div className="flex gap-3 flex-wrap">
+                      <button
+                        onClick={handlePrintAbsensi}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-all text-sm font-medium shadow-md"
                       >
-                        <div className="flex items-start justify-between gap-4 mb-3">
-                          <div className="flex items-center gap-3">
-                            <div className="bg-indigo-100 text-indigo-600 w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm">
-                              {(item.user?.name || 'U').charAt(0).toUpperCase()}
-                            </div>
-                            <div>
-                              <h4 className="font-bold text-gray-800">
-                                {item.user?.name || 'Nama Tidak Tersedia'}
-                              </h4>
-                              <p className="text-xs text-gray-500">ID: {item.user?.id || '-'}</p>
-                            </div>
-                          </div>
-                          {getStatusBadge(item.status)}
-                        </div>
-                        
-                        <div className="flex flex-wrap gap-4 text-sm">
-                          <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg">
-                            <Clock className="w-4 h-4 text-green-600" />
-                            <span className="font-medium">Masuk:</span>
-                            <span className="font-bold text-gray-800">{item.jam_kedatangan || '-'}</span>
-                          </div>
-                          <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg">
-                            <Clock className="w-4 h-4 text-orange-600" />
-                            <span className="font-medium">Pulang:</span>
-                            <span className="font-bold text-gray-800">{item.jam_pulang || '-'}</span>
-                          </div>
+                        <Printer className="w-4 h-4" />
+                        <span>Print Absensi</span>
+                      </button>
+
+                      <button
+                        onClick={handlePrintKatering}
+                        className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-all text-sm font-medium shadow-md"
+                      >
+                        <Printer className="w-4 h-4" />
+                        <span>Print Katering</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Search and Filter Section */}
+                  <div className="p-5 bg-gray-50 border-b border-gray-200">
+                    <div className="flex gap-3 flex-wrap">
+                      {/* Search Box */}
+                      <div className="flex-1 min-w-[200px]">
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                          <input
+                            type="text"
+                            placeholder="Cari nama atau ID karyawan..."
+                            value={searchQuery}
+                            onChange={(e) => setSearchQuery(e.target.value)}
+                            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent text-sm"
+                          />
                         </div>
                       </div>
-                    ))
+
+                      {/* Status Filter Dropdown */}
+                      <div className="relative">
+                        <button
+                          onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                          className={`flex items-center gap-2 px-4 py-2.5 border rounded-lg font-medium text-sm transition-all ${
+                            statusFilter === 'all' 
+                              ? 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50' 
+                              : `${activeStatusOption.color} ${activeStatusOption.textColor} border-transparent shadow-md`
+                          }`}
+                        >
+                          <Filter className="w-4 h-4" />
+                          <span>{activeStatusOption.label}</span>
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                          </svg>
+                        </button>
+
+                        {showFilterDropdown && (
+                          <>
+                            <div 
+                              className="fixed inset-0 z-10" 
+                              onClick={() => setShowFilterDropdown(false)}
+                            />
+                            <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-2xl border border-gray-200 z-20 max-h-[400px] overflow-y-auto">
+                              <div className="p-2">
+                                {statusOptions.map((option) => (
+                                  <button
+                                    key={option.value}
+                                    onClick={() => {
+                                      setStatusFilter(option.value);
+                                      setShowFilterDropdown(false);
+                                    }}
+                                    className={`w-full text-left px-3 py-2.5 rounded-lg hover:bg-gray-50 transition-all ${
+                                      statusFilter === option.value ? 'bg-indigo-50' : ''
+                                    }`}
+                                  >
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="font-semibold text-sm text-gray-800">{option.label}</span>
+                                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${option.color} ${option.textColor}`}>
+                                        {option.value === 'all' ? 'All' : option.value}
+                                      </span>
+                                    </div>
+                                    <p className="text-xs text-gray-500">{option.desc}</p>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Items Per Page Selector */}
+                  
+
+                      {/* Reset Filters */}
+                      {(searchQuery || statusFilter !== 'all') && (
+                        <button
+                          onClick={() => {
+                            setSearchQuery('');
+                            setStatusFilter('all');
+                          }}
+                          className="px-4 py-2.5 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all text-sm font-medium"
+                        >
+                          Reset
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  
+                  {/* Kehadiran List */}
+                  <div className="p-5 space-y-3">
+                    {filteredKehadiran.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        <AlertCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                        <p className="font-medium">
+                          {searchQuery || statusFilter !== 'all' 
+                            ? 'Tidak ada data yang sesuai dengan filter' 
+                            : 'Tidak ada data kehadiran untuk tower ini'}
+                        </p>
+                      </div>
+                    ) : (
+                      <>
+                        {paginatedKehadiran.map((item, idx) => (
+                          <div 
+                            key={idx} 
+                            className="border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-indigo-200 transition-all bg-gradient-to-r from-gray-50 to-white"
+                          >
+                            <div className="flex items-start justify-between gap-4 mb-3">
+                              <div className="flex items-center gap-3">
+                                <div className="bg-indigo-100 text-indigo-600 w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm">
+                                  {(item.user?.name || 'U').charAt(0).toUpperCase()}
+                                </div>
+                                <div>
+                                  <h4 className="font-bold text-gray-800">
+                                    {item.user?.name || 'Nama Tidak Tersedia'}
+                                  </h4>
+                                  <p className="text-xs text-gray-500">ID: {item.user?.id || '-'}</p>
+                                </div>
+                              </div>
+                              {getStatusBadge(item.status)}
+                            </div>
+                            
+                            <div className="flex flex-wrap gap-4 text-sm">
+                              <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg">
+                                <Clock className="w-4 h-4 text-green-600" />
+                                <span className="font-medium">Masuk:</span>
+                                <span className="font-bold text-gray-800">{item.jam_kedatangan || '-'}</span>
+                              </div>
+                              <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg">
+                                <Clock className="w-4 h-4 text-orange-600" />
+                                <span className="font-medium">Pulang:</span>
+                                <span className="font-bold text-gray-800">{item.jam_pulang || '-'}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </>
+                    )}
+                  </div>
+
+                  {/* Pagination Controls */}
+                  {filteredKehadiran.length > 0 && totalPages > 1 && (
+                    <div className="p-5 border-t border-gray-200 bg-gray-50">
+                      <div className="flex items-center justify-between flex-wrap gap-4">
+                        {/* Page Info */}
+                        <div className="text-sm text-gray-600">
+                          Halaman <span className="font-bold text-gray-800">{currentPage}</span> dari{' '}
+                          <span className="font-bold text-gray-800">{totalPages}</span>
+                        </div>
+
+                        {/* Pagination Buttons */}
+                        <div className="flex items-center gap-2">
+                          {/* Previous Button */}
+                          <button
+                            onClick={() => handlePageChange(currentPage - 1)}
+                            disabled={currentPage === 1}
+                            className={`flex items-center gap-1 px-3 py-2 rounded-lg font-medium text-sm transition-all ${
+                              currentPage === 1
+                                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600'
+                            }`}
+                          >
+                            <ChevronLeft className="w-4 h-4" />
+                            <span>Prev</span>
+                          </button>
+
+                          {/* Page Numbers */}
+                          <div className="flex gap-1">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
+                              // Show first page, last page, current page, and pages around current
+                              const showPage = 
+                                page === 1 || 
+                                page === totalPages || 
+                                (page >= currentPage - 1 && page <= currentPage + 1);
+
+                              if (!showPage && page === 2) {
+                                return <span key={page} className="px-2 py-2 text-gray-400">...</span>;
+                              }
+                              if (!showPage && page === totalPages - 1) {
+                                return <span key={page} className="px-2 py-2 text-gray-400">...</span>;
+                              }
+                              if (!showPage) {
+                                return null;
+                              }
+
+                              return (
+                                <button
+                                  key={page}
+                                  onClick={() => handlePageChange(page)}
+                                  className={`px-3 py-2 rounded-lg font-medium text-sm transition-all ${
+                                    currentPage === page
+                                      ? 'bg-indigo-600 text-white shadow-md'
+                                      : 'bg-white border border-gray-300 text-gray-700 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600'
+                                  }`}
+                                >
+                                  {page}
+                                </button>
+                              );
+                            })}
+                          </div>
+
+                          {/* Next Button */}
+                          <button
+                            onClick={() => handlePageChange(currentPage + 1)}
+                            disabled={currentPage === totalPages}
+                            className={`flex items-center gap-1 px-3 py-2 rounded-lg font-medium text-sm transition-all ${
+                              currentPage === totalPages
+                                ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-600'
+                            }`}
+                          >
+                            <span>Next</span>
+                            <ChevronRight className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
                   )}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </div>
       </div>
-    </div>
     </LayoutTemplate>
   );
 }
 
-export default Absensi;
+export default Absensi; 

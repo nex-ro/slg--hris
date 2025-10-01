@@ -8,7 +8,7 @@ use App\Http\Controllers\AbsensiController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
-
+use Illuminate\Http\Request;
 Route::get('/', function () {
     return redirect('/login');
 });
@@ -23,6 +23,10 @@ Route::get('/absensi/input-harian', [AbsensiController::class, 'inputHarian'])->
 Route::get('/kehadiran', [HrdController::class, 'getByDate']);
 Route::get('/absensi/input-tidak-hadir', [AbsensiController::class, 'inputTidak'])->name('absensi.tidak');
 Route::post('/hrd/absen/input-tidak', [AbsensiController::class, 'storeInputTidak'])->name('hrd.absen.input-tidak.store');
+Route::post('/hrd/absen/input-tidak', [AbsensiController::class, 'storeInputTidak'])->name('hrd.absen.input-tidak.store');
+Route::get('/absensi/dokumen', [AbsensiController::class, 'dokumen'])->name('hrd.absen.dokument');
+Route::post('/print-absensi', [AbsensiController::class, 'printAbsensi'])->name('print.absensi');
+Route::post('/print-katering', [AbsensiController::class, 'printKatering'])->name('print.katering');
 
 Route::middleware('pegawai')->group(function () {
     Route::get('/dashboard', [UserController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');

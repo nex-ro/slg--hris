@@ -28,7 +28,7 @@ class HrdController extends Controller
     
         // Ambil semua users yang aktif
         $users = User::where('active', true)
-            ->select('id', 'name', 'email', 'tower')
+            ->select('id', 'name', 'email', 'tower','divisi','jabatan','tmk')
             ->orderBy('tower', 'asc')
             ->orderBy('name', 'asc')
             ->get();
@@ -52,8 +52,10 @@ class HrdController extends Controller
                     : null,
                 'user' => [
                     'id' => $user->id,
-                    'name' => $user->name,
-                    'email' => $user->email,
+                    'name' => $user->name,  
+                    'divisi' => $user->divisi,
+                    'jabatan' => $user->jabatan,
+                    'tmk' => $user->tmk,
                     'tower' => $user->tower ?? 'Tanpa Tower', // Tambahkan tower di user object juga
                 ]
             ];

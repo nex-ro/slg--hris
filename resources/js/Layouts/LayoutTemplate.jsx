@@ -34,7 +34,6 @@ const LayoutTemplate = ({ children }) => {
   const dropdownRef = useRef(null);
   
   const currentPath = usePage().url;
-
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
     { icon: Users, label: 'Pegawai', href: '/pegawai' },
