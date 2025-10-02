@@ -107,9 +107,10 @@ const handlePrintAbsensi = async () => {
   };
   const statusOptions = [
     { value: 'all', label: 'Semua Status', desc: 'Tampilkan semua data', color: 'bg-gray-500', textColor: 'text-white', borderColor: 'border-gray-500' },
+    { value: 'N/A', label: 'N/A', desc: 'Status tidak tersedia', color: 'bg-gray-600', textColor: 'text-white', borderColor: 'border-gray-600' },
     { value: 'On Time', label: 'On Time', desc: 'Hadir tepat waktu', color: 'bg-green-600', textColor: 'text-white', borderColor: 'border-green-600' },
     { value: 'Terlambat', label: 'Terlambat', desc: 'Hadir terlambat', color: 'bg-orange-600', textColor: 'text-white', borderColor: 'border-orange-600' },
-    { value: 'N/A', label: 'N/A', desc: 'Status tidak tersedia', color: 'bg-gray-600', textColor: 'text-white', borderColor: 'border-gray-600' },
+    { value: 'sakit', label: 'Sakit', desc: 'Tidak masuk karena sakit', color: 'bg-blue-600', textColor: 'text-white', borderColor: 'border-blue-600' },
     { value: 'C1', label: 'Cuti Full Day', desc: 'Mengambil cuti seharian penuh', color: 'bg-green-500', textColor: 'text-white', borderColor: 'border-green-500' },
     { value: 'C2', label: 'Cuti Setengah Hari', desc: 'Mengambil cuti setengah hari', color: 'bg-green-400', textColor: 'text-white', borderColor: 'border-green-400' },
     { value: 'P1', label: 'Ijin Full Day', desc: 'Izin tidak masuk kerja seharian', color: 'bg-blue-500', textColor: 'text-white', borderColor: 'border-blue-500' },
@@ -118,9 +119,7 @@ const handlePrintAbsensi = async () => {
     { value: 'DL', label: 'Dinas Luar', desc: 'Bertugas di luar kantor', color: 'bg-purple-500', textColor: 'text-white', borderColor: 'border-purple-500' },
     { value: 'WFH', label: 'Work From Home', desc: 'Bekerja dari rumah', color: 'bg-orange-500', textColor: 'text-white', borderColor: 'border-orange-500' },
     { value: 'FP-TR', label: 'FP Tidak Ter-Record', desc: 'Fingerprint tidak terekam sistem', color: 'bg-red-500', textColor: 'text-white', borderColor: 'border-red-500' },
-    { value: 'LK', label: 'Libur Kerja', desc: 'Hari libur resmi/nasional', color: 'bg-gray-500', textColor: 'text-white', borderColor: 'border-gray-500' },
-    { value: 'sakit', label: 'Sakit', desc: 'Tidak masuk karena sakit', color: 'bg-blue-600', textColor: 'text-white', borderColor: 'border-blue-600' },
-    { value: 'alpha', label: 'Alpha', desc: 'Tidak hadir tanpa keterangan', color: 'bg-red-600', textColor: 'text-white', borderColor: 'border-red-600' },
+    { value: 'LK', label: 'Libur Kerja', desc: 'Hari libur resmi/nasional', color: 'bg-green-500', textColor: 'text-white', borderColor: 'border-gray-500' },
   ];
 
   useEffect(() => {
@@ -526,7 +525,7 @@ const handlePrintAbsensi = async () => {
                   </div>
                   
                   {/* Kehadiran List */}
-                  <div className="p-5 space-y-3">
+                  <div className="p-5 space-y-3" style={{ minHeight: '350px' }}>
                     {filteredKehadiran.length === 0 ? (
                       <div className="text-center py-8 text-gray-500">
                         <AlertCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />

@@ -20,77 +20,108 @@ class AbsensiController extends Controller
     {
         return Inertia::render('Hrd/Absensi', []);
     }
-  public function saveAbsensi(Request $request)
+public function saveAbsensi(Request $request)
 {
     try {
         $data = $request->input('data', []);
         $savedCount = 0;
-        $errors = [];
+        $updatedCount = 0;
+        $errorMessages = []; // Ubah dari array of objects ke array of strings
         
         foreach ($data as $index => $absensi) {
             // Cek apakah UID ada di tabel users
             $userExists = \App\Models\User::where('id', $absensi['uid'])->exists();
             
             if (!$userExists) {
-                $errors[] = [
-                    'index' => $index,
-                    'uid' => $absensi['uid'],
-                    'message' => "User dengan UID {$absensi['uid']} tidak ditemukan"
-                ];
+                $errorMessages[] = "UID {$absensi['uid']} tidak ditemukan"; // Simpan pesan string langsung
                 continue;
             }
             
-            // Parse jam kedatangan
-            $jamKedatangan = $absensi['jam_kedatangan'];
-            $waktuKedatangan = \Carbon\Carbon::parse($jamKedatangan);
+            // Cari data kehadiran yang sudah ada
+            $kehadiran = Kehadiran::where('tanggal', $absensi['tanggal'])
+                                  ->where('uid', $absensi['uid'])
+                                  ->first();
             
-            // Cek apakah jam kedatangan sebelum atau sama dengan 08:00:00
-            $batasWaktu = \Carbon\Carbon::parse('08:00:00');
-            
-            // Tentukan status berdasarkan jam kedatangan
-            if ($waktuKedatangan->lte($batasWaktu)) {
-                $status = 'On Time';
-            } else {
-                $status = 'Terlambat';
-            }
-            
-            // Simpan atau update data kehadiran
-            Kehadiran::updateOrCreate(
-                [
+            // Jika data sudah ada
+            if ($kehadiran) {
+                $isUpdated = false;
+                
+                // Jika hanya ada jam pulang dari data baru, update jam pulang saja
+                if (!$absensi['jam_kedatangan'] && $absensi['jam_pulang']) {
+                    $kehadiran->jam_pulang = $absensi['jam_pulang'];
+                    $isUpdated = true;
+                }
+                // Jika ada jam kedatangan baru dan belum ada di database
+                else if ($absensi['jam_kedatangan'] && !$kehadiran->jam_kedatangan) {
+                    $jamKedatangan = $absensi['jam_kedatangan'];
+                    $waktuKedatangan = \Carbon\Carbon::parse($jamKedatangan);
+                    $batasWaktu = \Carbon\Carbon::parse('08:00:00');
+                    
+                    $kehadiran->jam_kedatangan = $jamKedatangan;
+                    $kehadiran->status = $waktuKedatangan->lte($batasWaktu) ? 'On Time' : 'Terlambat';
+                    $isUpdated = true;
+                }
+                // Jika ada jam pulang baru dan belum ada di database
+                else if ($absensi['jam_pulang'] && !$kehadiran->jam_pulang) {
+                    $kehadiran->jam_pulang = $absensi['jam_pulang'];
+                    $isUpdated = true;
+                }
+                
+                if ($isUpdated) {
+                    $kehadiran->save();
+                    $updatedCount++;
+                }
+            } 
+            // Jika data belum ada, buat baru
+            else {
+                $status = null; // PERBAIKAN: Default null, bukan 'hadir'
+                
+                // Tentukan status HANYA jika ada jam kedatangan
+                if ($absensi['jam_kedatangan']) {
+                    $jamKedatangan = $absensi['jam_kedatangan'];
+                    $waktuKedatangan = \Carbon\Carbon::parse($jamKedatangan);
+                    $batasWaktu = \Carbon\Carbon::parse('08:00:00');
+                    $status = $waktuKedatangan->lte($batasWaktu) ? 'On Time' : 'Terlambat';
+                }
+                
+                Kehadiran::create([
                     'tanggal' => $absensi['tanggal'],
-                    'uid' => $absensi['uid']
-                ],
-                [
-                    'jam_kedatangan' => $jamKedatangan,
+                    'uid' => $absensi['uid'],
+                    'jam_kedatangan' => $absensi['jam_kedatangan'],
                     'jam_pulang' => $absensi['jam_pulang'],
-                    'status' => $status,
-                    'tower' => $absensi['tower']
-                ]
-            );
-            
-            $savedCount++;
+                    'status' => $status, // Bisa null jika jam_kedatangan null
+                    'tower' => $absensi['tower'] ?? null
+                ]);
+                
+                $savedCount++;
+            }
         }
         
         // Response berdasarkan hasil
-        if (count($errors) > 0 && $savedCount === 0) {
-            return back()->with([
-                'error' => 'Semua data gagal disimpan',
-                'errorDetails' => 'Periksa kembali UID yang digunakan.'
+        if (count($errorMessages) > 0 && $savedCount === 0 && $updatedCount === 0) {
+            // PERBAIKAN: Return error dengan format yang benar untuk Inertia
+            return back()->withErrors([
+                'error' => 'Semua data gagal disimpan: ' . implode(', ', $errorMessages)
             ]);
-        } elseif (count($errors) > 0) {
+        } elseif (count($errorMessages) > 0) {
             return back()->with([
-                'warning' => "Berhasil Gagal menyimpan data",
-                'warningDetails' => 'Beberapa UID tidak ditemukan di database.'
+                'warning' => "Berhasil menyimpan {$savedCount} data baru dan update {$updatedCount} data. Gagal: " . implode(', ', $errorMessages)
             ]);
         } else {
+            $message = [];
+            if ($savedCount > 0) $message[] = "{$savedCount} data baru";
+            if ($updatedCount > 0) $message[] = "{$updatedCount} data diupdate";
+            
             return back()->with([
-                'success' => "Berhasil menyimpan {$savedCount} data absensi!"
+                'success' => "Berhasil! " . implode(', ', $message)
             ]);
         }
     } catch (\Exception $e) {
-        return back()->with([
-            'error' => 'Gagal menyimpan data absensi',
-            'errorDetails' => 'Terjadi kesalahan saat memproses data. Silakan coba lagi.'
+        \Log::error('Error saving absensi: ' . $e->getMessage());
+        
+        // PERBAIKAN: Return error dengan format yang benar
+        return back()->withErrors([
+            'error' => 'Gagal menyimpan data: ' . $e->getMessage()
         ]);
     }
 }

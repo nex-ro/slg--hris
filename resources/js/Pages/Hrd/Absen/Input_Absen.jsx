@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X, Save, Loader, Plus, UserPlus, Trash2 } from "lucide-react";
-import LayoutTemplate from "@/Layouts/LayoutTemplate";
-import { router } from '@inertiajs/react';
+import { useState, useEffect } from "react";
+import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X, Save, Loader, UserPlus, Trash2 } from "lucide-react";
+import  LayoutTemplate  from "@/Layouts/LayoutTemplate";
+import { router, usePage } from "@inertiajs/react";
 
 // Toast Component
 function Toast({ message, type, onClose }) {
@@ -18,7 +18,112 @@ function Toast({ message, type, onClose }) {
     </div>
   );
 }
-
+const handleSaveData = async () => {
+  if (data.length === 0) {
+    showToast("Tidak ada data untuk disimpan", "error");
+    return;
+  }
+  
+  setSaving(true);
+  setError("");
+  
+  try {
+    const dataByPersonAndDate = {};
+    
+    Object.keys(groupedData).forEach(date => {
+      groupedData[date].forEach(row => {
+        const dateTime = row["Date And Time"] || "";
+        const [dateOnly, timeOnly] = dateTime.split(' ');
+        
+        let formattedDate = dateOnly;
+        if (dateOnly && dateOnly.includes('/')) {
+          const [day, month, year] = dateOnly.split('/');
+          formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        }
+        
+        const personnelId = row["Personnel ID"];
+        const key = `${formattedDate}-${personnelId}`;
+        
+        if (!dataByPersonAndDate[key]) {
+          dataByPersonAndDate[key] = {
+            tanggal: formattedDate,
+            uid: personnelId,
+            jam_kedatangan: null,
+            jam_pulang: null,
+            status_kedatangan: null,
+            status_pulang: null,
+            status: 'hadir'
+          };
+        }
+        
+        const classified = classifyTime(timeOnly);
+        
+        if (classified.type === 'kedatangan') {
+          if (!dataByPersonAndDate[key].jam_kedatangan) {
+            dataByPersonAndDate[key].jam_kedatangan = classified.time;
+            const [hours, minutes] = classified.time.split(':').map(Number);
+            const totalMinutes = hours * 60 + minutes;
+            dataByPersonAndDate[key].status_kedatangan = totalMinutes <= (8 * 60) ? 'On Time' : 'Terlambat';
+          }
+        } else if (classified.type === 'pulang') {
+          if (!dataByPersonAndDate[key].jam_pulang) {
+            dataByPersonAndDate[key].jam_pulang = classified.time;
+            const [hours, minutes] = classified.time.split(':').map(Number);
+            const totalMinutes = hours * 60 + minutes;
+            dataByPersonAndDate[key].status_pulang = totalMinutes >= (17 * 60) ? 'Normal' : 'pulang_cepat';
+          }
+        }
+        
+        if (row["jam_pulang"] && !dataByPersonAndDate[key].jam_pulang) {
+          dataByPersonAndDate[key].jam_pulang = row["jam_pulang"];
+          const [hours, minutes] = row["jam_pulang"].split(':').map(Number);
+          const totalMinutes = hours * 60 + minutes;
+          dataByPersonAndDate[key].status_pulang = totalMinutes >= (17 * 60) ? 'normal' : 'pulang_cepat';
+        }
+      });
+    });
+    
+    const formattedData = Object.values(dataByPersonAndDate);
+    
+    router.post('/absensi/save', 
+      { data: formattedData }, 
+      {
+        preserveScroll: true,
+        onSuccess: () => {
+          setSaving(false);
+          setFile(null);
+          setData([]);
+          setGroupedData({});
+        },
+        onError: (errors) => {
+          setSaving(false);
+          let errorMessage = "Gagal menyimpan data";
+          
+          if (errors.error) {
+            errorMessage = errors.error;
+          } else if (errors.message) {
+            errorMessage = errors.message;
+          } else if (typeof errors === 'object') {
+            const errorArray = Object.values(errors).flat();
+            errorMessage = errorArray.join(', ');
+          }
+          
+          showToast(errorMessage, "error");
+          setError(errorMessage);
+        },
+        onFinish: () => {
+          setSaving(false);
+        }
+      }
+    );
+    
+  } catch (err) {
+    setSaving(false);
+    const errorMsg = "Gagal menyimpan data: " + err.message;
+    showToast(errorMsg, "error");
+    setError(errorMsg);
+  }
+};
 // Manual Input Modal
 function ManualInputModal({ isOpen, onClose, onSave }) {
   const [formData, setFormData] = useState({
@@ -152,6 +257,7 @@ function ManualInputModal({ isOpen, onClose, onSave }) {
 
 function Input_Absen() {
   const [file, setFile] = useState(null);
+   const { flash } = usePage().props;
   const [data, setData] = useState([]);
   const [groupedData, setGroupedData] = useState({});
   const [loading, setLoading] = useState(false);
@@ -160,10 +266,28 @@ function Input_Absen() {
   const [toast, setToast] = useState(null);
   const [showManualInput, setShowManualInput] = useState(false);
 
-  // Toast helper
   const showToast = (message, type) => {
     setToast({ message, type });
     setTimeout(() => setToast(null), 5000);
+  };
+
+  const classifyTime = (timeString) => {
+    if (!timeString) return { type: null, time: null };
+    
+    const [hours, minutes] = timeString.split(':').map(Number);
+    const totalMinutes = hours * 60 + minutes;
+    
+    const morningStart = 5 * 60;
+    const morningEnd = 10 * 60;
+    const eveningStart = 17 * 60;
+    const eveningEnd = 22 * 60;
+    
+    if (totalMinutes >= morningStart && totalMinutes <= morningEnd) {
+      return { type: 'kedatangan', time: timeString };
+    } else if (totalMinutes >= eveningStart && totalMinutes <= eveningEnd) {
+      return { type: 'pulang', time: timeString };
+    }
+    return { type: 'other', time: timeString };
   };
 
   const handleFileUpload = async (e) => {
@@ -228,44 +352,67 @@ function Input_Absen() {
               showToast("Format Excel tidak sesuai", "error");
               setData([]);
               setGroupedData({});
+              setLoading(false);
             } else {
-              const seenNames = new Set();
-              const uniqueData = [];
+              // PERBAIKAN: Tidak memfilter berdasarkan nama, gunakan semua data
+              const grouped = {};
+              const seenEntries = new Set(); // Untuk tracking duplikat
+              let duplicateCount = 0;
               
               normalizedData.forEach(row => {
-                const fullName = `${row["First Name"] || ""} ${row["Last Name"] || ""}`.trim();
-                if (!seenNames.has(fullName) && fullName !== "") {
-                  seenNames.add(fullName);
-                  uniqueData.push(row);
-                }
-              });
-              
-              const grouped = {};
-              uniqueData.forEach(row => {
                 const dateTime = row["Date And Time"] || "";
-                const dateOnly = dateTime.split(' ')[0];
+                const [dateOnly, timeOnly] = dateTime.split(' ');
+                const personnelId = row["Personnel ID"] || "";
                 
-                if (dateOnly && dateOnly !== "") {
-                  if (!grouped[dateOnly]) {
-                    grouped[dateOnly] = [];
+                if (dateOnly && dateOnly !== "" && timeOnly && personnelId) {
+                  // Classify the time
+                  const classified = classifyTime(timeOnly);
+                  
+                  // Only include if it's within valid time ranges
+                  if (classified.type !== 'other') {
+                    // Buat unique key berdasarkan tanggal, personnel ID, dan tipe waktu
+                    const uniqueKey = `${dateOnly}-${personnelId}-${classified.type}`;
+                    
+                    // Cek apakah sudah ada entry yang sama
+                    if (!seenEntries.has(uniqueKey)) {
+                      seenEntries.add(uniqueKey);
+                      
+                      if (!grouped[dateOnly]) {
+                        grouped[dateOnly] = [];
+                      }
+                      
+                      // Add classification info to the row
+                      row.timeType = classified.type;
+                      grouped[dateOnly].push(row);
+                    } else {
+                      duplicateCount++;
+                    }
                   }
-                  grouped[dateOnly].push(row);
                 }
               });
               
-              setData(uniqueData);
+              // Count total valid entries
+              const totalValidEntries = Object.values(grouped).reduce((sum, arr) => sum + arr.length, 0);
+              
+              setData(normalizedData);
               setGroupedData(grouped);
               setError("");
-              showToast(`Berhasil membaca ${uniqueData.length} data`, "success");
+              
+              let successMessage = `Berhasil membaca ${totalValidEntries} data valid (dalam rentang waktu 05:00-10:00 dan 17:00-22:00)`;
+              if (duplicateCount > 0) {
+                successMessage += `. ${duplicateCount} data duplikat diabaikan`;
+              }
+              
+              showToast(successMessage, "success");
+              setLoading(false);
             }
           } else {
             setError("File Excel kosong");
             showToast("File Excel kosong", "error");
             setData([]);
             setGroupedData({});
+            setLoading(false);
           }
-          
-          setLoading(false);
         } catch (err) {
           setError("Gagal membaca file: " + err.message);
           showToast("Gagal membaca file", "error");
@@ -295,39 +442,48 @@ function Input_Absen() {
     setError("");
   };
 
-  const handleManualSave = (manualData) => {
-    const newEntry = {
-      _id: `manual-${Date.now()}`,
-      "Date And Time": `${manualData.tanggal} ${manualData.jam_kedatangan}`,
-      "Personnel ID": manualData.uid,
-      "First Name": manualData.firstName || "",
-      "Last Name": manualData.lastName || "",
-      "jam_pulang": manualData.jam_pulang || null,
-      "isManual": true
-    };
-
-    const dateOnly = manualData.tanggal;
-    
-    setData(prevData => [...prevData, newEntry]);
-    setGroupedData(prevGrouped => {
-      const newGrouped = { ...prevGrouped };
-      if (!newGrouped[dateOnly]) {
-        newGrouped[dateOnly] = [];
-      }
-      newGrouped[dateOnly] = [...newGrouped[dateOnly], newEntry];
-      return newGrouped;
-    });
-
-    showToast("Data manual berhasil ditambahkan", "success");
+ const handleManualSave = (manualData) => {
+  const dateOnly = manualData.tanggal;
+  const personnelId = manualData.uid;
+  
+  // Cek duplikat untuk data manual
+  const isDuplicate = groupedData[dateOnly]?.some(entry => 
+    entry["Personnel ID"] === personnelId && entry.timeType === "kedatangan"
+  );
+  
+  if (isDuplicate) {
+    showToast("Data duplikat! Sudah ada data kedatangan untuk Personnel ID ini pada tanggal yang sama", "error");
+    return;
+  }
+  
+  const newEntry = {
+    _id: `manual-${Date.now()}`,
+    "Date And Time": `${manualData.tanggal} ${manualData.jam_kedatangan}`,
+    "Personnel ID": personnelId,
+    "First Name": manualData.firstName || "",
+    "Last Name": manualData.lastName || "",
+    "jam_pulang": manualData.jam_pulang || null,
+    "timeType": "kedatangan",
+    "isManual": true
   };
+  
+  setData(prevData => [...prevData, newEntry]);
+  setGroupedData(prevGrouped => {
+    const newGrouped = { ...prevGrouped };
+    if (!newGrouped[dateOnly]) {
+      newGrouped[dateOnly] = [];
+    }
+    newGrouped[dateOnly] = [...newGrouped[dateOnly], newEntry];
+    return newGrouped;
+  });
 
-
+  showToast("Data manual berhasil ditambahkan", "success");
+};
 
   const handleDeleteRow = (date, index) => {
     if (confirm("Apakah Anda yakin ingin menghapus data ini?")) {
       const rowToDelete = groupedData[date][index];
       
-      // Remove from grouped data
       setGroupedData(prevGrouped => {
         const newGrouped = { ...prevGrouped };
         newGrouped[date] = [...newGrouped[date]];
@@ -340,94 +496,123 @@ function Input_Absen() {
         return newGrouped;
       });
 
-      // Remove from main data array
       setData(prevData => prevData.filter(item => item._id !== rowToDelete._id));
       
       showToast("Data berhasil dihapus", "success");
     }
   };
-
   const handleSaveData = async () => {
-    if (data.length === 0) {
-      showToast("Tidak ada data untuk disimpan", "error");
-      return;
-    }
-
-    setSaving(true);
-    setError("");
-
-    try {
-      const formattedData = [];
-      
-      Object.keys(groupedData).forEach(date => {
-        groupedData[date].forEach(row => {
-          const dateTime = row["Date And Time"] || "";
-          const [dateOnly, timeOnly] = dateTime.split(' ');
-          
-          let formattedDate = dateOnly;
-          if (dateOnly && dateOnly.includes('/')) {
-            const [day, month, year] = dateOnly.split('/');
-            formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-          }
-          
-          formattedData.push({
+  if (data.length === 0) {
+    showToast("Tidak ada data untuk disimpan", "error");
+    return;
+  }
+  
+  setSaving(true);
+  setError("");
+  
+  try {
+    const dataByPersonAndDate = {};
+    
+    Object.keys(groupedData).forEach(date => {
+      groupedData[date].forEach(row => {
+        const dateTime = row["Date And Time"] || "";
+        const [dateOnly, timeOnly] = dateTime.split(' ');
+        
+        let formattedDate = dateOnly;
+        if (dateOnly && dateOnly.includes('/')) {
+          const [day, month, year] = dateOnly.split('/');
+          formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        }
+        
+        const personnelId = row["Personnel ID"];
+        const key = `${formattedDate}-${personnelId}`;
+        
+        if (!dataByPersonAndDate[key]) {
+          dataByPersonAndDate[key] = {
             tanggal: formattedDate,
-            uid: row["Personnel ID"] || null,
-            jam_kedatangan: timeOnly || null,
-            jam_pulang: row["jam_pulang"] || null,
+            uid: personnelId,
+            jam_kedatangan: null,
+            jam_pulang: null,
+            status_kedatangan: null,
+            status_pulang: null,
             status: 'hadir'
-          });
-        });
-      });
-
-      router.post('/absensi/save', 
-        { data: formattedData }, 
-        {
-          onSuccess: (page) => {
-            setSaving(false);
-            if (page.props.flash?.success) {
-              showToast(page.props.flash.success, "success");
-            } else if (page.props.flash?.warning) {
-              showToast(page.props.flash.warning, "warning");
-            } else {
-              showToast(`Berhasil menyimpan ${formattedData.length} data`, "success");
-            }
-            
-            // Reset after successful save
-            setFile(null);
-            setData([]);
-            setGroupedData({});
-          },
-          onError: (errors) => {
-            setSaving(false);
-            let errorMessage = "Gagal menyimpan data";
-            
-            if (errors.error) {
-              errorMessage = errors.error;
-            } else if (errors.message) {
-              errorMessage = errors.message;
-            } else if (errors.errorDetails) {
-              errorMessage = errors.errorDetails;
-            } else if (typeof errors === 'object') {
-              const errorList = Object.values(errors).flat();
-              errorMessage = errorList.join(', ');
-            }
-            
-            showToast(errorMessage, "error");
-            setError(errorMessage);
+          };
+        }
+        
+        const classified = classifyTime(timeOnly);
+        
+        if (classified.type === 'kedatangan') {
+          if (!dataByPersonAndDate[key].jam_kedatangan) {
+            dataByPersonAndDate[key].jam_kedatangan = classified.time;
+            const [hours, minutes] = classified.time.split(':').map(Number);
+            const totalMinutes = hours * 60 + minutes;
+            dataByPersonAndDate[key].status_kedatangan = totalMinutes <= (8 * 60) ? 'On Time' : 'Terlambat';
+          }
+        } else if (classified.type === 'pulang') {
+          if (!dataByPersonAndDate[key].jam_pulang) {
+            dataByPersonAndDate[key].jam_pulang = classified.time;
+            const [hours, minutes] = classified.time.split(':').map(Number);
+            const totalMinutes = hours * 60 + minutes;
+            dataByPersonAndDate[key].status_pulang = totalMinutes >= (17 * 60) ? 'Normal' : 'pulang_cepat';
           }
         }
-      );
-    } catch (err) {
-      setSaving(false);
-      const errorMsg = "Gagal menyimpan data: " + err.message;
-      showToast(errorMsg, "error");
-      setError(errorMsg);
-    }
-  };
+        
+        if (row["jam_pulang"] && !dataByPersonAndDate[key].jam_pulang) {
+          dataByPersonAndDate[key].jam_pulang = row["jam_pulang"];
+          const [hours, minutes] = row["jam_pulang"].split(':').map(Number);
+          const totalMinutes = hours * 60 + minutes;
+          dataByPersonAndDate[key].status_pulang = totalMinutes >= (17 * 60) ? 'normal' : 'pulang_cepat';
+        }
+      });
+    });
+    
+    const formattedData = Object.values(dataByPersonAndDate);
+    
+    router.post('/absensi/save', 
+      { data: formattedData }, 
+      {
+        preserveScroll: true,
+        onSuccess: () => {
+          setSaving(false);
+          setFile(null);
+          setData([]);
+          setGroupedData({});
+        },
+        onError: (errors) => {
+          setSaving(false);
+          let errorMessage = "Gagal menyimpan data";
+          
+          if (errors.error) {
+            errorMessage = errors.error;
+          } else if (errors.message) {
+            errorMessage = errors.message;
+          } else if (typeof errors === 'object') {
+            const errorArray = Object.values(errors).flat();
+            errorMessage = errorArray.join(', ');
+          }
+          
+          showToast(errorMessage, "error");
+          setError(errorMessage);
+        },
+        onFinish: () => {
+          setSaving(false);
+        }
+      }
+    );
+    
+  } catch (err) {
+    setSaving(false);
+    const errorMsg = "Gagal menyimpan data: " + err.message;
+    showToast(errorMsg, "error");
+    setError(errorMsg);
+  }
+};
+
+ 
 
   return (
     <LayoutTemplate>
+    <div className="min-h-screen bg-gray-50">
       <style>{`
         @keyframes slide-in {
           from {
@@ -452,179 +637,194 @@ function Input_Absen() {
         onSave={handleManualSave}
       />
 
-      <div className="">
-        <div className="max-w-6xl mx-auto p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h1 className="text-3xl font-bold text-gray-800">Upload Data Absensi</h1>
-            <button
-              onClick={() => setShowManualInput(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <UserPlus className="h-5 w-5" />
-              Tambah Manual
-            </button>
-          </div>
+      <div className="max-w-6xl mx-auto p-6">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold text-gray-800">Upload Data Absensi</h1>
+          <button
+            onClick={() => setShowManualInput(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            <UserPlus className="h-5 w-5" />
+            Tambah Manual
+          </button>
+        </div>
 
-          <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors">
-              <input
-                type="file"
-                id="fileUpload"
-                accept=".xlsx,.xls,.csv"
-                onChange={handleFileUpload}
-                className="hidden"
-              />
-              
-              {!file ? (
-                <label htmlFor="fileUpload" className="cursor-pointer">
-                  <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                  <p className="text-lg font-medium text-gray-700 mb-2">
-                    Klik untuk upload file
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Support: Excel (.xlsx, .xls) atau CSV
-                  </p>
-                </label>
-              ) : (
-                <div className="flex items-center justify-center gap-3">
-                  <FileSpreadsheet className="h-8 w-8 text-green-500" />
-                  <span className="text-gray-700 font-medium">{file.name}</span>
+        <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors">
+            <input
+              type="file"
+              id="fileUpload"
+              accept=".xlsx,.xls,.csv"
+              onChange={handleFileUpload}
+              className="hidden"
+              disabled={loading}
+            />
+            
+            {!file ? (
+              <label htmlFor="fileUpload" className={`cursor-pointer ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
+                <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <p className="text-lg font-medium text-gray-700 mb-2">
+                  Klik untuk upload file
+                </p>
+                <p className="text-sm text-gray-500">
+                  Support: Excel (.xlsx, .xls) atau CSV
+                </p>
+              </label>
+            ) : (
+              <div className="flex items-center justify-center gap-3">
+                <FileSpreadsheet className="h-8 w-8 text-green-500" />
+                <span className="text-gray-700 font-medium">{file.name}</span>
+                {!loading && (
                   <button
                     onClick={handleRemoveFile}
                     className="ml-2 text-red-500 hover:text-red-700"
                   >
                     <X className="h-5 w-5" />
                   </button>
-                </div>
-              )}
-            </div>
-
-            {loading && (
-              <div className="mt-4 flex items-center justify-center gap-2 text-blue-600">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                <span>Memproses file...</span>
-              </div>
-            )}
-
-            {saving && (
-              <div className="mt-4 flex items-center justify-center gap-2 text-green-600">
-                <Loader className="animate-spin h-5 w-5" />
-                <span>Menyimpan data...</span>
-              </div>
-            )}
-
-            {error && (
-              <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-                <p className="text-red-700">{error}</p>
-              </div>
-            )}
-
-            {data.length > 0 && !error && (
-              <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
-                <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
-                <p className="text-green-700">
-                  Total {data.length} data siap untuk disimpan
-                </p>
-              </div>
-            )}
-
-            {data.length > 0 && !error && (
-              <div className="mt-4 flex justify-center">
-                <button
-                  onClick={handleSaveData}
-                  disabled={saving}
-                  className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
-                >
-                  <Save className="h-5 w-5" />
-                  {saving ? "Menyimpan..." : "Simpan Semua Data"}
-                </button>
+                )}
               </div>
             )}
           </div>
 
-          {Object.keys(groupedData).length > 0 && (
-            <div className="space-y-6">
-              {Object.keys(groupedData).sort().map((date) => (
-                <div key={date} className="bg-white rounded-lg shadow-md overflow-hidden">
-                  <div className="bg-blue-600 text-white px-6 py-3">
-                    <h2 className="text-lg font-semibold">Tanggal: {date}</h2>
-                    <p className="text-sm text-blue-100">{groupedData[date].length} orang</p>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            No
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Waktu
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Personnel ID
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            First Name
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Last Name
-                          </th>
-                          <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Jam Pulang
-                          </th>
-                          <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                            Aksi
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {groupedData[date].map((row, index) => {
-                          const dateTime = row["Date And Time"] || "";
-                          const time = dateTime.split(' ')[1] || "-";
-                          
-                          return (
-                            <tr key={row._id || index} className="hover:bg-gray-50">
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {index + 1}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {time}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {row["Personnel ID"] || "-"}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {row["First Name"] || "-"}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {row["Last Name"] || "-"}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                                {row["jam_pulang"] || "-"}
-                              </td>
-                              <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-                                <button
-                                  onClick={() => handleDeleteRow(date, index)}
-                                  className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded"
-                                  title="Hapus"
-                                >
-                                  <Trash2 className="h-4 w-4" />
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              ))}
+          {loading && (
+            <div className="mt-4 flex items-center justify-center gap-2 text-blue-600">
+              <Loader className="animate-spin h-5 w-5" />
+              <span>Memproses file...</span>
+            </div>
+          )}
+
+          {saving && (
+            <div className="mt-4 flex items-center justify-center gap-2 text-green-600">
+              <Loader className="animate-spin h-5 w-5" />
+              <span>Menyimpan data ke database...</span>
+            </div>
+          )}
+
+          {error && (
+            <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <p className="text-red-700">{error}</p>
+            </div>
+          )}
+
+          {Object.keys(groupedData).length > 0 && !error && (
+            <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4 flex items-start gap-3">
+              <CheckCircle className="h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+              <div className="text-green-700">
+                <p className="font-semibold">
+                  Total {Object.values(groupedData).reduce((sum, arr) => sum + arr.length, 0)} data siap untuk disimpan
+                </p>
+                <p className="text-sm mt-1">
+                  Data dalam rentang waktu: 05:00-10:00 (Kedatangan) dan 17:00-22:00 (Pulang)
+                </p>
+              </div>
+            </div>
+          )}
+
+          {Object.keys(groupedData).length > 0 && !error && (
+            <div className="mt-4 flex justify-center">
+              <button
+                onClick={handleSaveData}
+                disabled={saving}
+                className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+              >
+                <Save className="h-5 w-5" />
+                {saving ? "Menyimpan..." : "Simpan Semua Data"}
+              </button>
             </div>
           )}
         </div>
+
+        {Object.keys(groupedData).length > 0 && (
+          <div className="space-y-6">
+            {Object.keys(groupedData).sort().reverse().map((date) => (
+              <div key={date} className="bg-white rounded-lg shadow-md overflow-hidden">
+                <div className="bg-blue-600 text-white px-6 py-3">
+                  <h2 className="text-lg font-semibold">Tanggal: {date}</h2>
+                  <p className="text-sm text-blue-100">{groupedData[date].length} data absensi</p>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          No
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Waktu
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Tipe
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Personnel ID
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          First Name
+                        </th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Last Name
+                        </th>
+                        <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          Aksi
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {groupedData[date].map((row, index) => {
+                        const dateTime = row["Date And Time"] || "";
+                        const time = dateTime.split(' ')[1] || "-";
+                        const timeType = row.timeType || 'other';
+                        
+                        return (
+                          <tr key={row._id || index} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {index + 1}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {time}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                timeType === 'kedatangan' 
+                                  ? 'bg-green-100 text-green-800' 
+                                  : 'bg-blue-100 text-blue-800'
+                              }`}>
+                                {timeType === 'kedatangan' ? 'Datang' : 'Pulang'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {row["Personnel ID"] || "-"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {row["First Name"] || "-"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                              {row["Last Name"] || "-"}
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+                              <button
+                                onClick={() => handleDeleteRow(date, index)}
+                                className="text-red-600 hover:text-red-800 p-1 hover:bg-red-50 rounded"
+                                title="Hapus"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+    </div>
     </LayoutTemplate>
+
   );
 }
 

@@ -14,7 +14,7 @@ return new class extends Migration
             $table->date('tanggal');
             $table->time('jam_kedatangan')->nullable(); 
             $table->time('jam_pulang')->nullable();     
-            $table->string('status')->default('hadir'); 
+            $table->string('status')->nullable(); 
             $table->string('tower')->nullable(); 
             $table->timestamps(); 
         });

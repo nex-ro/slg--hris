@@ -25,15 +25,17 @@ import {
   FolderOpen
 } from 'lucide-react';
 
-const LayoutTemplate = ({ children }) => {
+const DashboardLayouts = ({ children }) => {
   const { auth = {}, url } = usePage().props;
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [notificationCount] = useState(3);
   const [expandedMenu, setExpandedMenu] = useState(null);
   const dropdownRef = useRef(null);
   
   const currentPath = usePage().url;
+
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
     { icon: Users, label: 'Pegawai', href: '/pegawai' },
@@ -119,31 +121,48 @@ const LayoutTemplate = ({ children }) => {
       )}
 
       {/* Sidebar - Fixed */}
-      <div className={`fixed lg:static inset-y-0 left-0 z-30 w-72 h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 transform transition-transform duration-300 ease-in-out ${
+      <div className={`fixed lg:static inset-y-0 left-0 z-30 h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 transform transition-all duration-300 ease-in-out ${
         sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-      }`}>
+      } ${sidebarCollapsed ? 'lg:w-20' : 'lg:w-72'} w-72`}>
         <div className="flex flex-col h-full">
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-700/50 flex-shrink-0">
-            <div className="flex items-center space-x-3">
+            <div className={`flex items-center space-x-3 ${sidebarCollapsed ? 'lg:justify-center lg:w-full' : ''}`}>
               <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
                 <LayoutDashboard className="w-6 h-6 text-white" />
               </div>
-              <div>
-                <span className="text-white font-bold text-lg">Admin Panel</span>
-                <p className="text-gray-400 text-sm">Management System</p>
-              </div>
+              {!sidebarCollapsed && (
+                <div>
+                  <span className="text-white font-bold text-lg">Admin Panel</span>
+                  <p className="text-gray-400 text-sm">Management System</p>
+                </div>
+              )}
             </div>
-            <button 
-              onClick={() => setSidebarOpen(false)}
-              className="lg:hidden text-gray-400 hover:text-white transition-colors p-1"
-            >
-              <X className="w-6 h-6" />
-            </button>
+            <div className="flex items-center space-x-2">
+              {/* Desktop Toggle Button */}
+              <button 
+                onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+                className="hidden lg:block text-gray-400 hover:text-white transition-colors p-1 hover:bg-gray-700/50 rounded-lg"
+                title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+              >
+                {sidebarCollapsed ? (
+                  <ChevronRight className="w-5 h-5" />
+                ) : (
+                  <X className="w-5 h-5" />
+                )}
+              </button>
+              {/* Mobile Close Button */}
+              <button 
+                onClick={() => setSidebarOpen(false)}
+                className="lg:hidden text-gray-400 hover:text-white transition-colors p-1"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
           </div>
 
           {/* User Info Card */}
-          {auth?.user && (
+          {auth?.user && !sidebarCollapsed && (
             <div className="mx-4 mt-4 p-4 bg-gray-800/50 rounded-xl border border-gray-700/50 flex-shrink-0">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-full flex items-center justify-center">
@@ -163,9 +182,20 @@ const LayoutTemplate = ({ children }) => {
               </div>
             </div>
           )}
+          
+          {/* Collapsed User Avatar */}
+          {auth?.user && sidebarCollapsed && (
+            <div className="mx-4 mt-4 flex justify-center flex-shrink-0">
+              <div className="w-10 h-10 bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-full flex items-center justify-center">
+                <span className="text-gray-900 font-semibold text-sm">
+                  {auth?.user?.name?.charAt(0)?.toUpperCase() || 'U'}
+                </span>
+              </div>
+            </div>
+          )}
 
           {/* Menu Items - Scrollable */}
-  <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+          <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
             {menuItems.map((item, index) => {
               const Icon = item.icon;
               const active = isActive(item.href);
@@ -178,32 +208,46 @@ const LayoutTemplate = ({ children }) => {
                   {hasSubMenu ? (
                     <button
                       onClick={() => toggleSubMenu(index)}
-                      className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+                      className={`w-full flex items-center px-4 py-3 rounded-xl transition-all duration-200 group ${
+                        sidebarCollapsed ? 'justify-center' : 'space-x-3'
+                      } ${
                         hasActiveSubItem
                           ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25' 
                           : 'text-gray-300 hover:bg-gray-700/50 hover:text-white hover:shadow-md'
                       }`}
+                      title={sidebarCollapsed ? item.label : ''}
                     >
                       <Icon className={`w-5 h-5 ${hasActiveSubItem ? '' : 'group-hover:scale-110 transition-transform'}`} />
-                      <span className="font-medium flex-1 text-left">{item.label}</span>
-                      <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                      {!sidebarCollapsed && (
+                        <>
+                          <span className="font-medium flex-1 text-left">{item.label}</span>
+                          <ChevronDown className={`w-4 h-4 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
+                        </>
+                      )}
                     </button>
                   ) : (
                     <Link
                       href={item.href}
-                      className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl transition-all duration-200 group ${
+                      className={`w-full flex items-center px-4 py-3 rounded-xl transition-all duration-200 group ${
+                        sidebarCollapsed ? 'justify-center' : 'space-x-3'
+                      } ${
                         active 
                           ? 'bg-gradient-to-r from-blue-500 to-indigo-600 text-white shadow-lg shadow-blue-500/25' 
                           : 'text-gray-300 hover:bg-gray-700/50 hover:text-white hover:shadow-md'
                       }`}
+                      title={sidebarCollapsed ? item.label : ''}
                     >
                       <Icon className={`w-5 h-5 ${active ? '' : 'group-hover:scale-110 transition-transform'}`} />
-                      <span className="font-medium">{item.label}</span>
-                      {!active && <ChevronRight className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />}
+                      {!sidebarCollapsed && (
+                        <>
+                          <span className="font-medium">{item.label}</span>
+                          {!active && <ChevronRight className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />}
+                        </>
+                      )}
                     </Link>
                   )}
 
-                  {hasSubMenu && isExpanded && (
+                  {hasSubMenu && isExpanded && !sidebarCollapsed && (
                     <div className="mt-1 ml-4 space-y-1">
                       {item.subItems.map((subItem, subIndex) => {
                         const SubIcon = subItem.icon;
@@ -238,18 +282,24 @@ const LayoutTemplate = ({ children }) => {
                 href={route('logout')} 
                 method="post" 
                 as="button"
-                className="w-full flex items-center justify-center space-x-3 px-4 py-3 rounded-xl bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white shadow-lg transition-all duration-200 group"
+                className={`w-full flex items-center rounded-xl bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white shadow-lg transition-all duration-200 group ${
+                  sidebarCollapsed ? 'justify-center px-4 py-3' : 'justify-center space-x-3 px-4 py-3'
+                }`}
+                title={sidebarCollapsed ? 'Logout' : ''}
               >
                 <LogOut className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                <span className="font-medium">Logout</span>
+                {!sidebarCollapsed && <span className="font-medium">Logout</span>}
               </Link>
             ) : (
               <Link 
                 href={route('login')} 
-                className="w-full flex items-center justify-center space-x-3 px-4 py-3 rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-lg transition-all duration-200 group"
+                className={`w-full flex items-center rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white shadow-lg transition-all duration-200 group ${
+                  sidebarCollapsed ? 'justify-center px-4 py-3' : 'justify-center space-x-3 px-4 py-3'
+                }`}
+                title={sidebarCollapsed ? 'Login' : ''}
               >
                 <LogIn className="w-5 h-5 group-hover:scale-110 transition-transform" />
-                <span className="font-medium">Login</span>
+                {!sidebarCollapsed && <span className="font-medium">Login</span>}
               </Link>
             )}
           </div>
@@ -258,7 +308,7 @@ const LayoutTemplate = ({ children }) => {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 lg:ml-0 h-screen">
-        {/* Top Navigation - Sticky */}
+          {/* Top Navigation - Sticky */}
         <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0 z-10">
           <div className="flex items-center justify-between px-4 sm:px-6 py-4">
             {/* Left Side - Mobile Menu + Breadcrumb */}
@@ -393,11 +443,12 @@ const LayoutTemplate = ({ children }) => {
 
         {/* Scrollable Content Area */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-         
+            {/* Page Title & Stats Cards */}
+       
 
           {/* Main Content Area */}
           <main className="p-4 sm:p-6 space-y-6">
-        
+           
 
             {/* Content Area for Children */}
             {children && (
@@ -425,4 +476,4 @@ const LayoutTemplate = ({ children }) => {
   );
 };
 
-export default LayoutTemplate;
+export default DashboardLayouts;
