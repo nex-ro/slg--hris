@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Upload, FileSpreadsheet, CheckCircle, AlertCircle, X, Save, Loader, UserPlus, Trash2 } from "lucide-react";
+import { Upload, FileSpreadsheet, CheckCircle,ChevronDown , AlertCircle, X, Save, Loader, UserPlus, Trash2 } from "lucide-react";
 import  LayoutTemplate  from "@/Layouts/LayoutTemplate";
 import { router, usePage } from "@inertiajs/react";
 
@@ -125,135 +125,7 @@ const handleSaveData = async () => {
   }
 };
 // Manual Input Modal
-function ManualInputModal({ isOpen, onClose, onSave }) {
-  const [formData, setFormData] = useState({
-    tanggal: '',
-    uid: '',
-    firstName: '',
-    lastName: '',
-    jam_kedatangan: '',
-    jam_pulang: ''
-  });
 
-  const handleSubmit = () => {
-    if (!formData.tanggal || !formData.uid || !formData.jam_kedatangan) {
-      alert('Harap isi semua field yang wajib (Tanggal, Personnel ID, Jam Kedatangan)');
-      return;
-    }
-    onSave(formData);
-    setFormData({ tanggal: '', uid: '', firstName: '', lastName: '', jam_kedatangan: '', jam_pulang: '' });
-    onClose();
-  };
-
-  if (!isOpen) return null;
-
-  return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-xl font-bold text-gray-800">Tambah Data Manual</h2>
-          <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
-            <X className="h-6 w-6" />
-          </button>
-        </div>
-        
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Tanggal <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="date"
-              value={formData.tanggal}
-              onChange={(e) => setFormData({...formData, tanggal: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Personnel ID <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="text"
-              value={formData.uid}
-              onChange={(e) => setFormData({...formData, uid: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Masukkan Personnel ID"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              First Name
-            </label>
-            <input
-              type="text"
-              value={formData.firstName}
-              onChange={(e) => setFormData({...formData, firstName: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Nama depan"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Last Name
-            </label>
-            <input
-              type="text"
-              value={formData.lastName}
-              onChange={(e) => setFormData({...formData, lastName: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="Nama belakang"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Jam Kedatangan <span className="text-red-500">*</span>
-            </label>
-            <input
-              type="time"
-              value={formData.jam_kedatangan}
-              onChange={(e) => setFormData({...formData, jam_kedatangan: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Jam Pulang (Opsional)
-            </label>
-            <input
-              type="time"
-              value={formData.jam_pulang || ''}
-              onChange={(e) => setFormData({...formData, jam_pulang: e.target.value})}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-          
-          <div className="flex gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50"
-            >
-              Batal
-            </button>
-            <button
-              type="button"
-              onClick={handleSubmit}
-              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
-            >
-              Simpan
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function Input_Absen() {
   const [file, setFile] = useState(null);
@@ -264,7 +136,6 @@ function Input_Absen() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState(null);
-  const [showManualInput, setShowManualInput] = useState(false);
 
   const showToast = (message, type) => {
     setToast({ message, type });
@@ -441,45 +312,6 @@ function Input_Absen() {
     setGroupedData({});
     setError("");
   };
-
- const handleManualSave = (manualData) => {
-  const dateOnly = manualData.tanggal;
-  const personnelId = manualData.uid;
-  
-  // Cek duplikat untuk data manual
-  const isDuplicate = groupedData[dateOnly]?.some(entry => 
-    entry["Personnel ID"] === personnelId && entry.timeType === "kedatangan"
-  );
-  
-  if (isDuplicate) {
-    showToast("Data duplikat! Sudah ada data kedatangan untuk Personnel ID ini pada tanggal yang sama", "error");
-    return;
-  }
-  
-  const newEntry = {
-    _id: `manual-${Date.now()}`,
-    "Date And Time": `${manualData.tanggal} ${manualData.jam_kedatangan}`,
-    "Personnel ID": personnelId,
-    "First Name": manualData.firstName || "",
-    "Last Name": manualData.lastName || "",
-    "jam_pulang": manualData.jam_pulang || null,
-    "timeType": "kedatangan",
-    "isManual": true
-  };
-  
-  setData(prevData => [...prevData, newEntry]);
-  setGroupedData(prevGrouped => {
-    const newGrouped = { ...prevGrouped };
-    if (!newGrouped[dateOnly]) {
-      newGrouped[dateOnly] = [];
-    }
-    newGrouped[dateOnly] = [...newGrouped[dateOnly], newEntry];
-    return newGrouped;
-  });
-
-  showToast("Data manual berhasil ditambahkan", "success");
-};
-
   const handleDeleteRow = (date, index) => {
     if (confirm("Apakah Anda yakin ingin menghapus data ini?")) {
       const rowToDelete = groupedData[date][index];
@@ -631,22 +463,11 @@ function Input_Absen() {
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
-      <ManualInputModal 
-        isOpen={showManualInput} 
-        onClose={() => setShowManualInput(false)} 
-        onSave={handleManualSave}
-      />
-
+    
       <div className="max-w-6xl mx-auto p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800">Upload Data Absensi</h1>
-          <button
-            onClick={() => setShowManualInput(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <UserPlus className="h-5 w-5" />
-            Tambah Manual
-          </button>
+
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Users, Clock, CheckCircle, XCircle, AlertCircle, Search, Filter, Layout, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Users, Clock, CheckCircle, XCircle,UserPlus ,X, AlertCircle, Search, Filter, Layout, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
 import LayoutTemplate from '@/Layouts/LayoutTemplate';
-
+import ManualInputModal from '@/Layouts/ManualInputModal';
 function Absensi() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [kehadiranData, setKehadiranData] = useState({});
@@ -11,7 +11,8 @@ function Absensi() {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  
+  const [showManualInput, setShowManualInput] = useState(false);
+
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -287,9 +288,52 @@ const handlePrintAbsensi = async () => {
   const totalPages = getTotalPages(filteredKehadiran.length);
 
   const activeStatusOption = statusOptions.find(s => s.value === statusFilter) || statusOptions[0];
+ const handleManualSave = (manualData) => {
+  const dateOnly = manualData.tanggal;
+  const personnelId = manualData.uid;
+  
+  // Cek duplikat untuk data manual
+  const isDuplicate = groupedData[dateOnly]?.some(entry => 
+    entry["Personnel ID"] === personnelId && entry.timeType === "kedatangan"
+  );
+  
+  if (isDuplicate) {
+    showToast("Data duplikat! Sudah ada data kedatangan untuk Personnel ID ini pada tanggal yang sama", "error");
+    return;
+  }
+  
+  const newEntry = {
+    _id: `manual-${Date.now()}`,
+    "Date And Time": `${manualData.tanggal} ${manualData.jam_kedatangan}`,
+    "Personnel ID": personnelId,
+    "First Name": manualData.firstName || "",
+    "Last Name": manualData.lastName || "",
+    "jam_pulang": manualData.jam_pulang || null,
+    "timeType": "kedatangan",
+    "isManual": true
+  };
+  
+  setData(prevData => [...prevData, newEntry]);
+  setGroupedData(prevGrouped => {
+    const newGrouped = { ...prevGrouped };
+    if (!newGrouped[dateOnly]) {
+      newGrouped[dateOnly] = [];
+    }
+    newGrouped[dateOnly] = [...newGrouped[dateOnly], newEntry];
+    return newGrouped;
+  });
 
+  showToast("Data manual berhasil ditambahkan", "success");
+};
   return (
     <LayoutTemplate>
+        <ManualInputModal 
+        isOpen={showManualInput}
+        kalender={selectedDate}
+        onClose={() => setShowManualInput(false)} 
+        onSave={handleManualSave}
+      />
+
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto">
           {/* Header Section */}
@@ -434,6 +478,13 @@ const handlePrintAbsensi = async () => {
                       >
                         <Printer className="w-4 h-4" />
                         <span>Print Katering</span>
+                      </button>
+                      <button
+                        onClick={() => setShowManualInput(true)}
+                        className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <UserPlus className="h-5 w-5" />
+                        Tambah Manual
                       </button>
                     </div>
                   </div>

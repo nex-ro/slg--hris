@@ -125,21 +125,6 @@ public function saveAbsensi(Request $request)
         ]);
     }
 }
-    public function inputHarian()
-    {
-        return Inertia::render('Hrd/Absen/Input_Absen', []);
-    }
-public function inputTidak()
-{
-    $users = User::where('active', 1)
-        ->select('id', 'name', 'divisi', 'jabatan')
-        ->orderBy('name')
-        ->get();
-    
-    return Inertia::render('Hrd/Absen/Input_tidak', [
-        'users' => $users
-    ]);
-}
 
 public function storeInputTidak(Request $request)
 {
@@ -255,7 +240,100 @@ public function storeInputTidak(Request $request)
         }
     }
 
+    public function ManualInput(Request $request)
+{
+    $validator = Validator::make($request->all(), [
+        'tanggal' => 'required|date',
+        'user_id' => 'required|exists:users,id',
+        'status' => 'required|in:Hadir,Sakit,P1,P2,P3,C1,C2,DL,WFH,FP-TR,LK',
+        'jam_kedatangan' => 'nullable|date_format:H:i',
+        'jam_pulang' => 'nullable|date_format:H:i',
+    ]);
 
+    if ($validator->fails()) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Validasi gagal',
+            'errors' => $validator->errors()
+        ], 422);
+    }
+
+    // Validasi khusus: jika status Hadir, jam_kedatangan wajib
+    if ($request->status === 'Hadir' && empty($request->jam_kedatangan)) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Jam kedatangan wajib diisi untuk status Hadir'
+        ], 422);
+    }
+
+    // Cek duplikat - perbaiki kolom dari uid ke user_id di query
+    $exists = Kehadiran::where('tanggal', $request->tanggal)
+        ->where('uid', $request->user_id)  // uid adalah kolom di database
+        ->exists();
+
+    if ($exists) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Data kehadiran untuk tanggal dan karyawan ini sudah ada'
+        ], 409);
+    }
+
+    // Get user info
+    $user = User::find($request->user_id);
+    
+    if (!$user) {
+        return response()->json([
+            'success' => false,
+            'message' => 'User tidak ditemukan'
+        ], 404);
+    }
+
+    try {
+        // Create attendance record
+        $kehadiran = Kehadiran::create([
+            'tanggal' => $request->tanggal,
+            'uid' => $request->user_id,  // mapping user_id dari request ke uid di database
+            'status' => $request->status,
+            'jam_kedatangan' => $request->jam_kedatangan,
+            'jam_pulang' => $request->jam_pulang,
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Data kehadiran berhasil disimpan',
+            'data' => [
+                'id' => $kehadiran->id,
+                'tanggal' => $kehadiran->tanggal,
+                'uid' => $kehadiran->uid,
+                'user_name' => $user->name,
+                'status' => $kehadiran->status,
+                'jam_kedatangan' => $kehadiran->jam_kedatangan,
+                'jam_pulang' => $kehadiran->jam_pulang,
+                'created_at' => $kehadiran->created_at,
+            ]
+        ], 201);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Gagal menyimpan data: ' . $e->getMessage()
+        ], 500);
+    }
+} 
+    public function inputHarian()
+    {
+        return Inertia::render('Hrd/Absen/Input_Absen', []);
+    }
+    public function inputTidak()
+    {
+        $users = User::where('active', 1)
+            ->select('id', 'name', 'divisi', 'jabatan')
+            ->orderBy('name')
+            ->get();
+        
+        return Inertia::render('Hrd/Absen/Input_tidak', [
+            'users' => $users
+        ]);
+    }
 
 
  

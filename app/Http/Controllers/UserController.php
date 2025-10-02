@@ -18,6 +18,36 @@ class UserController extends Controller
             'users' => $users
         ]);
     }
+public function getUsers()
+    {
+        $users = User::where('active', 1)
+            ->select('id', 'name', 'email', 'divisi', 'jabatan')
+            ->orderBy('name', 'asc')
+            ->get();
+
+        return response()->json($users);
+    }
+
+    
+   
+
+
+    public function inputHarian()
+    {
+        return Inertia::render('Hrd/Absen/Input_Absen', []);
+    }
+
+    public function inputTidak()
+    {
+        $users = User::where('active', 1)
+            ->select('id', 'name', 'divisi', 'jabatan')
+            ->orderBy('name')
+            ->get();
+        
+        return Inertia::render('Hrd/Absen/Input_tidak', [
+            'users' => $users
+        ]);
+    }
 
     public function store(Request $request)
     {
