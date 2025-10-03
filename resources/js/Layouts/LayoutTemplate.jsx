@@ -33,11 +33,9 @@ const DashboardLayouts = ({ children }) => {
   const [notificationCount] = useState(3);
   const [expandedMenu, setExpandedMenu] = useState(null);
   const dropdownRef = useRef(null);
-  
   const currentPath = usePage().url;
-
   const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
+    { icon: LayoutDashboard, label: 'Dashboard', href: '/HRD/dashboard' },
     { icon: Users, label: 'Pegawai', href: '/pegawai' },
     { 
       icon: Calendar, 

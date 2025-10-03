@@ -37,7 +37,7 @@ const DashboardLayouts = ({ children }) => {
   const currentPath = usePage().url;
 
   const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
+    { icon: LayoutDashboard, label: 'Dashboard', href: '/HRD/dashboard' },
     { icon: Users, label: 'Pegawai', href: '/pegawai' },
     { 
       icon: Calendar, 

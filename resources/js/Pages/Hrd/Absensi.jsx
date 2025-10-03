@@ -7,11 +7,12 @@ function Absensi() {
   const [kehadiranData, setKehadiranData] = useState({});
   const [loading, setLoading] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [activeTower, setActiveTower] = useState('Eifel');
+  const [activeTower, setActiveTower] = useState('Eiffel');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const [showManualInput, setShowManualInput] = useState(false);
+  const [rawKehadiranData, setRawKehadiranData] = useState([]);
 
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
@@ -75,7 +76,7 @@ const handlePrintAbsensi = async () => {
         body: JSON.stringify({
           tanggal: formatDateForAPI(selectedDate),
           tower: activeTower,
-          kehadiran: currentKehadiran
+          kehadiran: rawKehadiranData
         })
       });
 
@@ -89,7 +90,7 @@ const handlePrintAbsensi = async () => {
       // Buat element anchor untuk download
       const a = document.createElement('a');
       a.href = url;
-      a.download = `Katering_${activeTower}_${formatDateForAPI(selectedDate)}.xlsx`;
+      a.download = `Katering_${formatDateForAPI(selectedDate)}.xlsx`;
       
       // Trigger download
       document.body.appendChild(a);
@@ -132,7 +133,8 @@ const handlePrintAbsensi = async () => {
     setCurrentPage(1);
   }, [searchQuery, statusFilter, activeTower]);
 
-  const fetchKehadiranData = async (date) => {
+  const fetchKehadiranData = async (date) => 
+  {
     setLoading(true);
     try {
       const formattedDate = formatDateForAPI(date);
@@ -156,9 +158,12 @@ const handlePrintAbsensi = async () => {
         console.error('Response is not JSON:', text.substring(0, 200));
         throw new Error('Server tidak mengembalikan JSON. Periksa route API Anda.');
       }
-      
+
       const data = await response.json();
-      console.log('Fetched kehadiran data:', data);
+
+      // SIMPAN DATA MENTAH
+      setRawKehadiranData(data);
+
       const groupedByTower = data.reduce((acc, item) => {
         const tower = item.tower || 'Tanpa Tower';
         if (!acc[tower]) {
@@ -167,9 +172,9 @@ const handlePrintAbsensi = async () => {
         acc[tower].push(item);
         return acc;
       }, {});
-      
+
       setKehadiranData(groupedByTower);
-      
+
       const towers = Object.keys(groupedByTower);
       if (towers.length > 0 && !towers.includes(activeTower)) {
         setActiveTower(towers[0]);
@@ -288,43 +293,9 @@ const handlePrintAbsensi = async () => {
   const totalPages = getTotalPages(filteredKehadiran.length);
 
   const activeStatusOption = statusOptions.find(s => s.value === statusFilter) || statusOptions[0];
- const handleManualSave = (manualData) => {
-  const dateOnly = manualData.tanggal;
-  const personnelId = manualData.uid;
-  
-  // Cek duplikat untuk data manual
-  const isDuplicate = groupedData[dateOnly]?.some(entry => 
-    entry["Personnel ID"] === personnelId && entry.timeType === "kedatangan"
-  );
-  
-  if (isDuplicate) {
-    showToast("Data duplikat! Sudah ada data kedatangan untuk Personnel ID ini pada tanggal yang sama", "error");
-    return;
-  }
-  
-  const newEntry = {
-    _id: `manual-${Date.now()}`,
-    "Date And Time": `${manualData.tanggal} ${manualData.jam_kedatangan}`,
-    "Personnel ID": personnelId,
-    "First Name": manualData.firstName || "",
-    "Last Name": manualData.lastName || "",
-    "jam_pulang": manualData.jam_pulang || null,
-    "timeType": "kedatangan",
-    "isManual": true
-  };
-  
-  setData(prevData => [...prevData, newEntry]);
-  setGroupedData(prevGrouped => {
-    const newGrouped = { ...prevGrouped };
-    if (!newGrouped[dateOnly]) {
-      newGrouped[dateOnly] = [];
-    }
-    newGrouped[dateOnly] = [...newGrouped[dateOnly], newEntry];
-    return newGrouped;
-  });
-
-  showToast("Data manual berhasil ditambahkan", "success");
-};
+ const handleManualSave = () => {
+    fetchKehadiranData(selectedDate);
+ }
   return (
     <LayoutTemplate>
         <ManualInputModal 

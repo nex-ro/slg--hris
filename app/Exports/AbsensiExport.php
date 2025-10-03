@@ -127,7 +127,8 @@ class AbsensiExport implements FromCollection, WithHeadings, WithStyles, WithTit
                     // On Time atau N/A = Putih (default)
                     if (strpos($keterangan, 'on time') !== false || 
                         $keterangan == 'n/a' || 
-                        $keterangan == '-' ||
+                        $keterangan == '-' || 
+                        $keterangan == 'libur kerja' || 
                         empty($keterangan)) {
                         // Tidak perlu set warna (tetap putih)
                         continue;

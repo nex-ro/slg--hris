@@ -212,7 +212,7 @@ function Pegawai({ users = [], flash }) {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.jabatan || '-'}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                        user.tower === 'Eifel' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'
+                        user.tower === 'Eiffel' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800'
                       }`}>
                         {user.tower || '-'}
                       </span>
@@ -371,7 +371,7 @@ function Pegawai({ users = [], flash }) {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     >
                       <option value="">-- Pilih Tower --</option>
-                      <option value="Eifel">Eifel</option>
+                      <option value="Eiffel">Eiffel</option>
                       <option value="Liberty">Liberty</option>
                     </select>
                   </div>

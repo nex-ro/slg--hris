@@ -5,6 +5,8 @@ import LayoutTemplate from "@/Layouts/LayoutTemplate";
 
 function InputTidak({ users = [], flash }) {
   const [selectedDate, setSelectedDate] = useState('');
+  const [selectedDoneDate, setselectedDoneDate] = useState('');
+  const [dateError, setDateError] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
@@ -54,16 +56,24 @@ function InputTidak({ users = [], flash }) {
 
   const handleSubmit = () => {
     if (!isFormValid) return;
-    
+    if (selectedDoneDate && new Date(selectedDoneDate) < new Date(selectedDate)) {
+  setDateError('Tanggal selesai tidak boleh lebih kecil dari tanggal mulai.');
+  return;
+} else {
+  setDateError('');
+}
+
     setProcessing(true);
     
     router.post('/hrd/absen/input-tidak', {
       tanggal: selectedDate,
+      tanggalSelesai: selectedDoneDate,
       status: selectedStatus,
       users: selectedUsers.map(u => u.id)
     }, {
       onSuccess: () => {
         setSelectedDate('');
+        setselectedDoneDate('');
         setSelectedStatus('');
         setSelectedUsers([]);
         setSearchTerm('');
@@ -118,19 +128,37 @@ function InputTidak({ users = [], flash }) {
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
             {/* Date Selection */}
             <div className="p-8 bg-gradient-to-r from-blue-50 to-slate-50 border-b border-slate-200">
-              <div className="max-w-md">
-                <label className="flex items-center text-sm font-bold text-slate-700 mb-3">
-                  <Calendar className="w-5 h-5 mr-2 text-blue-600" />
-                  Tanggal Kehadiran
-                </label>
-                <input
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all text-slate-700 font-medium"
-                />
-              </div>
-            </div>
+  <div className="flex gap-8">
+    {/* Tanggal Ketidakhadiran */}
+    <div className="w-1/2">
+      <label className="flex items-center text-sm font-bold text-slate-700 mb-3">
+        <Calendar className="w-5 h-5 mr-2 text-blue-600" />
+        Tanggal Ketidakhadiran
+      </label>
+      <input
+        type="date"
+        value={selectedDate}
+        onChange={(e) => setSelectedDate(e.target.value)}
+        className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all text-slate-700 font-medium"
+      />
+    </div>
+
+    {/* Hingga Tanggal (Opsional) */}
+    <div className="w-1/2">
+      <label className="flex items-center text-sm font-bold text-slate-700 mb-3">
+        <Calendar className="w-5 h-5 mr-2 text-blue-600" />
+        Hingga Tanggal (Opsional)
+      </label>
+      <input
+        type="date"
+        value={selectedDoneDate}
+        onChange={(e) => setselectedDoneDate(e.target.value)}
+        className="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:border-blue-500 focus:ring-2 focus:ring-blue-200 focus:outline-none transition-all text-slate-700 font-medium"
+      />
+    </div>
+  </div>
+</div>
+
 
             {/* User Selection Section */}
             <div className="p-8 border-b border-slate-200">
@@ -278,6 +306,10 @@ function InputTidak({ users = [], flash }) {
             </div>
 
             {/* Footer with Submit Button */}
+            {dateError && (
+  <p className="mt-2 text-sm text-red-600 font-medium">{dateError}</p>
+)}
+
             <div className="px-8 py-6 bg-gradient-to-r from-slate-50 to-blue-50 border-t-2 border-slate-200">
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-start gap-3">
