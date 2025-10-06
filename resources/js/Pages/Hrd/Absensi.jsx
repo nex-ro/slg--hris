@@ -18,13 +18,49 @@ function Absensi() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
+
+// Fungsi untuk mendapatkan CSRF token fresh
+const fetchFreshCsrfToken = async () => {
+  try {
+    // Fetch halaman current untuk mendapatkan token baru
+    const response = await fetch(window.location.href, {
+      method: 'GET',
+      credentials: 'same-origin'
+    });
+    
+    if (response.ok) {
+      const html = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const newToken = doc.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (newToken) {
+        // Update meta tag di halaman current
+        const metaTag = document.querySelector('meta[name="csrf-token"]');
+        if (metaTag) {
+          metaTag.setAttribute('content', newToken);
+        }
+        return newToken;
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching fresh CSRF token:', error);
+  }
+  return null;
+};
+
+const getCsrfToken = () => {
+  return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+};
 const handlePrintAbsensi = async () => {
   try {
+    let csrfToken = getCsrfToken();
+    
     const response = await fetch('/print-absensi', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+        'X-CSRF-TOKEN': csrfToken,
         'X-Requested-With': 'XMLHttpRequest'
       },
       credentials: 'same-origin',
@@ -35,41 +71,91 @@ const handlePrintAbsensi = async () => {
       })
     });
 
+    // Jika error 419, fetch token baru dan retry
+    if (response.status === 419) {
+      console.log('CSRF token expired, fetching new token...');
+      const newToken = await fetchFreshCsrfToken();
+      
+      if (!newToken) {
+        throw new Error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.');
+      }
+
+      // Retry dengan token baru
+      const retryResponse = await fetch('/print-absensi', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': newToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          tanggal: formatDateForAPI(selectedDate),
+          tower: activeTower,
+          kehadiran: currentKehadiran
+        })
+      });
+
+      if (!retryResponse.ok) {
+        throw new Error(`HTTP error! status: ${retryResponse.status}`);
+      }
+
+      const blob = await retryResponse.blob();
+      downloadFile(blob, `Absensi_${activeTower}_${formatDateForAPI(selectedDate)}.xlsx`);
+      return;
+    }
+
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
     const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-    
-    // Buat element anchor untuk download
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Absensi_${activeTower}_${formatDateForAPI(selectedDate)}.xlsx`;
-    
-    // Trigger download
-    document.body.appendChild(a);
-    a.click();
-    
-    // Cleanup
-    document.body.removeChild(a);
-    window.URL.revokeObjectURL(url);
-    
-    console.log('File downloaded successfully');
+    downloadFile(blob, `Absensi_${activeTower}_${formatDateForAPI(selectedDate)}.xlsx`);
     
   } catch (error) {
     console.error('Error print absensi:', error);
-    alert(`Error: ${error.message}`);
+    if (error.message.includes('419') || error.message.includes('CSRF')) {
+      alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
+      window.location.reload();
+    } else {
+      alert(`Error: ${error.message}`);
+    }
   }
 };
+const handlePrintKatering = async () => {
+  try {
+    let csrfToken = getCsrfToken();
+    
+    const response = await fetch('/print-katering', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        tanggal: formatDateForAPI(selectedDate),
+        tower: activeTower,
+        kehadiran: rawKehadiranData
+      })
+    });
 
-  const handlePrintKatering = async () => {
-    try {
-      const response = await fetch('/print-katering', {
+    // Jika error 419, fetch token baru dan retry
+    if (response.status === 419) {
+      console.log('CSRF token expired, fetching new token...');
+      const newToken = await fetchFreshCsrfToken();
+      
+      if (!newToken) {
+        throw new Error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.');
+      }
+
+      // Retry dengan token baru
+      const retryResponse = await fetch('/print-katering', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+          'X-CSRF-TOKEN': newToken,
           'X-Requested-With': 'XMLHttpRequest'
         },
         credentials: 'same-origin',
@@ -80,33 +166,43 @@ const handlePrintAbsensi = async () => {
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+      if (!retryResponse.ok) {
+        throw new Error(`HTTP error! status: ${retryResponse.status}`);
       }
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      
-      // Buat element anchor untuk download
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `Katering_${formatDateForAPI(selectedDate)}.xlsx`;
-      
-      // Trigger download
-      document.body.appendChild(a);
-      a.click();
-      
-      // Cleanup
-      document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
-      
-      console.log('File katering downloaded successfully');
-      
-    } catch (error) {
-      console.error('Error print katering:', error);
+      const blob = await retryResponse.blob();
+      downloadFile(blob, `Katering_${formatDateForAPI(selectedDate)}.xlsx`);
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    downloadFile(blob, `Katering_${formatDateForAPI(selectedDate)}.xlsx`);
+    
+  } catch (error) {
+    console.error('Error print katering:', error);
+    if (error.message.includes('419') || error.message.includes('CSRF')) {
+      alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
+      window.location.reload();
+    } else {
       alert(`Error: ${error.message}`);
     }
-  };
+  }
+};
+const downloadFile = (blob, filename) => {
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  window.URL.revokeObjectURL(url);
+  console.log('File downloaded successfully:', filename);
+};
   const statusOptions = [
     { value: 'all', label: 'Semua Status', desc: 'Tampilkan semua data', color: 'bg-gray-500', textColor: 'text-white', borderColor: 'border-gray-500' },
     { value: 'N/A', label: 'N/A', desc: 'Status tidak tersedia', color: 'bg-gray-600', textColor: 'text-white', borderColor: 'border-gray-600' },
@@ -318,79 +414,80 @@ const handlePrintAbsensi = async () => {
             <p className="text-gray-600 ml-14">Pilih tanggal untuk melihat data kehadiran karyawan</p>
           </div>
 
-          <div className="grid lg:grid-cols-3 gap-6">
+          <div className="grid lg:grid-cols-4 gap-6">
             {/* Left Column - Calendar */}
-            <div className="lg:col-span-1">
-              <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-5 sticky top-4">
-                {/* Calendar Header */}
-                <div className="flex items-center justify-between mb-5 pb-4 border-b border-gray-100">
-                  <button
-                    onClick={handlePrevMonth}
-                    className="p-2 hover:bg-indigo-50 rounded-lg transition text-indigo-600"
-                    title="Bulan Sebelumnya"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-                  <h2 className="text-base font-bold text-gray-800">
-                    {currentMonth.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
-                  </h2>
-                  <button
-                    onClick={handleNextMonth}
-                    className="p-2 hover:bg-indigo-50 rounded-lg transition text-indigo-600"
-                    title="Bulan Berikutnya"
-                  >
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
-                </div>
+           <div className="lg:col-span-1">
+            <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-4 sticky top-4">
+              {/* Calendar Header - ukuran lebih kecil */}
+              <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100">
+                <button
+                  onClick={handlePrevMonth}
+                  className="p-1.5 hover:bg-indigo-50 rounded-lg transition text-indigo-600"
+                  title="Bulan Sebelumnya"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                  </svg>
+                </button>
+                <h2 className="text-sm font-bold text-gray-800">
+                  {currentMonth.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' })}
+                </h2>
+                <button
+                  onClick={handleNextMonth}
+                  className="p-1.5 hover:bg-indigo-50 rounded-lg transition text-indigo-600"
+                  title="Bulan Berikutnya"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+              </div>
 
-                {/* Calendar Grid */}
-                <div className="grid grid-cols-7 gap-1.5">
-                  {days.map((day) => (
-                    <div key={day} className="text-center font-bold text-gray-500 py-2 text-xs">
+              {/* Calendar Grid - ukuran lebih kecil */}
+              <div className="grid grid-cols-7 gap-1">
+                {days.map((day) => (
+                  <div key={day} className="text-center font-bold text-gray-500 py-1.5 text-[10px]">
+                    {day}
+                  </div>
+                ))}
+
+                {Array.from({ length: startingDayOfWeek }).map((_, i) => (
+                  <div key={`empty-${i}`} className="aspect-square" />
+                ))}
+
+                {Array.from({ length: daysInMonth }).map((_, i) => {
+                  const day = i + 1;
+                  return (
+                    <button
+                      key={day}
+                      onClick={() => handleDateClick(day)}
+                      className={`aspect-square rounded-lg flex items-center justify-center font-semibold transition-all text-xs
+                        ${isSelectedDate(day) 
+                          ? 'bg-indigo-600 text-white shadow-lg scale-105 ring-2 ring-indigo-300' 
+                          : isToday(day) 
+                          ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-400' 
+                          : 'bg-gray-50 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600'
+                        }`}
+                    >
                       {day}
-                    </div>
-                  ))}
-                  
-                  {Array.from({ length: startingDayOfWeek }).map((_, i) => (
-                    <div key={`empty-${i}`} className="aspect-square" />
-                  ))}
-                  
-                  {Array.from({ length: daysInMonth }).map((_, i) => {
-                    const day = i + 1;
-                    return (
-                      <button
-                        key={day}
-                        onClick={() => handleDateClick(day)}
-                        className={`aspect-square rounded-lg flex items-center justify-center font-semibold transition-all text-sm
-                          ${isSelectedDate(day) 
-                            ? 'bg-indigo-600 text-white shadow-lg scale-105 ring-2 ring-indigo-300' 
-                            : isToday(day) 
-                            ? 'bg-indigo-100 text-indigo-700 ring-2 ring-indigo-400' 
-                            : 'bg-gray-50 text-gray-700 hover:bg-indigo-50 hover:text-indigo-600'
-                          }`}
-                      >
-                        {day}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                {/* Selected Date Info */}
-                <div className="mt-5 pt-5 border-t border-gray-100">
-                  <p className="text-xs text-gray-500 mb-1">Tanggal Dipilih</p>
-                  <p className="text-sm font-bold text-indigo-600">
-                    {formatDateDisplay(selectedDate)}
-                  </p>
-                </div>
+                    </button>
+                  );
+                })}
+              </div>
+              
+              {/* Selected Date Info - ukuran lebih kecil */}
+              <div className="mt-4 pt-4 border-t border-gray-100">
+                <p className="text-[10px] text-gray-500 mb-1">Tanggal Dipilih</p>
+                <p className="text-xs font-bold text-indigo-600">
+                  {formatDateDisplay(selectedDate)}
+                </p>
               </div>
             </div>
+          </div>
+
 
             {/* Right Column - Kehadiran Data */}
-            <div className="lg:col-span-2">
+            <div className="lg:col-span-3">
               {loading ? (
                 <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-12 text-center">
                   <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600"></div>

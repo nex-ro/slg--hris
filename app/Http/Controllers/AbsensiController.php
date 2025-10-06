@@ -16,6 +16,8 @@ use App\Exports\KateringExport;
 use App\Exports\AbsensiMonthlyExport;
 use App\Models\Holiday;
 use App\Exports\AbsensiCustomExport;
+use App\Exports\KehadiranExport;
+use App\Exports\RekapKehadiranSheet;
 class AbsensiController extends Controller
 {
     public function absensi()
@@ -406,9 +408,9 @@ public function storeInputTidak(Request $request)
             ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk')
             ->where('tower', $tower)
             ->orderBy('tower', 'asc')
-            ->orderBy('name', 'asc')
+            ->orderBy('id', 'asc')
             ->get();
-
+        
         // Array untuk menyimpan data per tanggal
         $dataPerTanggal = [];
 
@@ -507,28 +509,115 @@ public function storeInputTidak(Request $request)
         ], 500);
     }
 }
-    public function printRekapAll(Request $request)
+   public function printRekapAll(Request $request)
     {
-        dd($request->all());
-        $bulan = $request->input('bulan');
-        $tahun = $request->input('tahun');
+        try {
+            $request->validate([
+                'bulan' => 'required|integer|min:1|max:12',
+                'tahun' => 'required|integer|min:2000|max:2100'
+            ]);
 
-        // Validasi input
-        if (!$bulan || !$tahun) {
+            $bulan = (int) $request->input('bulan');
+            $tahun = (int) $request->input('tahun');
+
+            // Hitung jumlah hari dalam bulan tersebut
+            $jumlahHari = Carbon::create($tahun, $bulan, 1)->daysInMonth;
+
+            // Ambil semua users yang aktif
+            $users = User::where('active', true)
+                ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk')
+                ->orderBy('divisi', 'asc')
+                ->orderBy('id', 'asc')
+                ->get();
+            // Array untuk menyimpan data per tanggal
+            $dataPerTanggal = [];
+
+            // Loop untuk setiap hari dalam bulan
+            for ($hari = 1; $hari <= $jumlahHari; $hari++) {
+                $tanggal = Carbon::create($tahun, $bulan, $hari)->format('Y-m-d');
+                $carbonDate = Carbon::parse($tanggal);
+                
+                // Cek apakah hari Sabtu atau Minggu
+                $isSaturdayOrSunday = $carbonDate->isSaturday() || $carbonDate->isSunday();
+
+                // Cek apakah libur nasional
+                $isNationalHoliday = Holiday::isHoliday($tanggal);
+
+                // Tentukan apakah hari libur
+                $isHoliday = $isSaturdayOrSunday || $isNationalHoliday;
+
+                // Ambil kehadiran untuk tanggal ini
+                $kehadiranHariIni = Kehadiran::where('tanggal', $tanggal)
+                    ->get()
+                    ->keyBy('uid');
+
+                // Format data untuk setiap user di tanggal ini
+                $formattedData = $users->map(function ($user) use ($kehadiranHariIni, $tanggal, $isHoliday) {
+                    $attendance = $kehadiranHariIni->get($user->id);
+
+                    // Tentukan status
+                    $status = 'N/A';
+                    if ($isHoliday) {
+                        $status = 'LK';
+                    } elseif ($attendance) {
+                        $status = $attendance->status;
+                    }
+
+                    return [
+                        'id' => $attendance->id ?? null,
+                        'tanggal' => $tanggal,
+                        'tower' => $user->tower ?? 'Tanpa Tower',
+                        'status' => $status,
+                        'jam_kedatangan' => $attendance && $attendance->jam_kedatangan 
+                            ? Carbon::parse($attendance->jam_kedatangan)->format('H:i') 
+                            : null,
+                        'jam_pulang' => $attendance && $attendance->jam_pulang 
+                            ? Carbon::parse($attendance->jam_pulang)->format('H:i') 
+                            : null,
+                        'user' => [
+                            'id' => $user->id,
+                            'name' => $user->name,
+                            'divisi' => $user->divisi,
+                            'jabatan' => $user->jabatan,
+                            'tmk' => $user->tmk,
+                            'tower' => $user->tower ?? 'Tanpa Tower',
+                        ]
+                    ];
+                });
+
+                $dataPerTanggal[] = [
+                    'tanggal' => $tanggal,
+                    'hari' => $carbonDate->locale('id')->dayName,
+                    'is_holiday' => $isHoliday,
+                    'total_users' => $users->count(),
+                    'total_hadir' => $kehadiranHariIni->count(),
+                    'data' => $formattedData->values()->all()
+                ];
+            }
+
+            // Generate Excel
+            $namaBulan = Carbon::create($tahun, $bulan, 1)->locale('id')->monthName;
+            $filename = "Monitoring_Kehadiran_{$namaBulan}_{$tahun}.xlsx";
+
+            return Excel::download(new KehadiranExport($dataPerTanggal, $users, $bulan, $tahun, $jumlahHari), $filename);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
             return response()->json([
-                'error' => 'Data tidak lengkap. Pastikan bulan, tahun, dan tower diisi.'
-            ], 400);
+                'error' => 'Validasi gagal',
+                'message' => 'Format bulan (1-12) dan tahun (2000-2100) harus valid',
+                'details' => $e->errors()
+            ], 422);
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Terjadi kesalahan',
+                'message' => $e->getMessage()
+            ], 500);
         }
+}
 
-        // Redirect ke fungsi printAbsensiMonthly dengan parameter yang sesuai
-        // return redirect()->route('kehadiran.print-monthly', [
-        //     'bulan' => $bulan,
-        //     'tahun' => $tahun,
-        // ]);
-    }
 
-    public function printAbsensiCustom(Request $request)
-    {
+public function printAbsensiCustom(Request $request)
+{
     try {
         $request->validate([
             'tanggal_mulai' => 'required|date',

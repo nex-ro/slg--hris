@@ -10,13 +10,220 @@ use App\Models\User;
 use App\Models\Holiday;
 use Maatwebsite\Excel\Facades\Excel;
 use App\Exports\AbsensiPerDivisiExport;
+use Illuminate\Support\Facades\DB;
+use App\Exports\KehadiranExport;
 
 class HrdController extends Controller
 {
-      public function index()
+    public function index(Request $request)
     {
-        return Inertia::render('Hrd/Dashboard', []);
+        // Get filter parameters
+        $month = $request->input('month', now()->month);
+        $year = $request->input('year', now()->year);
+        $tower = $request->input('tower', null);
+        $divisi = $request->input('divisi', null);
+        $userId = $request->input('user_id', null);
+
+        // Get all towers and divisions for filters
+        $towers = User::distinct()->pluck('tower')->filter()->values();
+        $divisions = User::distinct()->pluck('divisi')->filter()->values();
+
+        // Get top 10 late employees per tower
+        $top10PerTower = $this->getTop10LateEmployees($month, $year, $tower);
+
+        // Get late count by division
+        $lateByDivision = $this->getLateCountByDivision($month, $year);
+
+        // Get total late trend data
+        $lateTrendData = $this->getLateTrendData($month, $year, $divisi, $userId);
+
+        // Get employees late 3+ times
+        $late3TimesData = $this->getEmployeesLate3Times($month, $year, $tower);
+
+        // Get summary statistics
+        $summaryStats = $this->getSummaryStats($month, $year);
+
+        // Get all users for person filter
+        $users = User::where('active', 1)
+            ->select('id', 'name')
+            ->orderBy('name')
+            ->get();
+
+        return Inertia::render('Hrd/Dashboard', [
+            'filters' => [
+                'month' => (int)$month,
+                'year' => (int)$year,
+                'tower' => $tower,
+                'divisi' => $divisi,
+                'userId' => $userId,
+            ],
+            'towers' => $towers,
+            'divisions' => $divisions,
+            'users' => $users,
+            'top10PerTower' => $top10PerTower,
+            'lateByDivision' => $lateByDivision,
+            'lateTrendData' => $lateTrendData,
+            'late3TimesData' => $late3TimesData,
+            'summaryStats' => $summaryStats,
+        ]);
     }
+
+    /**
+     * Get top 10 employees with most late records per tower
+     */
+    private function getTop10LateEmployees($month, $year, $tower = null)
+    {
+        $query = Kehadiran::select('uid', DB::raw('COUNT(*) as late_count'))
+            ->whereYear('tanggal', $year)
+            ->whereMonth('tanggal', $month)
+            ->where('status', 'terlambat');
+
+        if ($tower) {
+            $query->whereHas('user', function($q) use ($tower) {
+                $q->where('tower', $tower);
+            });
+        }
+
+        $lateData = $query->groupBy('uid')
+            ->orderByDesc('late_count')
+            ->limit(10)
+            ->get();
+
+        return $lateData->map(function($item) {
+            return [
+                'name' => $item->user->name ?? 'Unknown',
+                'jumlah' => $item->late_count,
+                'user_id' => $item->uid,
+                'tower' => $item->user->tower ?? '',
+                'divisi' => $item->user->divisi ?? '',
+            ];
+        });
+    }
+
+    /**
+     * Get late count grouped by division
+     */
+    private function getLateCountByDivision($month, $year)
+    {
+        $lateByDivision = Kehadiran::select('users.divisi', DB::raw('COUNT(*) as count'))
+            ->join('users', 'kehadiran.uid', '=', 'users.id')
+            ->whereYear('kehadiran.tanggal', $year)
+            ->whereMonth('kehadiran.tanggal', $month)
+            ->where('kehadiran.status', 'terlambat')
+            ->whereNotNull('users.divisi')
+            ->groupBy('users.divisi')
+            ->get();
+
+        return $lateByDivision->map(function($item) {
+            return [
+                'name' => $item->divisi,
+                'value' => $item->count,
+            ];
+        });
+    }
+
+    /**
+     * Get late trend data (daily) with optional filters
+     */
+    private function getLateTrendData($month, $year, $divisi = null, $userId = null)
+    {
+        $query = Kehadiran::select(
+                DB::raw('DAY(tanggal) as day'),
+                DB::raw('COUNT(*) as count')
+            )
+            ->whereYear('tanggal', $year)
+            ->whereMonth('tanggal', $month)
+            ->where('status', 'terlambat');
+
+        // Apply filters
+        if ($divisi && $divisi !== 'All') {
+            $query->whereHas('user', function($q) use ($divisi) {
+                $q->where('divisi', $divisi);
+            });
+        }
+
+        if ($userId && $userId !== 'All') {
+            $query->where('uid', $userId);
+        }
+
+        $trendData = $query->groupBy(DB::raw('DAY(tanggal)'))
+            ->orderBy('day')
+            ->get();
+
+        return $trendData->map(function($item) {
+            return [
+                'day' => $item->day,
+                'count' => $item->count,
+            ];
+        });
+    }
+
+    /**
+     * Get employees who were late 3 or more times
+     */
+    private function getEmployeesLate3Times($month, $year, $tower = null)
+    {
+        $query = Kehadiran::select('uid', DB::raw('COUNT(*) as late_count'))
+            ->whereYear('tanggal', $year)
+            ->whereMonth('tanggal', $month)
+            ->where('status', 'terlambat');
+
+        if ($tower) {
+            $query->whereHas('user', function($q) use ($tower) {
+                $q->where('tower', $tower);
+            });
+        }
+
+        $lateData = $query->groupBy('uid')
+            ->having('late_count', '>=', 3)
+            ->orderByDesc('late_count')
+            ->get();
+
+        return $lateData->map(function($item) {
+            $user = $item->user;
+            return [
+                'id' => $item->uid,
+                'name' => $user->name ?? 'Unknown',
+                'divisi' => $user->divisi ?? '-',
+                'tower' => $user->tower ?? '-',
+                'lateCount' => $item->late_count,
+            ];
+        });
+    }
+
+    /**
+     * Get summary statistics
+     */
+    private function getSummaryStats($month, $year)
+    {
+        $totalLate = Kehadiran::whereYear('tanggal', $year)
+            ->whereMonth('tanggal', $month)
+            ->where('status', 'terlambat')
+            ->count();
+
+        $totalEmployees = User::where('active', 1)->count();
+
+        $totalTowers = User::where('active', 1)
+            ->whereNotNull('tower')
+            ->distinct('tower')
+            ->count('tower');
+
+        $late3Times = Kehadiran::select('uid')
+            ->whereYear('tanggal', $year)
+            ->whereMonth('tanggal', $month)
+            ->where('status', 'terlambat')
+            ->groupBy('uid')
+            ->havingRaw('COUNT(*) >= 3')
+            ->count();
+
+        return [
+            'totalLate' => $totalLate,
+            'totalEmployees' => $totalEmployees,
+            'totalTowers' => $totalTowers,
+            'late3Times' => $late3Times,
+        ];
+    }
+
     public function absensi()
     {
         return Inertia::render('Hrd/Absensi', []);
@@ -237,7 +444,7 @@ public function exportByTowerAndDivisi(Request $request)
         $users = User::where('active', true)
             ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk')
             ->orderBy('divisi', 'asc')
-            ->orderBy('name', 'asc')
+            ->orderBy('id', 'asc')
             ->get();
 
         if ($users->isEmpty()) {

@@ -9,6 +9,7 @@ function Dokumen() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [customDate, setCustomDate] = useState({ start: "", end: "" });
   const [selectedTower, setSelectedTower] = useState("");
+  const [downloadLoading, setDownloadLoading] = useState(false);
   const towers = ["Eiffel", "Liberty"];
 
   const months = [
@@ -24,30 +25,122 @@ function Dokumen() {
     console.log(`Download ${fileType} - Hari Ini`);
     console.log("Tanggal:", new Date().toLocaleDateString('id-ID'));
   };
+  // Fungsi untuk mendapatkan CSRF token fresh
+const fetchFreshCsrfToken = async () => {
+  try {
+    const response = await fetch(window.location.href, {
+      method: 'GET',
+      credentials: 'same-origin'
+    });
+    
+    if (response.ok) {
+      const html = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const newToken = doc.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (newToken) {
+        const metaTag = document.querySelector('meta[name="csrf-token"]');
+        if (metaTag) {
+          metaTag.setAttribute('content', newToken);
+        }
+        return newToken;
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching fresh CSRF token:', error);
+  }
+  return null;
+};
+
+const getCsrfToken = () => {
+  return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+};
+const downloadFileWithRetry = async (url) => {
+  setDownloadLoading(true);
+  try {
+    let csrfToken = getCsrfToken();
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'X-CSRF-TOKEN': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'same-origin'
+    });
+
+    // Jika error 419, fetch token baru dan retry
+    if (response.status === 419) {
+      console.log('CSRF token expired, fetching new token...');
+      const newToken = await fetchFreshCsrfToken();
+      
+      if (!newToken) {
+        throw new Error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.');
+      }
+
+      // Retry dengan token baru
+      const retryResponse = await fetch(url, {
+        method: 'GET',
+        headers: {
+          'X-CSRF-TOKEN': newToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin'
+      });
+
+      if (!retryResponse.ok) {
+        throw new Error(`HTTP error! status: ${retryResponse.status}`);
+      }
+
+      // Redirect ke URL download
+      window.location.href = url;
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    // Redirect ke URL download
+    window.location.href = url;
+    
+  } catch (error) {
+    console.error('Error downloading file:', error);
+    if (error.message.includes('419') || error.message.includes('CSRF')) {
+      alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
+      window.location.reload();
+    } else {
+      alert(`Error: ${error.message}`);
+    }
+  } finally {
+    setDownloadLoading(false);
+  }
+};
 
   const handleDownloadPerTower = async (fileType) => {
-    if (!selectedMonth) {
-      alert("Mohon pilih bulan terlebih dahulu");
-      return;
-    }
-    if (!selectedYear) {
-      alert("Mohon pilih tahun terlebih dahulu");
-      return;
-    }
+  if (!selectedMonth) {
+    alert("Mohon pilih bulan terlebih dahulu");
+    return;
+  }
+  if (!selectedYear) {
+    alert("Mohon pilih tahun terlebih dahulu");
+    return;
+  }
 
-    const bulan = getMonthNumber(selectedMonth);
-    const tahun = selectedYear;
+  const bulan = getMonthNumber(selectedMonth);
+  const tahun = selectedYear;
 
-    console.log(`Download ${fileType} - Per Divisi`);
-    console.log("Bulan:", bulan);
-    console.log("Tahun:", tahun);
+  console.log(`Download ${fileType} - Per Divisi`);
+  console.log("Bulan:", bulan);
+  console.log("Tahun:", tahun);
 
-    if (fileType === "Absensi") {
-      window.location.href = `/absensi/export-tower-divisi?bulan=${bulan}&tahun=${tahun}`;
-    } else {
-      console.log("Katering per divisi belum tersedia");
-    }
-  };
+  if (fileType === "Absensi") {
+    await downloadFileWithRetry(`/absensi/export-tower-divisi?bulan=${bulan}&tahun=${tahun}`);
+  } else {
+    console.log("Katering per divisi belum tersedia");
+  }
+};
 
   const getMonthNumber = (monthName) => {
     const monthIndex = months.indexOf(monthName);
@@ -55,74 +148,86 @@ function Dokumen() {
   };
 
   const handleDownloadMonthly = async (fileType) => {
-    if (!selectedMonth) {
-      alert("Mohon pilih bulan terlebih dahulu");
-      return;
-    }
-    if (!selectedYear) {
-      alert("Mohon pilih tahun terlebih dahulu");
-      return;
-    }
+  if (!selectedMonth) {
+    alert("Mohon pilih bulan terlebih dahulu");
+    return;
+  }
+  if (!selectedYear) {
+    alert("Mohon pilih tahun terlebih dahulu");
+    return;
+  }
+  if (!selectedTower) {
+    alert("Mohon pilih tower terlebih dahulu");
+    return;
+  }
 
+  const bulan = getMonthNumber(selectedMonth);
+  const tahun = selectedYear;
+
+  console.log(`Download ${fileType} - Bulanan`);
+  console.log("Bulan:", selectedMonth, "->", bulan);
+  console.log("Tahun:", tahun);
+  console.log("Tower:", selectedTower);
+
+  if (fileType === "Absensi") {
+    await downloadFileWithRetry(`/kehadiran/print-monthly?bulan=${bulan}&tahun=${tahun}&tower=${selectedTower}`);
+  } else {
+    console.log("Katering monthly belum tersedia");
+  }
+};
+
+  const handleDownloadRekapAll = async (fileType) => {
+  if (!selectedMonth) {
+    alert("Mohon pilih bulan terlebih dahulu");
+    return;
+  }
+  if (!selectedYear) {
+    alert("Mohon pilih tahun terlebih dahulu");
+    return;
+  }
+
+  console.log(`Download ${fileType} - Rekap All`);
+  console.log("Bulan:", selectedMonth);
+  console.log("Tahun:", selectedYear);
+  
+  if (fileType === "Absensi") {
     const bulan = getMonthNumber(selectedMonth);
     const tahun = selectedYear;
+    await downloadFileWithRetry(`/kehadiran/print-rekapall?bulan=${bulan}&tahun=${tahun}`);
+  } else {
+    console.log("Katering custom belum tersedia");
+  }
+};
+  const handleDownloadCustom = async (fileType) => {
+  if (!customDate.start || !customDate.end) {
+    alert("Mohon isi tanggal mulai dan tanggal akhir");
+    return;
+  }
+  if (!selectedTower) {
+    alert("Mohon pilih tower terlebih dahulu");
+    return;
+  }
+  
+  const startDate = new Date(customDate.start);
+  const endDate = new Date(customDate.end);
+  if (endDate < startDate) {
+    alert("Tanggal akhir harus setelah atau sama dengan tanggal mulai");
+    return;
+  }
 
-    console.log(`Download ${fileType} - Bulanan`);
-    console.log("Bulan:", selectedMonth, "->", bulan);
-    console.log("Tahun:", tahun);
+  console.log(`Download ${fileType} - Custom Period`);
+  console.log("Dari:", customDate.start);
+  console.log("Sampai:", customDate.end);
+  console.log("Tower:", selectedTower);
 
-    if (fileType === "Absensi") {
-      window.location.href = `/kehadiran/print-monthly?bulan=${bulan}&tahun=${tahun}&tower=${selectedTower}`;
-    } else {
-      console.log("Katering monthly belum tersedia");
-    }
-  };
-
-  const handleDownloadRekapAll = (fileType) => {
-    if (!selectedMonth) {
-      alert("Mohon pilih bulan terlebih dahulu");
-      return;
-    }
-    if (!selectedYear) {
-      alert("Mohon pilih tahun terlebih dahulu");
-      return;
-    }
-
-    console.log(`Download ${fileType} - Rekap All`);
-    console.log("Bulan:", selectedMonth);
-    console.log("Tahun:", selectedYear);
-    if (fileType === "Absensi") {
-      const bulan = getMonthNumber(selectedMonth);
-      const tahun = selectedYear;
-      window.location.href = `/kehadiran/print-rekapall?bulan=${bulan}&tahun=${tahun}`;
-    } else {
-      console.log("Katering custom belum tersedia");
-    }
-  };
-  const handleDownloadCustom = (fileType) => {
-    if (!customDate.start || !customDate.end) {
-      alert("Mohon isi tanggal mulai dan tanggal akhir");
-      return;
-    }
-    const startDate = new Date(customDate.start);
-    const endDate = new Date(customDate.end);
-    if (endDate < startDate) {
-      alert("Tanggal akhir harus setelah atau sama dengan tanggal mulai");
-      return;
-    }
-
-    console.log(`Download ${fileType} - Custom Period`);
-    console.log("Dari:", customDate.start);
-    console.log("Sampai:", customDate.end);
-
-    if (fileType === "Absensi") {
-      const tanggalMulai = customDate.start;
-      const tanggalAkhir = customDate.end;
-      window.location.href = `/kehadiran/print-custom?tanggal_mulai=${tanggalMulai}&tanggal_akhir=${tanggalAkhir}&tower=${selectedTower} `;
-    } else {
-      console.log("Katering custom belum tersedia");
-    }
-  };
+  if (fileType === "Absensi") {
+    const tanggalMulai = customDate.start;
+    const tanggalAkhir = customDate.end;
+    await downloadFileWithRetry(`/kehadiran/print-custom?tanggal_mulai=${tanggalMulai}&tanggal_akhir=${tanggalAkhir}&tower=${selectedTower}`);
+  } else {
+    console.log("Katering custom belum tersedia");
+  }
+};
 
   const handleCustomDateChange = (field, value) => {
     setCustomDate(prev => ({ ...prev, [field]: value }));
@@ -455,25 +560,39 @@ function Dokumen() {
           {/* Download Button */}
           <div className="flex justify-center">
             <button
-              onClick={() => {
-                const fileType = activeTab === "absensi" ? "Absensi" : "Katering";
-                if (selectedPeriod === "today") {
-                  handleDownloadToday(fileType);
-                } else if (selectedPeriod === "pertower") {
-                  handleDownloadPerTower(fileType);
-                } else if (selectedPeriod === "monthly") {
-                  handleDownloadMonthly(fileType);
-                } else if (selectedPeriod === "rekapall") {
-                  handleDownloadRekapAll(fileType);
-                } else if (selectedPeriod === "custom") {
-                  handleDownloadCustom(fileType);
-                }
-              }}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-colors shadow-md hover:shadow-lg"
-            >
-              <Download className="w-5 h-5" />
-              Download File {activeTab === "absensi" ? "Absensi" : "Katering"}
-            </button>
+            onClick={() => {
+              const fileType = activeTab === "absensi" ? "Absensi" : "Katering";
+              if (selectedPeriod === "today") {
+                handleDownloadToday(fileType);
+              } else if (selectedPeriod === "pertower") {
+                handleDownloadPerTower(fileType);
+              } else if (selectedPeriod === "monthly") {
+                handleDownloadMonthly(fileType);
+              } else if (selectedPeriod === "rekapall") {
+                handleDownloadRekapAll(fileType);
+              } else if (selectedPeriod === "custom") {
+                handleDownloadCustom(fileType);
+              }
+            }}
+            disabled={downloadLoading}
+            className={`font-semibold py-3 px-8 rounded-lg flex items-center gap-2 transition-colors shadow-md hover:shadow-lg ${
+              downloadLoading
+                ? 'bg-blue-400 cursor-not-allowed text-white'
+                : 'bg-blue-600 hover:bg-blue-700 text-white'
+            }`}
+          >
+            {downloadLoading ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <span>Memproses...</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-5 h-5" />
+                <span>Download File {activeTab === "absensi" ? "Absensi" : "Katering"}</span>
+              </>
+            )}
+          </button>
           </div>
 
           {/* Info Box */}

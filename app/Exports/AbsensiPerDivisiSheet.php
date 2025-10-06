@@ -49,80 +49,91 @@ class AbsensiPerDivisiSheet implements FromArray, WithTitle, WithStyles, WithCol
             $namaKaryawan = $karyawan['nama'];
             $dataKehadiran = $karyawan['data'];
 
-            // Header Karyawan
-            $data[] = ['DAFTAR HADIR KARYAWAN'];
-            $data[] = ['Nama', ': ' . $namaKaryawan];
-            $data[] = ['Bulan', ': ' . $namaBulan[$this->bulan] . ' ' . $this->tahun];
-            $data[] = [];
-
-            // Header Tabel
+            // Header Baris 1: Judul Utama
+            $data[] = ['MONITORING KEHADIRAN KARYAWAN'];
+            
+            // Header Baris 2: Bulan dan Tahun
+            $data[] = ['BULAN ' . strtoupper($namaBulan[$this->bulan]) . ' ' . $this->tahun];
+            
+            // Header Baris 3: Baris kosong
+            $data[] = [''];
+            
+            // Header Baris 4: Nama Karyawan dan TMK
+            $data[] = ['Nama *', $namaKaryawan, '', '', '', '', '', 'TMK * :', '21 August 2023'];
+            
+            // Header Baris 5: Header Tabel
             $data[] = [
-                'Bulan',
-                'Tgl',
+                'ID',
+                'No.',
                 'Tanggal',
                 'Hari',
-                'Nama',
-                'Divisi',
+                'Nama Karyawan',
+                'Department',
                 'Jabatan',
-                'Status',
-                '#N/A',
-                '#N/A',
-                '#N/A'
+                'Jam Masuk',
+                'Jam Pulang',
+                'Keterangan'
             ];
 
             // Data Absensi per hari
-            foreach ($dataKehadiran as $absensi) {
-                $tanggalObj = Carbon::parse($absensi['tanggal']);
-                
-                $data[] = [
-                    $tanggalObj->month,
-                    $tanggalObj->day,
-                    $tanggalObj->format('d-M-y'),
-                    $tanggalObj->locale('id')->dayName,
-                    $absensi['user']['name'],
-                    $absensi['user']['divisi'],
-                    $absensi['user']['jabatan'],
-                    $absensi['status'],
-                    $absensi['jam_kedatangan'] ?? '#N/A',
-                    $absensi['jam_pulang'] ?? '#N/A',
-                    '#N/A'
-                ];
-            }
+            // Di method array(), ubah bagian Data Absensi per hari:
 
-            $data[] = [];
+            $no = 1;
+            for ($i = 1; $i <= $jumlahHari; $i++) {
+                // Cari data absensi untuk tanggal ini
+                $tanggalCari = Carbon::create($this->tahun, $this->bulan, $i)->format('Y-m-d');
+                $absensi = collect($dataKehadiran)->firstWhere('tanggal', $tanggalCari);
+
+                if ($absensi) {
+                    $tanggalObj = Carbon::parse($absensi['tanggal']);
+                    $data[] = [
+                        $absensi['user']['id'], // TAMBAHKAN ID USER DI SINI
+                        $no,
+                        $tanggalObj->format('d-M-y'),
+                        $tanggalObj->locale('id')->dayName,
+                        $absensi['user']['name'],
+                        $absensi['user']['divisi'],
+                        $absensi['user']['jabatan'],
+                        $absensi['jam_kedatangan'] ?? '-',
+                        $absensi['jam_pulang'] ?? '-',
+                        $absensi['status']
+                    ];
+                } else {
+                    // Jika tidak ada data absensi untuk tanggal ini
+                    $tanggalObj = Carbon::create($this->tahun, $this->bulan, $i);
+                    $data[] = [
+                        $karyawan['id'] ?? '', // TAMBAHKAN ID KARYAWAN DI SINI
+                        $no,
+                        $tanggalObj->format('d-M-y'),
+                        $tanggalObj->locale('id')->dayName,
+                        $namaKaryawan,
+                        $karyawan['divisi'] ?? '-',
+                        $karyawan['jabatan'] ?? '-',
+                        '-',
+                        '-',
+                        'N/A'
+                    ];
+                }
+                $no++;
+            }
 
             // Summary Section
             $statusCount = $this->hitungStatus($dataKehadiran);
             
-            $data[] = ['Ket.'];
-            $data[] = ['', '- On Time * :', $statusCount['on_time'], 'Hari'];
-            $data[] = ['', '- Terlambat * :', $statusCount['terlambat'], 'Hari'];
-            $data[] = ['', '- Sakit * :', $statusCount['sakit'], 'Hari'];
-            $data[] = ['', '- P1 (Ijin Full Day) * :', $statusCount['p1'], 'Hari'];
-            $data[] = ['', '- P2 (Ijin Setengah Hari) * :', $statusCount['p2'], 'Hari'];
-            $data[] = ['', '- P3 (Ijin Keluar Kantor) * :', $statusCount['p3'], 'Hari'];
-            $data[] = ['', '- C1 (Cuti Full Day) * :', $statusCount['c1'], 'Hari'];
-            $data[] = ['', '- C2 (Cuti Setengah Hari) * :', $statusCount['c2'], 'Hari'];
-            $data[] = ['', '- Mangkir * :', $statusCount['mangkir'], 'Hari'];
-            $data[] = ['', '- Dinas Luar * :', $statusCount['dinas_luar'], 'Hari'];
-            $data[] = ['', '- Work From Home * :', $statusCount['wfh'], 'Hari'];
-            $data[] = ['', '- FP Tidak Ter-Record * :', $statusCount['fp_tidak_record'], 'Hari'];
-            $data[] = ['', '- Libur Kerja * :', $statusCount['libur'], 'Hari'];
-
-            $data[] = [];
-            $data[] = [];
-
-            // Signature Section
-            $data[] = ['', '', '', '', 'Dibuat Oleh,', '', 'Diperiksa Oleh,'];
-            $data[] = [];
-            $data[] = [];
-            $data[] = [];
-            $data[] = ['', '', '', '', 'Jack Sen', '', 'Jupiter'];
-            $data[] = ['', '', '', '', 'Staff HRD', '', 'Head of HRD'];
-
-            $data[] = [];
-            $data[] = [];
-            $data[] = [];
+            $data[] = ['Ket.', '', '', '', '', '', '', '', '', ''];
+            $data[] = ['', '- On Time * :', '', '', (string)$statusCount['on_time'], 'Hari', '', 'Dibuat Oleh,', '', 'Diperiksa Oleh,'];
+            $data[] = ['', '- Terlambat * :', '', '', (string)$statusCount['terlambat'], 'Hari', '', '', '', ''];
+            $data[] = ['', '- Sakit * :', '', '', (string)$statusCount['sakit'], 'Hari', '', '', '', ''];
+            $data[] = ['', '- P1 (Ijin Full Day) * :', '', '', (string)$statusCount['p1'], 'Hari', '', '', '', ''];
+            $data[] = ['', '- P2 (Ijin Setengah Hari) * :', '', '', (string)$statusCount['p2'], 'Hari', '', 'Jack Sen', '', 'Jupiter'];
+            $data[] = ['', '- P3 (Ijin Keluar Kantor) * :', '', '', (string)$statusCount['p3'], 'Hari', '', 'Staff HRD', '', 'Head of HRD'];
+            $data[] = ['', '- C1 (Cuti Full Day) * :', '', '', (string)$statusCount['c1'], 'Hari', '', '', '', ''];
+            $data[] = ['', '- C2 (Cuti Setengah Hari) * :', '', '', (string)$statusCount['c2'], 'Hari', '', '', '', ''];
+            $data[] = ['', '- Mangkir * :', '', '', (string)$statusCount['mangkir'], 'Hari', '', '', '', ''];
+            $data[] = ['', '- Dinas Luar * :', '', '', (string)$statusCount['dinas_luar'], 'Hari', '', '', '', ''];
+            $data[] = ['', '- Work From Home * :', '', '', (string)$statusCount['wfh'], 'Hari', '', '', '', ''];
+            $data[] = ['', '- FP Tidak Ter-Record * :', '', '', (string)$statusCount['fp_tidak_record'], 'Hari', '', '', '', ''];
+            $data[] = ['', '- Libur Kerja * :', '', '', (string)$statusCount['libur'], 'Hari', '', '', '', ''];
         }
 
         return $data;
@@ -147,7 +158,7 @@ class AbsensiPerDivisiSheet implements FromArray, WithTitle, WithStyles, WithCol
         ];
 
         foreach ($dataKehadiran as $absensi) {
-            $status = strtolower($absensi['status']);
+            $status = strtolower($absensi['status'] ?? '');
             
             if ($status === 'on time' || $status === 'hadir') {
                 $count['on_time']++;
@@ -182,17 +193,16 @@ class AbsensiPerDivisiSheet implements FromArray, WithTitle, WithStyles, WithCol
     public function columnWidths(): array
     {
         return [
-            'A' => 8,
-            'B' => 8,
-            'C' => 12,
-            'D' => 12,
-            'E' => 25,
-            'F' => 20,
-            'G' => 35,
-            'H' => 25,
-            'I' => 12,
-            'J' => 12,
-            'K' => 12,
+            'A' => 8,   // ID
+            'B' => 8,   // No.
+            'C' => 12,  // Tanggal
+            'D' => 12,  // Hari
+            'E' => 25,  // Nama Karyawan
+            'F' => 20,  // Department
+            'G' => 35,  // Jabatan
+            'H' => 12,  // Jam Masuk
+            'I' => 12,  // Jam Pulang
+            'J' => 25,  // Keterangan
         ];
     }
 
@@ -201,21 +211,37 @@ class AbsensiPerDivisiSheet implements FromArray, WithTitle, WithStyles, WithCol
         $currentRow = 1;
 
         foreach ($this->karyawanData as $karyawan) {
-            // Style untuk header karyawan
-            $sheet->mergeCells("A{$currentRow}:K{$currentRow}");
+            $dataKehadiran = $karyawan['data'];
+            $jumlahHari = Carbon::create($this->tahun, $this->bulan, 1)->daysInMonth;
+            
+            // Baris 1: MONITORING KEHADIRAN KARYAWAN (merge A-J, center, bold)
+            $sheet->mergeCells("A{$currentRow}:J{$currentRow}");
             $sheet->getStyle("A{$currentRow}")->applyFromArray([
                 'font' => ['bold' => true, 'size' => 14],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
             ]);
             $currentRow++;
 
-            // Nama dan Bulan
-            $currentRow += 2;
+            // Baris 2: BULAN MARET 2025 (merge A-J, center, bold)
+            $sheet->mergeCells("A{$currentRow}:J{$currentRow}");
+            $sheet->getStyle("A{$currentRow}")->applyFromArray([
+                'font' => ['bold' => true, 'size' => 12],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
+            ]);
             $currentRow++;
 
-            // Header tabel
+            // Baris 3: Kosong
+            $currentRow++;
+
+            // Baris 4: Nama dan TMK
+            $sheet->getStyle("A{$currentRow}:J{$currentRow}")->applyFromArray([
+                'font' => ['bold' => false],
+            ]);
+            $currentRow++;
+
+            // Baris 5: Header tabel
             $headerRow = $currentRow;
-            $sheet->getStyle("A{$headerRow}:K{$headerRow}")->applyFromArray([
+            $sheet->getStyle("A{$headerRow}:J{$headerRow}")->applyFromArray([
                 'font' => ['bold' => true],
                 'fill' => [
                     'fillType' => Fill::FILL_SOLID,
@@ -231,10 +257,9 @@ class AbsensiPerDivisiSheet implements FromArray, WithTitle, WithStyles, WithCol
             ]);
             $currentRow++;
 
-            // Data rows
-            $jumlahHari = count($karyawan['data']);
+            // Data rows (gunakan jumlah hari dari data karyawan ini)
             for ($i = 0; $i < $jumlahHari; $i++) {
-                $sheet->getStyle("A{$currentRow}:K{$currentRow}")->applyFromArray([
+                $sheet->getStyle("A{$currentRow}:J{$currentRow}")->applyFromArray([
                     'borders' => [
                         'allBorders' => [
                             'borderStyle' => Border::BORDER_THIN,
@@ -245,30 +270,138 @@ class AbsensiPerDivisiSheet implements FromArray, WithTitle, WithStyles, WithCol
                 $currentRow++;
             }
 
-            $currentRow++; // Empty row
-
             // Summary section
             $summaryStart = $currentRow;
-            $currentRow += 14; // 14 baris summary
-
-            // Signature section
-            $currentRow += 2;
-            $sigRow = $currentRow;
-            $sheet->mergeCells("E{$sigRow}:E{$sigRow}");
-            $sheet->mergeCells("G{$sigRow}:G{$sigRow}");
-            $sheet->getStyle("E{$sigRow}:G{$sigRow}")->applyFromArray([
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
+            
+            // Row 1: Ket. (kosong di kolom H, I, J)
+            $currentRow++;
+            
+            // Row 2: On Time dengan "Dibuat Oleh," dan "Diperiksa Oleh,"
+            $sheet->mergeCells("H{$currentRow}:I{$currentRow}");
+            $sheet->getStyle("H{$currentRow}:I{$currentRow}")->applyFromArray([
+                'font' => ['size' => 9],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000']
+                    ]
+                ]
             ]);
-
-            $currentRow += 4;
-            $nameRow = $currentRow;
-            $sheet->getStyle("E{$nameRow}:G{$nameRow}")->applyFromArray([
-                'font' => ['bold' => true],
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER]
+            
+            $sheet->getStyle("J{$currentRow}")->applyFromArray([
+                'font' => ['size' => 9],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000']
+                    ]
+                ]
             ]);
-
-            $currentRow += 2;
-            $currentRow += 3; // Extra spacing untuk karyawan berikutnya
+            $currentRow++;
+            
+            // Row 3-5: 3 baris kosong untuk signature (merge vertikal H2:H4 dan I2:I4, serta J2:J4)
+            $signatureStartRow = $currentRow;
+            $signatureEndRow = $currentRow + 2;
+            
+            // Merge H2:I4 (3 baris) untuk area signature "Dibuat Oleh"
+            $sheet->mergeCells("H{$signatureStartRow}:I{$signatureEndRow}");
+            $sheet->getStyle("H{$signatureStartRow}:I{$signatureEndRow}")->applyFromArray([
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000']
+                    ]
+                ]
+            ]);
+            
+            // Merge J2:J4 (3 baris) untuk area signature "Diperiksa Oleh"
+            $sheet->mergeCells("J{$signatureStartRow}:J{$signatureEndRow}");
+            $sheet->getStyle("J{$signatureStartRow}:J{$signatureEndRow}")->applyFromArray([
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000']
+                    ]
+                ]
+            ]);
+            
+            $currentRow += 3;
+            
+            // Merge cells untuk keterangan (B:D untuk label, E untuk angka, F untuk "Hari")
+            $ketRow = $summaryStart;
+            for ($i = 1; $i <= 13; $i++) {
+                $row = $summaryStart + $i;
+                // Merge B:D untuk label keterangan
+                $sheet->mergeCells("B{$row}:D{$row}");
+                $sheet->getStyle("B{$row}:D{$row}")->applyFromArray([
+                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER]
+                ]);
+                
+                // Center untuk angka di kolom E
+                $sheet->getStyle("E{$row}")->applyFromArray([
+                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER]
+                ]);
+                
+                // Left untuk "Hari" di kolom F
+                $sheet->getStyle("F{$row}")->applyFromArray([
+                    'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER]
+                ]);
+            }
+            
+            // Row 6: Nama (Jack Sen dan Jupiter)
+            $nameRow = $summaryStart + 5;
+            $sheet->mergeCells("H{$nameRow}:I{$nameRow}");
+            $sheet->getStyle("H{$nameRow}:I{$nameRow}")->applyFromArray([
+                'font' => ['bold' => true, 'size' => 9],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000']
+                    ]
+                ]
+            ]);
+            
+            $sheet->getStyle("J{$nameRow}")->applyFromArray([
+                'font' => ['bold' => true, 'size' => 9],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000']
+                    ]
+                ]
+            ]);
+            
+            // Row 7: Jabatan (Staff HRD dan Head of HRD)
+            $positionRow = $summaryStart + 6;
+            $sheet->mergeCells("H{$positionRow}:I{$positionRow}");
+            $sheet->getStyle("H{$positionRow}:I{$positionRow}")->applyFromArray([
+                'font' => ['size' => 9],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000']
+                    ]
+                ]
+            ]);
+            
+            $sheet->getStyle("J{$positionRow}")->applyFromArray([
+                'font' => ['size' => 9],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000']
+                    ]
+                ]
+            ]);
+            
+            // Pindah ke baris setelah summary (14 baris summary)
+            $currentRow = $summaryStart + 14;
         }
 
         return [];
