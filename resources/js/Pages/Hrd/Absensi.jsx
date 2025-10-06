@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Calendar, Users, Clock, CheckCircle, XCircle,UserPlus ,X, AlertCircle, Search, Filter, Layout, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
 import LayoutTemplate from '@/Layouts/LayoutTemplate';
 import ManualInputModal from '@/Layouts/ManualInputModal';
+import { Head } from '@inertiajs/react';
 function Absensi() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [kehadiranData, setKehadiranData] = useState({});
@@ -394,6 +395,8 @@ const downloadFile = (blob, filename) => {
  }
   return (
     <LayoutTemplate>
+              <Head title="Absensi" />
+
         <ManualInputModal 
         isOpen={showManualInput}
         kalender={selectedDate}

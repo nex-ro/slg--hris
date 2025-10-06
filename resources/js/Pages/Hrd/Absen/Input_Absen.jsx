@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
-import { Upload, FileSpreadsheet, CheckCircle,ChevronDown , AlertCircle, X, Save, Loader, UserPlus, Trash2 } from "lucide-react";
-import  LayoutTemplate  from "@/Layouts/LayoutTemplate";
-import { router, usePage } from "@inertiajs/react";
-
+import { Upload, FileSpreadsheet, CheckCircle, ChevronDown, AlertCircle, X, Save, Loader, UserPlus, Trash2, Layout } from "lucide-react";
+import LayoutTemplate from "@/Layouts/LayoutTemplate";
+import { Head, router } from "@inertiajs/react";
 // Toast Component
 function Toast({ message, type, onClose }) {
   const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-yellow-500';
@@ -18,124 +17,16 @@ function Toast({ message, type, onClose }) {
     </div>
   );
 }
-const handleSaveData = async () => {
-  if (data.length === 0) {
-    showToast("Tidak ada data untuk disimpan", "error");
-    return;
-  }
-  
-  setSaving(true);
-  setError("");
-  
-  try {
-    const dataByPersonAndDate = {};
-    
-    Object.keys(groupedData).forEach(date => {
-      groupedData[date].forEach(row => {
-        const dateTime = row["Date And Time"] || "";
-        const [dateOnly, timeOnly] = dateTime.split(' ');
-        
-        let formattedDate = dateOnly;
-        if (dateOnly && dateOnly.includes('/')) {
-          const [day, month, year] = dateOnly.split('/');
-          formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-        }
-        
-        const personnelId = row["Personnel ID"];
-        const key = `${formattedDate}-${personnelId}`;
-        
-        if (!dataByPersonAndDate[key]) {
-          dataByPersonAndDate[key] = {
-            tanggal: formattedDate,
-            uid: personnelId,
-            jam_kedatangan: null,
-            jam_pulang: null,
-            status_kedatangan: null,
-            status_pulang: null,
-            status: 'hadir'
-          };
-        }
-        
-        const classified = classifyTime(timeOnly);
-        
-        if (classified.type === 'kedatangan') {
-          if (!dataByPersonAndDate[key].jam_kedatangan) {
-            dataByPersonAndDate[key].jam_kedatangan = classified.time;
-            const [hours, minutes] = classified.time.split(':').map(Number);
-            const totalMinutes = hours * 60 + minutes;
-            dataByPersonAndDate[key].status_kedatangan = totalMinutes <= (8 * 60) ? 'On Time' : 'Terlambat';
-          }
-        } else if (classified.type === 'pulang') {
-          if (!dataByPersonAndDate[key].jam_pulang) {
-            dataByPersonAndDate[key].jam_pulang = classified.time;
-            const [hours, minutes] = classified.time.split(':').map(Number);
-            const totalMinutes = hours * 60 + minutes;
-            dataByPersonAndDate[key].status_pulang = totalMinutes >= (17 * 60) ? 'Normal' : 'pulang_cepat';
-          }
-        }
-        
-        if (row["jam_pulang"] && !dataByPersonAndDate[key].jam_pulang) {
-          dataByPersonAndDate[key].jam_pulang = row["jam_pulang"];
-          const [hours, minutes] = row["jam_pulang"].split(':').map(Number);
-          const totalMinutes = hours * 60 + minutes;
-          dataByPersonAndDate[key].status_pulang = totalMinutes >= (17 * 60) ? 'normal' : 'pulang_cepat';
-        }
-      });
-    });
-    
-    const formattedData = Object.values(dataByPersonAndDate);
-    
-    router.post('/absensi/save', 
-      { data: formattedData }, 
-      {
-        preserveScroll: true,
-        onSuccess: () => {
-          setSaving(false);
-          setFile(null);
-          setData([]);
-          setGroupedData({});
-        },
-        onError: (errors) => {
-          setSaving(false);
-          let errorMessage = "Gagal menyimpan data";
-          
-          if (errors.error) {
-            errorMessage = errors.error;
-          } else if (errors.message) {
-            errorMessage = errors.message;
-          } else if (typeof errors === 'object') {
-            const errorArray = Object.values(errors).flat();
-            errorMessage = errorArray.join(', ');
-          }
-          
-          showToast(errorMessage, "error");
-          setError(errorMessage);
-        },
-        onFinish: () => {
-          setSaving(false);
-        }
-      }
-    );
-    
-  } catch (err) {
-    setSaving(false);
-    const errorMsg = "Gagal menyimpan data: " + err.message;
-    showToast(errorMsg, "error");
-    setError(errorMsg);
-  }
-};
-// Manual Input Modal
-
 
 function Input_Absen() {
   const [file, setFile] = useState(null);
-   const { flash } = usePage().props;
   const [data, setData] = useState([]);
   const [groupedData, setGroupedData] = useState({});
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [toast, setToast] = useState(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const showToast = (message, type) => {
     setToast({ message, type });
@@ -161,8 +52,7 @@ function Input_Absen() {
     return { type: 'other', time: timeString };
   };
 
-  const handleFileUpload = async (e) => {
-    const uploadedFile = e.target.files[0];
+  const processFile = async (uploadedFile) => {
     if (!uploadedFile) return;
 
     const validTypes = [
@@ -225,9 +115,8 @@ function Input_Absen() {
               setGroupedData({});
               setLoading(false);
             } else {
-              // PERBAIKAN: Tidak memfilter berdasarkan nama, gunakan semua data
               const grouped = {};
-              const seenEntries = new Set(); // Untuk tracking duplikat
+              const seenEntries = new Set();
               let duplicateCount = 0;
               
               normalizedData.forEach(row => {
@@ -236,15 +125,11 @@ function Input_Absen() {
                 const personnelId = row["Personnel ID"] || "";
                 
                 if (dateOnly && dateOnly !== "" && timeOnly && personnelId) {
-                  // Classify the time
                   const classified = classifyTime(timeOnly);
                   
-                  // Only include if it's within valid time ranges
                   if (classified.type !== 'other') {
-                    // Buat unique key berdasarkan tanggal, personnel ID, dan tipe waktu
                     const uniqueKey = `${dateOnly}-${personnelId}-${classified.type}`;
                     
-                    // Cek apakah sudah ada entry yang sama
                     if (!seenEntries.has(uniqueKey)) {
                       seenEntries.add(uniqueKey);
                       
@@ -252,7 +137,6 @@ function Input_Absen() {
                         grouped[dateOnly] = [];
                       }
                       
-                      // Add classification info to the row
                       row.timeType = classified.type;
                       grouped[dateOnly].push(row);
                     } else {
@@ -262,7 +146,6 @@ function Input_Absen() {
                 }
               });
               
-              // Count total valid entries
               const totalValidEntries = Object.values(grouped).reduce((sum, arr) => sum + arr.length, 0);
               
               setData(normalizedData);
@@ -306,12 +189,51 @@ function Input_Absen() {
     }
   };
 
+  const handleFileUpload = async (e) => {
+    const uploadedFile = e.target.files[0];
+    processFile(uploadedFile);
+  };
+
+  // Drag and Drop handlers
+  const handleDragEnter = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!loading) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (loading) return;
+
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      processFile(files[0]);
+    }
+  };
+
   const handleRemoveFile = () => {
     setFile(null);
     setData([]);
     setGroupedData({});
     setError("");
   };
+
   const handleDeleteRow = (date, index) => {
     if (confirm("Apakah Anda yakin ingin menghapus data ini?")) {
       const rowToDelete = groupedData[date][index];
@@ -333,118 +255,134 @@ function Input_Absen() {
       showToast("Data berhasil dihapus", "success");
     }
   };
-  const handleSaveData = async () => {
-  if (data.length === 0) {
-    showToast("Tidak ada data untuk disimpan", "error");
-    return;
-  }
-  
-  setSaving(true);
-  setError("");
-  
-  try {
-    const dataByPersonAndDate = {};
-    
-    Object.keys(groupedData).forEach(date => {
-      groupedData[date].forEach(row => {
-        const dateTime = row["Date And Time"] || "";
-        const [dateOnly, timeOnly] = dateTime.split(' ');
-        
-        let formattedDate = dateOnly;
-        if (dateOnly && dateOnly.includes('/')) {
-          const [day, month, year] = dateOnly.split('/');
-          formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-        }
-        
-        const personnelId = row["Personnel ID"];
-        const key = `${formattedDate}-${personnelId}`;
-        
-        if (!dataByPersonAndDate[key]) {
-          dataByPersonAndDate[key] = {
-            tanggal: formattedDate,
-            uid: personnelId,
-            jam_kedatangan: null,
-            jam_pulang: null,
-            status_kedatangan: null,
-            status_pulang: null,
-            status: 'hadir'
-          };
-        }
-        
-        const classified = classifyTime(timeOnly);
-        
-        if (classified.type === 'kedatangan') {
-          if (!dataByPersonAndDate[key].jam_kedatangan) {
-            dataByPersonAndDate[key].jam_kedatangan = classified.time;
-            const [hours, minutes] = classified.time.split(':').map(Number);
-            const totalMinutes = hours * 60 + minutes;
-            dataByPersonAndDate[key].status_kedatangan = totalMinutes <= (8 * 60) ? 'On Time' : 'Terlambat';
-          }
-        } else if (classified.type === 'pulang') {
-          if (!dataByPersonAndDate[key].jam_pulang) {
-            dataByPersonAndDate[key].jam_pulang = classified.time;
-            const [hours, minutes] = classified.time.split(':').map(Number);
-            const totalMinutes = hours * 60 + minutes;
-            dataByPersonAndDate[key].status_pulang = totalMinutes >= (17 * 60) ? 'Normal' : 'pulang_cepat';
-          }
-        }
-        
-        if (row["jam_pulang"] && !dataByPersonAndDate[key].jam_pulang) {
-          dataByPersonAndDate[key].jam_pulang = row["jam_pulang"];
-          const [hours, minutes] = row["jam_pulang"].split(':').map(Number);
-          const totalMinutes = hours * 60 + minutes;
-          dataByPersonAndDate[key].status_pulang = totalMinutes >= (17 * 60) ? 'normal' : 'pulang_cepat';
-        }
-      });
-    });
-    
-    const formattedData = Object.values(dataByPersonAndDate);
-    
-    router.post('/absensi/save', 
-      { data: formattedData }, 
-      {
-        preserveScroll: true,
-        onSuccess: () => {
-          setSaving(false);
-          setFile(null);
-          setData([]);
-          setGroupedData({});
-        },
-        onError: (errors) => {
-          setSaving(false);
-          let errorMessage = "Gagal menyimpan data";
-          
-          if (errors.error) {
-            errorMessage = errors.error;
-          } else if (errors.message) {
-            errorMessage = errors.message;
-          } else if (typeof errors === 'object') {
-            const errorArray = Object.values(errors).flat();
-            errorMessage = errorArray.join(', ');
-          }
-          
-          showToast(errorMessage, "error");
-          setError(errorMessage);
-        },
-        onFinish: () => {
-          setSaving(false);
-        }
-      }
-    );
-    
-  } catch (err) {
-    setSaving(false);
-    const errorMsg = "Gagal menyimpan data: " + err.message;
-    showToast(errorMsg, "error");
-    setError(errorMsg);
-  }
-};
 
- 
+  const handleSaveData = async () => {
+    if (data.length === 0) {
+      showToast("Tidak ada data untuk disimpan", "error");
+      return;
+    }
+    
+    setSaving(true);
+    setError("");
+    
+    try {
+      const dataByPersonAndDate = {};
+      
+      Object.keys(groupedData).forEach(date => {
+        groupedData[date].forEach(row => {
+          const dateTime = row["Date And Time"] || "";
+          const [dateOnly, timeOnly] = dateTime.split(' ');
+          
+          let formattedDate = dateOnly;
+          if (dateOnly && dateOnly.includes('/')) {
+            const [day, month, year] = dateOnly.split('/');
+            formattedDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+          }
+          
+          const personnelId = row["Personnel ID"];
+          const key = `${formattedDate}-${personnelId}`;
+          
+          if (!dataByPersonAndDate[key]) {
+            dataByPersonAndDate[key] = {
+              tanggal: formattedDate,
+              uid: personnelId,
+              jam_kedatangan: null,
+              jam_pulang: null,
+              status_kedatangan: null,
+              status_pulang: null,
+              status: 'hadir'
+            };
+          }
+          
+          const classified = classifyTime(timeOnly);
+          
+          if (classified.type === 'kedatangan') {
+            if (!dataByPersonAndDate[key].jam_kedatangan) {
+              dataByPersonAndDate[key].jam_kedatangan = classified.time;
+              const [hours, minutes] = classified.time.split(':').map(Number);
+              const totalMinutes = hours * 60 + minutes;
+              dataByPersonAndDate[key].status_kedatangan = totalMinutes <= (8 * 60) ? 'On Time' : 'Terlambat';
+            }
+          } else if (classified.type === 'pulang') {
+            if (!dataByPersonAndDate[key].jam_pulang) {
+              dataByPersonAndDate[key].jam_pulang = classified.time;
+              const [hours, minutes] = classified.time.split(':').map(Number);
+              const totalMinutes = hours * 60 + minutes;
+              dataByPersonAndDate[key].status_pulang = totalMinutes >= (17 * 60) ? 'Normal' : 'pulang_cepat';
+            }
+          }
+          
+          if (row["jam_pulang"] && !dataByPersonAndDate[key].jam_pulang) {
+            dataByPersonAndDate[key].jam_pulang = row["jam_pulang"];
+            const [hours, minutes] = row["jam_pulang"].split(':').map(Number);
+            const totalMinutes = hours * 60 + minutes;
+            dataByPersonAndDate[key].status_pulang = totalMinutes >= (17 * 60) ? 'normal' : 'pulang_cepat';
+          }
+        });
+      });
+      
+      const formattedData = Object.values(dataByPersonAndDate);
+      
+      // Gunakan router.post dari Inertia.js
+      // Uncomment baris di bawah ini di aplikasi asli
+      
+      router.post('/absensi/save', 
+        { data: formattedData }, 
+        {
+          preserveScroll: true,
+          onSuccess: () => {
+            setSaving(false);
+            setFile(null);
+            setData([]);
+            setGroupedData({});
+            showToast("Data berhasil disimpan!", "success");
+          },
+          onError: (errors) => {
+            setSaving(false);
+            let errorMessage = "Gagal menyimpan data";
+            
+            if (errors.error) {
+              errorMessage = errors.error;
+            } else if (errors.message) {
+              errorMessage = errors.message;
+            } else if (typeof errors === 'object') {
+              const errorArray = Object.values(errors).flat();
+              errorMessage = errorArray.join(', ');
+            }
+            
+            showToast(errorMessage, "error");
+            setError(errorMessage);
+          },
+          onFinish: () => {
+            setSaving(false);
+          }
+        }
+      );
+    
+      
+      // Simulasi untuk demo (hapus di aplikasi asli)
+      // console.log('Data yang akan disimpan:', formattedData);
+      // setTimeout(() => {
+      //   setSaving(false);
+      //   showToast("Data berhasil disimpan!", "success");
+      //   setFile(null);
+      //   setData([]);
+      //   setGroupedData({});
+      // }, 1500);
+      
+    } catch (err) {
+      setSaving(false);
+      const errorMsg = "Gagal menyimpan data: " + err.message;
+      showToast(errorMsg, "error");
+      setError(errorMsg);
+    }
+  };
 
   return (
     <LayoutTemplate>
-    <div className="min-h-screen bg-gray-50">
+                    <Head title="Absensi" />
+
+<div className="min-h-screen bg-gray-50">
       <style>{`
         @keyframes slide-in {
           from {
@@ -463,15 +401,23 @@ function Input_Absen() {
 
       {toast && <Toast message={toast.message} type={toast.type} onClose={() => setToast(null)} />}
       
-    
       <div className="max-w-6xl mx-auto p-6">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800">Upload Data Absensi</h1>
-
         </div>
 
         <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-          <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-blue-500 transition-colors">
+          <div 
+            className={`border-2 border-dashed rounded-lg p-8 text-center transition-all ${
+              isDragging 
+                ? 'border-blue-500 bg-blue-50' 
+                : 'border-gray-300 hover:border-blue-500'
+            }`}
+            onDragEnter={handleDragEnter}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
             <input
               type="file"
               id="fileUpload"
@@ -483,9 +429,9 @@ function Input_Absen() {
             
             {!file ? (
               <label htmlFor="fileUpload" className={`cursor-pointer ${loading ? 'opacity-50 pointer-events-none' : ''}`}>
-                <Upload className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <Upload className={`mx-auto h-12 w-12 mb-4 ${isDragging ? 'text-blue-500' : 'text-gray-400'}`} />
                 <p className="text-lg font-medium text-gray-700 mb-2">
-                  Klik untuk upload file
+                  {isDragging ? 'Lepaskan file di sini' : 'Klik untuk upload atau drag & drop file'}
                 </p>
                 <p className="text-sm text-gray-500">
                   Support: Excel (.xlsx, .xls) atau CSV
@@ -645,7 +591,7 @@ function Input_Absen() {
       </div>
     </div>
     </LayoutTemplate>
-
+    
   );
 }
 

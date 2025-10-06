@@ -230,8 +230,6 @@ public function storeInputTidak(Request $request)
         $tanggal = $request->tanggal;
         $tower = $request->tower;
         $kehadiran = $request->kehadiran;
-        Log::info('Generating katering report for tower: ' . $tower . ' on date: ' . $tanggal);
-        Log::info('Kehadiran data: ' . json_encode($kehadiran));
         // Validasi data
         if (empty($kehadiran) || empty($tower) || empty($tanggal)) {
             return response()->json([

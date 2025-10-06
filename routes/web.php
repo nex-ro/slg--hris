@@ -34,6 +34,7 @@ Route::middleware('pegawai')->group(function () {
 });
 
 Route::middleware('hrd')->group(function () {
+    Route::get('/api/pegawai', [UserController::class, 'getPegawai'])->middleware(['auth', 'verified'])->name('getPegawai');
     Route::get('/HRD/dashboard', [HrdController::class, 'index'])->middleware(['auth', 'verified'])->name('hrd.dashboard');
     Route::get('/pegawai', [UserController::class, 'pegawai'])->middleware(['auth', 'verified'])->name('pegawai');
     Route::post('/pegawai', [UserController::class, 'store'])->name('pegawai.store');

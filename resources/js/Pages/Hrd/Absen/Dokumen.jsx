@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Download, Calendar, FileText } from "lucide-react";
-import { usePage } from "@inertiajs/react";
+import { Head, usePage } from "@inertiajs/react";
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
 function Dokumen() {
   const [activeTab, setActiveTab] = useState("absensi");
@@ -72,7 +72,6 @@ const downloadFileWithRetry = async (url) => {
 
     // Jika error 419, fetch token baru dan retry
     if (response.status === 419) {
-      console.log('CSRF token expired, fetching new token...');
       const newToken = await fetchFreshCsrfToken();
       
       if (!newToken) {
@@ -131,14 +130,14 @@ const downloadFileWithRetry = async (url) => {
   const bulan = getMonthNumber(selectedMonth);
   const tahun = selectedYear;
 
-  console.log(`Download ${fileType} - Per Divisi`);
-  console.log("Bulan:", bulan);
-  console.log("Tahun:", tahun);
+  // console.log(`Download ${fileType} - Per Divisi`);
+  // console.log("Bulan:", bulan);
+  // console.log("Tahun:", tahun);
 
   if (fileType === "Absensi") {
     await downloadFileWithRetry(`/absensi/export-tower-divisi?bulan=${bulan}&tahun=${tahun}`);
   } else {
-    console.log("Katering per divisi belum tersedia");
+    // console.log("Katering per divisi belum tersedia");
   }
 };
 
@@ -164,15 +163,10 @@ const downloadFileWithRetry = async (url) => {
   const bulan = getMonthNumber(selectedMonth);
   const tahun = selectedYear;
 
-  console.log(`Download ${fileType} - Bulanan`);
-  console.log("Bulan:", selectedMonth, "->", bulan);
-  console.log("Tahun:", tahun);
-  console.log("Tower:", selectedTower);
-
   if (fileType === "Absensi") {
     await downloadFileWithRetry(`/kehadiran/print-monthly?bulan=${bulan}&tahun=${tahun}&tower=${selectedTower}`);
   } else {
-    console.log("Katering monthly belum tersedia");
+    // console.log("Katering monthly belum tersedia");
   }
 };
 
@@ -186,16 +180,13 @@ const downloadFileWithRetry = async (url) => {
     return;
   }
 
-  console.log(`Download ${fileType} - Rekap All`);
-  console.log("Bulan:", selectedMonth);
-  console.log("Tahun:", selectedYear);
   
   if (fileType === "Absensi") {
     const bulan = getMonthNumber(selectedMonth);
     const tahun = selectedYear;
     await downloadFileWithRetry(`/kehadiran/print-rekapall?bulan=${bulan}&tahun=${tahun}`);
   } else {
-    console.log("Katering custom belum tersedia");
+    // console.log("Katering custom belum tersedia");
   }
 };
   const handleDownloadCustom = async (fileType) => {
@@ -215,10 +206,6 @@ const downloadFileWithRetry = async (url) => {
     return;
   }
 
-  console.log(`Download ${fileType} - Custom Period`);
-  console.log("Dari:", customDate.start);
-  console.log("Sampai:", customDate.end);
-  console.log("Tower:", selectedTower);
 
   if (fileType === "Absensi") {
     const tanggalMulai = customDate.start;
@@ -251,6 +238,8 @@ const downloadFileWithRetry = async (url) => {
 
   return (
     <LayoutTemplate>
+                    <Head title="Head" />
+
     <div className="">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
@@ -272,7 +261,7 @@ const downloadFileWithRetry = async (url) => {
             <FileText className="inline-block w-5 h-5 mr-2" />
             File Absensi
           </button>
-          <button
+          {/* <button
             onClick={() => handleTabChange("katering")}
             className={`pb-3 px-4 font-semibold transition-colors ${
               activeTab === "katering"
@@ -282,7 +271,7 @@ const downloadFileWithRetry = async (url) => {
           >
             <FileText className="inline-block w-5 h-5 mr-2" />
             File Katering
-          </button>
+          </button> */}
         </div>
 
         {/* Content Area */}

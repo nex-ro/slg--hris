@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Calendar, Users, FileText, Search, X, Check, Save, AlertCircle } from 'lucide-react';
-import { router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
 
 function InputTidak({ users = [], flash }) {
@@ -89,6 +89,8 @@ function InputTidak({ users = [], flash }) {
 
   return (
     <LayoutTemplate>
+                    <Head title="Absensi" />
+
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-slate-50 py-8 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto">
           {/* Header Section */}

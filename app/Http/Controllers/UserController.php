@@ -13,12 +13,75 @@ class UserController extends Controller
 {
     public function pegawai()
     {
-        $users = User::all();
         return Inertia::render('Hrd/Pegawai', [
-            'users' => $users
+            'flash' => session('flash')
         ]);
     }
-public function getUsers()
+        public function getPegawai(Request $request)
+    {
+        $query = User::query();
+    
+        // Search
+        if ($request->has('search') && $request->search != '') {
+            $search = $request->search;
+            $query->where(function($q) use ($search) {
+                $q->where('name', 'like', "%{$search}%")
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhere('id', 'like', "%{$search}%");
+            });
+        }
+    
+        // Filter Divisi
+        if ($request->has('divisi') && $request->divisi != '') {
+            $query->where('divisi', $request->divisi);
+        }
+    
+        // Filter Jabatan
+        if ($request->has('jabatan') && $request->jabatan != '') {
+            $query->where('jabatan', $request->jabatan);
+        }
+    
+        // Filter Tower
+        if ($request->has('tower') && $request->tower != '') {
+            $query->where('tower', $request->tower);
+        }
+    
+        // Paginate dengan 15 item per page
+        $users = $query->orderBy('id', 'desc')->paginate(15);
+    
+        // Get unique values untuk filter dropdowns
+        $divisiList = User::select('divisi')
+            ->distinct()
+            ->whereNotNull('divisi')
+            ->where('divisi', '!=', '')
+            ->orderBy('divisi')
+            ->pluck('divisi');
+            
+        $jabatanList = User::select('jabatan')
+            ->distinct()
+            ->whereNotNull('jabatan')
+            ->where('jabatan', '!=', '')
+            ->orderBy('jabatan')
+            ->pluck('jabatan');
+    
+        // Return JSON response
+        return response()->json([
+            'users' => [
+                'data' => $users->items(),
+                'current_page' => $users->currentPage(),
+                'last_page' => $users->lastPage(),
+                'per_page' => $users->perPage(),
+                'total' => $users->total(),
+                'from' => $users->firstItem(),
+                'to' => $users->lastItem(),
+            ],
+            'divisiList' => $divisiList,
+            'jabatanList' => $jabatanList,
+        ], 200);
+    }
+
+
+    public function getUsers()
     {
         $users = User::where('active', 1)
             ->select('id', 'name', 'email', 'divisi', 'jabatan')

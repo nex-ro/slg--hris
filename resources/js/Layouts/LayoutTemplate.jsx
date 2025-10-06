@@ -33,7 +33,9 @@ const DashboardLayouts = ({ children }) => {
   const [notificationCount] = useState(3);
   const [expandedMenu, setExpandedMenu] = useState(null);
   const dropdownRef = useRef(null);
+  
   const currentPath = usePage().url;
+
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/HRD/dashboard' },
     { icon: Users, label: 'Pegawai', href: '/pegawai' },
@@ -48,8 +50,8 @@ const DashboardLayouts = ({ children }) => {
         { icon: FolderOpen, label: 'Dokumen Absensi', href: '/absensi/dokumen' },
       ]
     },
-    { icon: BarChart3, label: 'Laporan', href: '/reports/index' },
-    { icon: FileText, label: 'Dokumen', href: '/documents/index' },
+    // { icon: BarChart3, label: 'Laporan', href: '/reports/index' },
+    // { icon: FileText, label: 'Dokumen', href: '/documents/index' },
   ];
 
   const isActive = (href) => {
@@ -126,12 +128,17 @@ const DashboardLayouts = ({ children }) => {
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-700/50 flex-shrink-0">
             <div className={`flex items-center space-x-3 ${sidebarCollapsed ? 'lg:justify-center lg:w-full' : ''}`}>
-              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-lg">
-                <LayoutDashboard className="w-6 h-6 text-white" />
-              </div>
+            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-md hover:shadow-lg transition-all duration-300">
+              <img
+                src="/asset/logo.png"
+                alt="Logo"
+                className="w-12 h-12 object-contain drop-shadow-md"
+              />
+            </div>
+
               {!sidebarCollapsed && (
                 <div>
-                  <span className="text-white font-bold text-lg">Admin Panel</span>
+                  <span className="text-white font-bold text-lg">My-SLG</span>
                   <p className="text-gray-400 text-sm">Management System</p>
                 </div>
               )}
@@ -442,11 +449,33 @@ const DashboardLayouts = ({ children }) => {
         {/* Scrollable Content Area */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
             {/* Page Title & Stats Cards */}
-       
-
+        
           {/* Main Content Area */}
           <main className="p-4 sm:p-6 space-y-6">
-           
+            {/* Quick Stats */}
+            {/* <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[
+                { title: 'Total Pegawai', value: '127', icon: Users, color: 'from-blue-500 to-blue-600', change: '+12%' },
+                { title: 'Hadir Hari Ini', value: '98', icon: Calendar, color: 'from-green-500 to-green-600', change: '+8%' },
+                { title: 'Terlambat', value: '5', icon: Activity, color: 'from-yellow-500 to-yellow-600', change: '-3%' },
+                { title: 'Izin/Sakit', value: '12', icon: FileText, color: 'from-red-500 to-red-600', change: '+2%' },
+              ].map((stat, index) => (
+                <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-gray-600 text-sm font-medium">{stat.title}</p>
+                      <p className="text-3xl font-bold text-gray-900 mt-2">{stat.value}</p>
+                      <p className={`text-sm mt-2 ${stat.change.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
+                        {stat.change} dari bulan lalu
+                      </p>
+                    </div>
+                    <div className={`w-12 h-12 bg-gradient-to-r ${stat.color} rounded-xl flex items-center justify-center shadow-lg`}>
+                      <stat.icon className="w-6 h-6 text-white" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div> */}
 
             {/* Content Area for Children */}
             {children && (
@@ -462,7 +491,7 @@ const DashboardLayouts = ({ children }) => {
                   <div className="w-16 h-16 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl flex items-center justify-center mx-auto mb-4">
                     <LayoutDashboard className="w-8 h-8 text-white" />
                   </div>
-                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Selamat datang di Admin Panel</h3>
+                  <h3 className="text-xl font-semibold text-gray-900 mb-2">Selamat datang di My-SLG</h3>
                   <p className="text-gray-600">Gunakan menu di sebelah kiri untuk navigasi ke berbagai fitur sistem.</p>
                 </div>
               </div>
