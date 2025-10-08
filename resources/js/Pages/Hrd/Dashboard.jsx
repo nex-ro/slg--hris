@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Calendar, Users, AlertTriangle, TrendingUp, Building2, Briefcase } from 'lucide-react';
 import DashboardLayouts from '@/Layouts/DasboardLayout';
+import { Head } from '@inertiajs/react';
 
 const Dashboard = ({ 
   filters, 

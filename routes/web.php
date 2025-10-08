@@ -50,13 +50,17 @@ Route::middleware('hrd')->group(function () {
     Route::post('/hrd/absen/input-tidak', [AbsensiController::class, 'storeInputTidak'])->name('hrd.absen.input-tidak.store');
     Route::get('/absensi/dokumen', [AbsensiController::class, 'dokumen'])->name('hrd.absen.dokument');
     Route::post('/print-absensi', [AbsensiController::class, 'printAbsensi'])->name('print.absensi');
+    Route::post('/print-absensi-pdf', [AbsensiController::class, 'printAbsensiPDF'])->name('print.absensiPDF');
+
     Route::post('/print-katering', [AbsensiController::class, 'printKatering'])->name('print.katering');
-    
+    Route::post('/print-katering-pdf', [AbsensiController::class, 'printKateringPDF'])->name('print.kateringPDF');
+
     Route::get('/kehadiran/by-month', [HrdController::class, 'getByMonth']);
 
     Route::get('/absensi/export-tower-divisi', [HrdController::class, 'exportByTowerAndDivisi']);
 
     Route::get('/kehadiran/print-monthly', [AbsensiController::class, 'printAbsensiMonthly'])->name('kehadiran.print-monthly');
+    Route::get('/kehadiran/print-monthly-pdf', [AbsensiController::class, 'printAbsensiMonthlyPDF'])->name('kehadiran.print-monthly-pdf');
     Route::get('/kehadiran/print-custom', [AbsensiController::class, 'printAbsensiCustom']);
     Route::get('/kehadiran/print-rekapall', [AbsensiController::class, 'printRekapAll']);
 });
@@ -67,7 +71,8 @@ Route::middleware('head')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::get('/api/users', [UserController::class, 'getUsers']);
     Route::get('/kehadiran', [HrdController::class, 'getByDate']);
-
+    Route::get('/api/holidays', [UserController::class, 'index']);
+    
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

@@ -11,6 +11,17 @@ use Illuminate\Support\Facades\Storage;
 
 class UserController extends Controller
 {
+        public function holiday(Request $request)
+    {
+        $year = $request->query('year', date('Y'));
+        
+        $holidays = Holiday::where('year', $year)
+            ->orderBy('date', 'asc')
+            ->get(['date', 'name']);
+        
+        return response()->json($holidays);
+    }
+
     public function pegawai()
     {
         return Inertia::render('Hrd/Pegawai', [

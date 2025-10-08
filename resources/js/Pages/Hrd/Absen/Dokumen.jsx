@@ -238,7 +238,7 @@ const downloadFileWithRetry = async (url) => {
 
   return (
     <LayoutTemplate>
-                    <Head title="Head" />
+                    <Head title="Dokumen" />
 
     <div className="">
       <div className="max-w-6xl mx-auto">

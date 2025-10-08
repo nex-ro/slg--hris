@@ -18,6 +18,9 @@ use App\Models\Holiday;
 use App\Exports\AbsensiCustomExport;
 use App\Exports\KehadiranExport;
 use App\Exports\RekapKehadiranSheet;
+use App\Exports\SummaryKetepatanSheet;
+use Barryvdh\DomPDF\Facade\Pdf;
+
 class AbsensiController extends Controller
 {
     public function absensi()
@@ -225,6 +228,135 @@ public function storeInputTidak(Request $request)
         ], 500);
     }
 }
+public function printAbsensiPDF(Request $request)
+{
+    try {
+        $data = $request->all();
+        $tanggal = $data['tanggal'] ?? null;
+        $tower = $data['tower'] ?? null;
+        $kehadiran = $data['kehadiran'] ?? [];
+        
+        // Validasi data
+        if (empty($kehadiran) || empty($tanggal) || empty($tower)) {
+            return response()->json([
+                'error' => 'Data tidak lengkap'
+            ], 400);
+        }
+        
+        $dataAbsensi = [];
+        foreach ($kehadiran as $item) {
+            // Ambil data user dari nested object
+            $user = $item['user'] ?? null;
+            
+            if ($user) {
+                $dataAbsensi[] = [
+                    'tanggal' => $item['tanggal'] ?? $tanggal,
+                    'hari' => $this->getNamaHari($item['tanggal'] ?? $tanggal),
+                    'tower' => $item['tower'] ?? $tower,
+                    'tmk' => $user['tmk'] ?? '-',
+                    'nama' => $user['name'] ?? '-',
+                    'divisi' => $user['divisi'] ?? '-',
+                    'jabatan' => $user['jabatan'] ?? '-',
+                    'status' => $item['status'] ?? 'N/A',
+                    'jam_kedatangan' => $item['jam_kedatangan'] ?? '-',
+                    'jam_pulang' => $item['jam_pulang'] ?? '-',
+                    'keterangan' => $item['keterangan'] ?? '-',
+                ];
+            }
+        }
+        
+        // Pastikan ada data sebelum export
+        if (empty($dataAbsensi)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Tidak ada data untuk diekspor'
+            ], 400);
+        }
+        
+        // Format tanggal untuk display
+        $tanggalFormatted = $this->formatTanggalIndonesia($tanggal);
+        
+        // Data untuk view
+        $pdfData = [
+            'tanggal' => $tanggalFormatted,
+            'tower' => $tower,
+            'dataAbsensi' => $dataAbsensi,
+            'totalData' => count($dataAbsensi)
+        ];
+        
+        // Load view untuk PDF
+        $pdf = \PDF::loadView('pdf.absensi-report', $pdfData);
+        
+        // Set paper size dan orientation
+        $pdf->setPaper('A4', 'portrait'); // Landscape karena banyak kolom
+        
+        // Set options PDF
+        $pdf->setOptions([
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled' => true,
+            'defaultFont' => 'sans-serif'
+        ]);
+        
+        // Generate nama file
+        $fileName = "Absensi_" . $tower . "_" . date('Y-m-d', strtotime($tanggal)) . ".pdf";
+        
+        // Download PDF
+        return $pdf->download($fileName);
+        
+    } catch (\Exception $e) {
+        \Log::error('Error generating absensi PDF report: ' . $e->getMessage());
+        \Log::error('Stack trace: ' . $e->getTraceAsString());
+        
+        return response()->json([
+            'error' => 'Gagal membuat laporan absensi PDF',
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
+
+// Helper function untuk format tanggal Indonesia
+private function formatTanggalIndonesia($tanggal)
+{
+    $bulanIndo = [
+        1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+        5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+        9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+    ];
+    
+    $tanggalObj = \DateTime::createFromFormat('Y-m-d', $tanggal);
+    if (!$tanggalObj) {
+        $tanggalObj = new \DateTime($tanggal);
+    }
+    
+    $hari = $tanggalObj->format('d');
+    $bulan = $bulanIndo[(int)$tanggalObj->format('m')];
+    $tahun = $tanggalObj->format('Y');
+    
+    return $hari . ' ' . $bulan . ' ' . $tahun;
+}
+
+// Helper function untuk mendapatkan nama hari dalam Bahasa Indonesia
+private function getNamaHari($tanggal)
+{
+    $hariIndo = [
+        'Sunday' => 'Minggu',
+        'Monday' => 'Senin',
+        'Tuesday' => 'Selasa',
+        'Wednesday' => 'Rabu',
+        'Thursday' => 'Kamis',
+        'Friday' => 'Jumat',
+        'Saturday' => 'Sabtu'
+    ];
+    
+    $tanggalObj = \DateTime::createFromFormat('Y-m-d', $tanggal);
+    if (!$tanggalObj) {
+        $tanggalObj = new \DateTime($tanggal);
+    }
+    
+    $hariEnglish = $tanggalObj->format('l');
+    
+    return $hariIndo[$hariEnglish] ?? $hariEnglish;
+}
     public function printKatering(Request $request)
     {
         $tanggal = $request->tanggal;
@@ -257,6 +389,176 @@ public function storeInputTidak(Request $request)
         }
     }
 
+    // Di Controller
+public function printKateringPDF(Request $request)
+{
+    $tanggal = $request->tanggal;
+    $tower = $request->tower;
+    $kehadiran = $request->kehadiran;
+    
+    // Validasi data
+    if (empty($kehadiran) || empty($tanggal)) {
+        return response()->json([
+            'error' => 'Data tidak lengkap'
+        ], 400);
+    }
+
+    try {
+        // Filter data hadir
+        $hadirCollection = collect($kehadiran)->filter(function($user) {
+            $status = strtolower(trim($user['status'] ?? ''));
+            return in_array($status, [
+                'ontime', 'on time', 'hadir', 'terlambat',
+                'late', 'telat', 'fp-tr', 'FP-TR'
+            ]);
+        });
+
+        // Group semua data by tower
+        $allGrouped = collect($kehadiran)->groupBy('tower')->map(function($group) {
+            return $group->sortBy('nama');
+        })->sortKeys();
+        
+        $hadirGrouped = $hadirCollection->groupBy('tower')->map(function($group) {
+            return $group->sortBy('nama');
+        })->sortKeys();
+
+        // Ambil data untuk Eiffel dan Liberty
+        $eifelHadir = $hadirGrouped->get('Eiffel', collect());
+        $libertyHadir = $hadirGrouped->get('Liberty', collect());
+        
+        $eifelAll = $allGrouped->get('Eiffel', collect());
+        $libertyAll = $allGrouped->get('Liberty', collect());
+
+        // Fungsi helper untuk filter status
+        $getByStatus = function($collection, $statuses) {
+            return $collection->filter(function($user) use ($statuses) {
+                $status = strtolower(trim($user['status'] ?? ''));
+                $statusesLower = array_map('strtolower', $statuses);
+                return in_array($status, $statusesLower);
+            });
+        };
+
+        // Data Eiffel
+        $eifelSakit = $getByStatus($eifelAll, ['sakit']);
+        $eifelCuti = $getByStatus($eifelAll, ['c1', 'c2', 'c3', 'cuti']);
+        $eifelWFH = $getByStatus($eifelAll, ['wfh']); // TAMBAHKAN INI
+        $eifelDinasLuar = $getByStatus($eifelAll, ['dinas_luar', 'dinas luar','dl']);
+        $eifelKeluar = $getByStatus($eifelAll, ['p1', 'p2', 'p3', 'keluar_kantor', 'keluar kantor']);
+
+        // Data Liberty
+        $libertySakit = $getByStatus($libertyAll, ['sakit']);
+        $libertyCuti = $getByStatus($libertyAll, ['c1', 'c2', 'c3', 'cuti']);
+        $libertyWFH = $getByStatus($libertyAll, ['wfh']); // TAMBAHKAN INI
+        $libertyDinasLuar = $getByStatus($libertyAll, ['dinas_luar', 'dinas luar','dl']);
+        $libertyKeluar = $getByStatus($libertyAll, ['p1', 'p2', 'p3', 'keluar_kantor', 'keluar kantor']);
+        // Hitung total
+        $eifelTotal = $eifelAll->count();
+        $libertyTotal = $libertyAll->count();
+        
+        
+        $wfhCount = $eifelWFH->count();
+        $wfhCountL = $libertyWFH->count();
+
+        $sakitCount = $eifelSakit->count();
+        $cutiCount = $eifelCuti->count();
+        $dinasCount = $eifelDinasLuar->count();
+        $keluarCount = $eifelKeluar->count();
+        $eifelHadirTotal = $eifelAll->count() - ($sakitCount + $cutiCount + $dinasCount + $keluarCount + $wfhCount);
+        
+        $sakitCountL = $libertySakit->count();
+        $cutiCountL = $libertyCuti->count();
+        $dinasCountL = $libertyDinasLuar->count();
+        $keluarCountL = $libertyKeluar->count();
+        $libertyHadirTotal = $libertyAll->count() - ($sakitCountL + $cutiCountL + $dinasCountL + $keluarCountL + $wfhCountL);
+
+        // Hitung akumulasi
+        $totalLantai19 = $eifelHadirTotal;
+        $totalLantai1 = $libertyHadirTotal;
+        $totalMarein = 0;
+        $totalAkumulasi = $totalLantai19 + $totalLantai1 + $totalMarein;
+
+        // Format tanggal
+        $bulanIndo = [
+            1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+            5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+            9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+        ];
+        
+        $tanggalObj = \DateTime::createFromFormat('Y-m-d', $tanggal);
+        if (!$tanggalObj) {
+            $tanggalObj = new \DateTime($tanggal);
+        }
+        
+        $hari = $tanggalObj->format('d');
+        $bulan = $bulanIndo[(int)$tanggalObj->format('m')];
+        $tahun = $tanggalObj->format('Y');
+        $tanggalFormatted = $hari . ' ' . $bulan . ' ' . $tahun;
+
+
+        // Data untuk view
+        $data = [
+            'tanggal' => $tanggalFormatted,
+            'eifelHadir' => $eifelHadir,
+            'libertyHadir' => $libertyHadir,
+            'eifelTotal' => $eifelTotal,
+            'libertyTotal' => $libertyTotal,
+            'eifelSakit' => $eifelSakit,
+            'eifelCuti' => $eifelCuti,
+            'eifelDinasLuar' => $eifelDinasLuar,
+            'eifelKeluar' => $eifelKeluar,
+            'libertySakit' => $libertySakit,
+            'libertyCuti' => $libertyCuti,
+            'libertyDinasLuar' => $libertyDinasLuar,
+            'libertyKeluar' => $libertyKeluar,
+            'eifelHadirTotal' => $eifelHadirTotal,
+            'libertyHadirTotal' => $libertyHadirTotal,
+            'totalLantai19' => $totalLantai19,
+            'totalLantai1' => $totalLantai1,
+            'totalMarein' => $totalMarein,
+            'totalAkumulasi' => $totalAkumulasi,
+            'sakitCount' => $sakitCount,
+            'cutiCount' => $cutiCount,
+            'dinasCount' => $dinasCount,
+            'keluarCount' => $keluarCount,
+            'sakitCountL' => $sakitCountL,
+            'cutiCountL' => $cutiCountL,
+            'dinasCountL' => $dinasCountL,
+            'keluarCountL' => $keluarCountL,
+            'eifelWFH' => $eifelWFH, // TAMBAHKAN INI
+            'libertyWFH' => $libertyWFH, // TAMBAHKAN INI
+            'wfhCount' => $wfhCount, // TAMBAHKAN INI
+            'wfhCountL' => $wfhCountL, // TAMBAHKAN INI
+        ];
+
+        // Load view untuk PDF
+        $pdf = \PDF::loadView('pdf.katering-report', $data);
+        
+        // Set paper size dan orientation
+        $pdf->setPaper('A4', 'portrait');
+        
+        // Set options PDF
+        $pdf->setOptions([
+            'isHtml5ParserEnabled' => true,
+            'isRemoteEnabled' => true,
+            'defaultFont' => 'sans-serif'
+        ]);
+        
+        // Generate nama file
+        $fileName = "Katering_" . date('Y-m-d', strtotime($tanggal)) . ".pdf";
+        
+        // Download PDF dengan header yang benar
+        return $pdf->download($fileName);
+        
+    } catch (\Exception $e) {
+        \Log::error('Error generating katering PDF report: ' . $e->getMessage());
+        \Log::error('Stack trace: ' . $e->getTraceAsString());
+        
+        return response()->json([
+            'error' => 'Gagal membuat laporan katering PDF',
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
    public function ManualInput(Request $request)
 {
     $validator = Validator::make($request->all(), [
@@ -386,7 +688,7 @@ public function storeInputTidak(Request $request)
         return Inertia::render('Hrd/Absen/Dokumen', []);
     }
     public function printAbsensiMonthly(Request $request)
-{
+    {
     try {
         $request->validate([
             'bulan' => 'required|integer|min:1|max:12',
@@ -409,10 +711,8 @@ public function storeInputTidak(Request $request)
             ->orderBy('id', 'asc')
             ->get();
         
-        // Array untuk menyimpan data per tanggal
         $dataPerTanggal = [];
 
-        // Loop untuk setiap hari dalam bulan
         for ($hari = 1; $hari <= $jumlahHari; $hari++) {
             $tanggal = Carbon::create($tahun, $bulan, $hari)->format('Y-m-d');
             $carbonDate = Carbon::parse($tanggal);
@@ -506,7 +806,142 @@ public function storeInputTidak(Request $request)
             'message' => $e->getMessage()
         ], 500);
     }
-}
+    }
+        public function printAbsensiMonthlyPDF(Request $request)
+    {
+        try {
+            $request->validate([
+                'bulan' => 'required|integer|min:1|max:12',
+                'tahun' => 'required|integer|min:2000|max:2100',
+                'tower' => 'required|string|in:Eiffel,Liberty'
+            ]);
+        
+            $bulan = (int) $request->input('bulan');
+            $tahun = (int) $request->input('tahun');
+            $tower = $request->input('tower');
+
+            // Hitung jumlah hari dalam bulan tersebut
+            $jumlahHari = Carbon::create($tahun, $bulan, 1)->daysInMonth;
+
+            // Ambil semua users yang aktif
+            $users = User::where('active', true)
+                ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk')
+                ->where('tower', $tower)
+                ->orderBy('tower', 'asc')
+                ->orderBy('id', 'asc')
+                ->get();
+            
+            $dataPerTanggal = [];
+
+            for ($hari = 1; $hari <= $jumlahHari; $hari++) {
+                $tanggal = Carbon::create($tahun, $bulan, $hari)->format('Y-m-d');
+                $carbonDate = Carbon::parse($tanggal);
+                
+                // Cek apakah hari Sabtu atau Minggu
+                $isSaturdayOrSunday = $carbonDate->isSaturday() || $carbonDate->isSunday();
+
+                // Cek apakah libur nasional
+                $isNationalHoliday = Holiday::isHoliday($tanggal);
+
+                // Tentukan apakah hari libur
+                $isHoliday = $isSaturdayOrSunday || $isNationalHoliday;
+
+                // Ambil kehadiran untuk tanggal ini
+                $kehadiranHariIni = Kehadiran::where('tanggal', $tanggal)
+                    ->get()
+                    ->keyBy('uid');
+
+                // Format data untuk setiap user di tanggal ini
+                $dataAbsensi = [];
+                foreach ($users as $user) {
+                    $attendance = $kehadiranHariIni->get($user->id);
+
+                    // Tentukan status, jam kedatangan, dan jam pulang
+                    if ($isHoliday) {
+                        $status = 'Libur Kerja';
+                        $jamKedatangan = '00:00';
+                        $jamPulang = '00:00';
+                    } elseif ($attendance) {
+                        $status = $attendance->status;
+                        $jamKedatangan = $attendance->jam_kedatangan 
+                            ? Carbon::parse($attendance->jam_kedatangan)->format('H:i') 
+                            : '-';
+                        $jamPulang = $attendance->jam_pulang 
+                            ? Carbon::parse($attendance->jam_pulang)->format('H:i') 
+                            : '-';
+                    } else {
+                        $status = 'N/A';
+                        $jamKedatangan = '-';
+                        $jamPulang = '-';
+                    }
+
+                    $dataAbsensi[] = [
+                        'tanggal' => $tanggal,
+                        'tower' => $user->tower ?? 'Tanpa Tower',
+                        'tmk' => $user->tmk ?? '-',
+                        'nama' => $user->name ?? '-',
+                        'divisi' => $user->divisi ?? '-',
+                        'jabatan' => $user->jabatan ?? '-',
+                        'status' => $status,
+                        'jam_kedatangan' => $jamKedatangan,
+                        'jam_pulang' => $jamPulang,
+                    ];
+                }
+
+                // Simpan data per tanggal
+                $dataPerTanggal[] = [
+                    'tanggal' => $tanggal,
+                    'tanggal_formatted' => $carbonDate->locale('id')->translatedFormat('d F Y'),
+                    'hari' => $carbonDate->locale('id')->dayName,
+                    'is_holiday' => $isHoliday,
+                    'data' => $dataAbsensi
+                ];
+            }
+
+            // Nama bulan dalam bahasa Indonesia
+            $namaBulan = [
+                1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',
+                5 => 'Mei', 6 => 'Juni', 7 => 'Juli', 8 => 'Agustus',
+                9 => 'September', 10 => 'Oktober', 11 => 'November', 12 => 'Desember'
+            ];
+
+            // Data untuk view
+            $data = [
+                'dataPerTanggal' => $dataPerTanggal,
+                'bulan' => $namaBulan[$bulan],
+                'tahun' => $tahun,
+                'tower' => $tower,
+                'generated_at' => Carbon::now()->locale('id')->translatedFormat('d F Y H:i:s')
+            ];
+
+            // Generate PDF
+            $pdf = Pdf::loadView('pdf.absensi-monthly', $data)
+                ->setPaper('a4', 'landscape')
+                ->setOptions([
+                    'isHtml5ParserEnabled' => true,
+                    'isRemoteEnabled' => true,
+                    'defaultFont' => 'sans-serif'
+                ]);
+
+            $fileName = 'Absensi_' . $namaBulan[$bulan] . '_' . $tahun . '_' . $tower . '.pdf';
+
+            return $pdf->download($fileName);
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            return response()->json([
+                'error' => 'Validasi gagal',
+                'message' => 'Format bulan (1-12) dan tahun (2000-2100) harus valid',
+                'details' => $e->errors()
+            ], 422);
+        
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Terjadi kesalahan',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
    public function printRekapAll(Request $request)
     {
         try {
