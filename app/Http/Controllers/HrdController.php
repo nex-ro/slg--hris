@@ -551,10 +551,10 @@ private function getYearlyTableData($year, $tower, $divisi)
 
         // Tentukan apakah hari libur
         $isHoliday = $isSaturdayOrSunday || $isNationalHoliday;
-    
         // Ambil semua users yang aktif
         $users = User::where('active', true)
             ->select('id', 'name', 'email', 'tower','divisi','jabatan','tmk')
+            ->where('active', true)
             ->orderBy('tower', 'asc')
             ->orderBy('name', 'asc')
             ->get();

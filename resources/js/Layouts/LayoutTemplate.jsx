@@ -22,7 +22,8 @@ import {
   List,
   ClipboardCheck,
   XCircle,
-  FolderOpen
+  FolderOpen,
+  Calendar1
 } from 'lucide-react';
 
 const DashboardLayouts = ({ children }) => {
@@ -47,6 +48,8 @@ const DashboardLayouts = ({ children }) => {
         { icon: List, label: 'List Absensi', href: '/absensi/list' },
         { icon: ClipboardCheck, label: 'Input Absensi Harian', href: '/absensi/input-harian' },
         { icon: XCircle, label: 'Input Absensi Tidak Hadir', href: '/absensi/input-tidak-hadir' },
+                  { icon: Calendar1, label: 'Atur Liburan', href: '/holidays' },
+
         { icon: FolderOpen, label: 'Dokumen Absensi', href: '/absensi/dokumen' },
       ]
     },

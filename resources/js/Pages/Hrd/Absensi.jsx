@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Calendar, Users,FileSpreadsheet, FileText, Clock, CheckCircle, XCircle,UserPlus ,X, AlertCircle, Search, Filter, Layout, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Calendar, Users,FileSpreadsheet,ChevronDown,FileText, Clock, CheckCircle, XCircle,UserPlus ,X, AlertCircle, Search, Filter, Layout, Printer, ChevronLeft, ChevronRight } from 'lucide-react';
 import LayoutTemplate from '@/Layouts/LayoutTemplate';
 import ManualInputModal from '@/Layouts/ManualInputModal';
 import { Head } from '@inertiajs/react';
@@ -18,7 +18,8 @@ function Absensi() {
   const [showKateringModal, setShowKateringModal] = useState(false);
   const [showAbsensiModal, setShowAbsensiModal] = useState(false);
   const [holidays, setHolidays] = useState([]);
-
+const [openStatusDropdown, setOpenStatusDropdown] = useState(null);
+const [updatingStatus, setUpdatingStatus] = useState(false);
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
@@ -103,6 +104,89 @@ function Absensi() {
   const handlePrintAbsensi = () => {
     setShowAbsensiModal(true);
   };
+  const editableStatusOptions = [
+  { value: 'Sakit', label: 'Sakit', desc: 'Tidak Masuk kerja', color: 'bg-red-400', textColor: 'text-white', borderColor: 'border-red-400' },
+  { value: 'P1', label: 'Ijin Full Day', desc: 'Izin tidak masuk kerja seharian', color: 'bg-blue-500', textColor: 'text-white', borderColor: 'border-blue-500' },
+  { value: 'P2', label: 'Ijin Setengah Hari', desc: 'Izin tidak masuk setengah hari', color: 'bg-blue-400', textColor: 'text-white', borderColor: 'border-blue-400' },
+  { value: 'P3', label: 'Ijin Keluar Kantor', desc: 'Izin keluar kantor sementara', color: 'bg-blue-300', textColor: 'text-blue-900', borderColor: 'border-blue-300' },
+  { value: 'C1', label: 'Cuti Full Day', desc: 'Mengambil cuti seharian penuh', color: 'bg-green-500', textColor: 'text-white', borderColor: 'border-green-500' },
+  { value: 'C2', label: 'Cuti Setengah Hari', desc: 'Mengambil cuti setengah hari', color: 'bg-green-400', textColor: 'text-white', borderColor: 'border-green-400' },
+  { value: 'DL', label: 'Dinas Luar', desc: 'Bertugas di luar kantor', color: 'bg-purple-500', textColor: 'text-white', borderColor: 'border-purple-500' },
+  { value: 'WFH', label: 'Work From Home', desc: 'Bekerja dari rumah', color: 'bg-orange-500', textColor: 'text-white', borderColor: 'border-orange-500' },
+  { value: 'FP-TR', label: 'FP Tidak Ter-Record', desc: 'Fingerprint tidak terekam sistem', color: 'bg-red-500', textColor: 'text-white', borderColor: 'border-red-500' }
+];
+const handleStatusChange = async (kehadiranId, newStatus, userData = null, tanggal = null) => {
+  setUpdatingStatus(true);
+  try {
+    let csrfToken = getCsrfToken();
+    
+    const payload = {
+      status: newStatus,
+      jam_kedatangan: '00:00',
+      jam_pulang: '00:00'
+    };
+
+    // Jika ID null, berarti create new
+    if (kehadiranId) {
+      payload.id = kehadiranId;
+    } else {
+      // Data untuk create new
+      payload.tanggal = tanggal || formatDateForAPI(selectedDate);
+      payload.uid = userData?.id;
+    }
+    
+    const response = await fetch('/kehadiran/update-status', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify(payload)
+    });
+
+    if (response.status === 419) {
+      const newToken = await fetchFreshCsrfToken();
+      
+      if (!newToken) {
+        throw new Error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.');
+      }
+
+      const retryResponse = await fetch('/kehadiran/update-status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': newToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify(payload)
+      });
+
+      if (!retryResponse.ok) {
+        throw new Error(`HTTP error! status: ${retryResponse.status}`);
+      }
+    } else if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    // Refresh data setelah berhasil update
+    await fetchKehadiranData(selectedDate);
+    setOpenStatusDropdown(null);
+    
+  } catch (error) {
+    console.error('Error updating status:', error);
+    if (error.message.includes('419') || error.message.includes('CSRF')) {
+      alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
+      window.location.reload();
+    } else {
+      alert(`Error: ${error.message}`);
+    }
+  } finally {
+    setUpdatingStatus(false);
+  }
+};
 
   const handlePrintAbsensiFormat = async (format) => {
     try {
@@ -392,20 +476,79 @@ function Absensi() {
            currentMonth.getFullYear() === selectedDate.getFullYear();
   };
 
-  const getStatusBadge = (status) => {
-    const statusInfo = statusOptions.find(s => s.value === status) || {
-      label: status || 'Unknown',
-      color: 'bg-gray-500',
-      textColor: 'text-white',
-      borderColor: 'border-gray-500'
-    };
-    
-    return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${statusInfo.color} ${statusInfo.textColor} ${statusInfo.borderColor}`}>
-        {statusInfo.label}
-      </span>
-    );
+ const getStatusBadge = (item, idx) => {
+  const status = item.status;
+  const kehadiranId = item.id; // Bisa null
+  
+  const statusInfo = statusOptions.find(s => s.value === status) || {
+    label: status || 'Unknown',
+    color: 'bg-gray-500',
+    textColor: 'text-white',
+    borderColor: 'border-gray-500'
   };
+  
+  // Jika status adalah N/A, tampilkan dropdown
+  if (status === 'N/A') {
+    return (
+      <div className="relative">
+        <button
+          onClick={() => setOpenStatusDropdown(openStatusDropdown === idx ? null : idx)}
+          disabled={updatingStatus}
+          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${statusInfo.color} ${statusInfo.textColor} ${statusInfo.borderColor} hover:opacity-80 transition-all ${updatingStatus ? 'opacity-50 cursor-not-allowed' : ''}`}
+        >
+          {statusInfo.label}
+          <ChevronDown className="w-3 h-3" />
+        </button>
+
+        {openStatusDropdown === idx && (
+          <>
+            <div 
+              className="fixed inset-0 z-10" 
+              onClick={() => setOpenStatusDropdown(null)}
+            />
+            <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-200 z-20 max-h-80 overflow-y-auto">
+              <div className="p-2">
+                <div className="px-3 py-2 border-b border-gray-200 mb-1">
+                  <p className="text-xs font-bold text-gray-700">
+                    Ubah Status {kehadiranId ? `(ID: ${kehadiranId})` : '(Buat Baru)'}
+                  </p>
+                </div>
+                {editableStatusOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    onClick={() => handleStatusChange(
+                      kehadiranId, 
+                      option.value, 
+                      item.user, 
+                      formatDateForAPI(selectedDate)
+                    )}
+                    disabled={updatingStatus}
+                    className={`w-full text-left px-3 py-2 rounded-lg hover:bg-gray-50 transition-all ${updatingStatus ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="font-semibold text-xs text-gray-800">{option.label}</span>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${option.color} ${option.textColor}`}>
+                        {option.value}
+                      </span>
+                    </div>
+                    <p className="text-xs text-gray-500">{option.desc}</p>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  }
+  
+  // Untuk status lainnya, tampilkan badge biasa
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${statusInfo.color} ${statusInfo.textColor} ${statusInfo.borderColor}`}>
+      {statusInfo.label}
+    </span>
+  );
+};
 
   const filterKehadiranData = (data) => {
     return data.filter(item => {
@@ -445,6 +588,7 @@ function Absensi() {
 
   const activeStatusOption = statusOptions.find(s => s.value === statusFilter) || statusOptions[0];
 
+  console.log(paginatedKehadiran)
   const handleManualSave = () => {
     fetchKehadiranData(selectedDate);
   };
@@ -837,7 +981,6 @@ function Absensi() {
                       )}
                     </div>
                   </div>
-                  
                   <div className="p-5 space-y-3" style={{ minHeight: '350px' }}>
                     {filteredKehadiran.length === 0 ? (
                       <div className="text-center py-8 text-gray-500">
@@ -850,40 +993,40 @@ function Absensi() {
                       </div>
                     ) : (
                       <>
-                        {paginatedKehadiran.map((item, idx) => (
-                          <div 
-                            key={idx} 
-                            className="border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-indigo-200 transition-all bg-gradient-to-r from-gray-50 to-white"
-                          >
-                            <div className="flex items-start justify-between gap-4 mb-3">
-                              <div className="flex items-center gap-3">
-                                <div className="bg-indigo-100 text-indigo-600 w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm">
-                                  {(item.user?.name || 'U').charAt(0).toUpperCase()}
-                                </div>
-                                <div>
-                                  <h4 className="font-bold text-gray-800">
-                                    {item.user?.name || 'Nama Tidak Tersedia'}
-                                  </h4>
-                                  <p className="text-xs text-gray-500">ID: {item.user?.id || '-'}</p>
-                                </div>
-                              </div>
-                              {getStatusBadge(item.status)}
-                            </div>
-                            
-                            <div className="flex flex-wrap gap-4 text-sm">
-                              <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg">
-                                <Clock className="w-4 h-4 text-green-600" />
-                                <span className="font-medium">Masuk:</span>
-                                <span className="font-bold text-gray-800">{item.jam_kedatangan || '-'}</span>
-                              </div>
-                              <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg">
-                                <Clock className="w-4 h-4 text-orange-600" />
-                                <span className="font-medium">Pulang:</span>
-                                <span className="font-bold text-gray-800">{item.jam_pulang || '-'}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                      {paginatedKehadiran.map((item, idx) => (
+  <div 
+    key={item.id}
+    className="border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-indigo-200 transition-all bg-gradient-to-r from-gray-50 to-white"
+  >
+    <div className="flex items-start justify-between gap-4 mb-3">
+      <div className="flex items-center gap-3">
+        <div className="bg-indigo-100 text-indigo-600 w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm">
+          {(item.user?.name || 'U').charAt(0).toUpperCase()}
+        </div>
+        <div>
+          <h4 className="font-bold text-gray-800">
+            {item.user?.name || 'Nama Tidak Tersedia'}
+          </h4>
+          <p className="text-xs text-gray-500">ID: {item.user?.id || '-'}</p>
+        </div>
+      </div>
+      {getStatusBadge(item, idx)}
+    </div>
+
+    <div className="flex flex-wrap gap-4 text-sm">
+      <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg">
+        <Clock className="w-4 h-4 text-green-600" />
+        <span className="font-medium">Masuk:</span>
+        <span className="font-bold text-gray-800">{item.jam_kedatangan || '-'}</span>
+      </div>
+      <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg">
+        <Clock className="w-4 h-4 text-orange-600" />
+        <span className="font-medium">Pulang:</span>
+        <span className="font-bold text-gray-800">{item.jam_pulang || '-'}</span>
+      </div>
+    </div>
+  </div>
+))}
                       </>
                     )}
                   </div>

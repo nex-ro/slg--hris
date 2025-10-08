@@ -409,7 +409,7 @@ public function printKateringPDF(Request $request)
             $status = strtolower(trim($user['status'] ?? ''));
             return in_array($status, [
                 'ontime', 'on time', 'hadir', 'terlambat',
-                'late', 'telat', 'fp-tr', 'FP-TR'
+                'late', 'telat', 'fp-tr', 'FP-TR','c2','p2'
             ]);
         });
 
@@ -440,10 +440,10 @@ public function printKateringPDF(Request $request)
 
         // Data Eiffel
         $eifelSakit = $getByStatus($eifelAll, ['sakit']);
-        $eifelCuti = $getByStatus($eifelAll, ['c1', 'c2', 'c3', 'cuti']);
+        $eifelCuti = $getByStatus($eifelAll, ['c1', 'c3', 'cuti']);
         $eifelWFH = $getByStatus($eifelAll, ['wfh']); // TAMBAHKAN INI
         $eifelDinasLuar = $getByStatus($eifelAll, ['dinas_luar', 'dinas luar','dl']);
-        $eifelKeluar = $getByStatus($eifelAll, ['p1', 'p2', 'p3', 'keluar_kantor', 'keluar kantor']);
+        $eifelKeluar = $getByStatus($eifelAll, ['p1','p3', 'keluar_kantor', 'keluar kantor']);
 
         // Data Liberty
         $libertySakit = $getByStatus($libertyAll, ['sakit']);
@@ -1049,6 +1049,92 @@ public function printKateringPDF(Request $request)
 }
 
 
+public function updateStatus(Request $request)
+{
+    try {
+        $validated = $request->validate([
+            'id' => 'nullable|integer',
+            'status' => 'required|string',
+            'jam_kedatangan' => 'nullable|string',
+            'jam_pulang' => 'nullable|string',
+            'tanggal' => 'required_if:id,null|date',
+            'uid' => 'required_if:id,null|integer|exists:users,id',
+        ]);
+
+        // Jika ID ada, update data yang sudah ada
+        if (!empty($validated['id'])) {
+            $kehadiran = Kehadiran::find($validated['id']);
+            
+            if (!$kehadiran) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Data kehadiran tidak ditemukan'
+                ], 404);
+            }
+
+            $kehadiran->update([
+                'status' => $validated['status'],
+                'jam_kedatangan' => $validated['jam_kedatangan'] ?? '00:00',
+                'jam_pulang' => $validated['jam_pulang'] ?? '00:00',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Status berhasil diupdate',
+                'data' => $kehadiran->fresh()->load('user')
+            ]);
+        } 
+        // Jika ID null, buat data baru
+        else {
+            // Cek apakah sudah ada data untuk user dan tanggal yang sama
+            $existingKehadiran = Kehadiran::where('uid', $validated['uid'])
+                ->where('tanggal', $validated['tanggal'])
+                ->first();
+
+            if ($existingKehadiran) {
+                // Jika sudah ada, update saja
+                $existingKehadiran->update([
+                    'status' => $validated['status'],
+                    'jam_kedatangan' => $validated['jam_kedatangan'] ?? '00:00',
+                    'jam_pulang' => $validated['jam_pulang'] ?? '00:00',
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Status berhasil diupdate (data sudah ada)',
+                    'data' => $existingKehadiran->fresh()->load('user')
+                ]);
+            }
+
+            // Buat data baru
+            $kehadiran = Kehadiran::create([
+                'tanggal' => $validated['tanggal'],
+                'uid' => $validated['uid'],
+                'status' => $validated['status'],
+                'jam_kedatangan' => $validated['jam_kedatangan'] ?? '00:00',
+                'jam_pulang' => $validated['jam_pulang'] ?? '00:00',
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Data kehadiran berhasil dibuat',
+                'data' => $kehadiran->fresh()->load('user')
+            ], 201);
+        }
+        
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Validation error',
+            'errors' => $e->errors()
+        ], 422);
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error: ' . $e->getMessage()
+        ], 500);
+    }
+}
 public function printAbsensiCustom(Request $request)
 {
     try {

@@ -14,6 +14,7 @@ const [divisiList, setDivisiList] = useState([]);
 const [jabatanList, setJabatanList] = useState([]);
 const [loading, setLoading] = useState(false);
 
+
   
   // Search & Filter State
 const [searchTerm, setSearchTerm] = useState('');
@@ -33,18 +34,19 @@ useEffect(() => {
 }, []);
 
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    role: 'pegawai',
-    active: true,
-    tmk: '',
-    divisi: '',
-    jabatan: '',
-    tower: '',
-    keterangan: '',
-    ttd: null
-  });
+  id: '',  // ✅ TAMBAHKAN INI
+  name: '',
+  email: '',
+  password: '',
+  role: 'pegawai',
+  active: true,
+  tmk: '',
+  divisi: '',
+  jabatan: '',
+  tower: '',
+  keterangan: '',
+  ttd: null
+});
   const [ttdPreview, setTtdPreview] = useState(null);
 useEffect(() => {
   const timer = setTimeout(() => {
@@ -108,6 +110,7 @@ const fetchData = async (page = 1) => {
 
   const resetForm = () => {
     setFormData({
+      id: '',  
       name: '',
       email: '',
       password: '',
@@ -132,6 +135,7 @@ const fetchData = async (page = 1) => {
 
   const openEditModal = (user) => {
     setFormData({
+      id: user.id,
       name: user.name,
       email: user.email,
       password: '',
@@ -496,8 +500,8 @@ const fetchData = async (page = 1) => {
         {/* Modal Form */}
         {isModalOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-screen overflow-y-auto">
-              <div className="flex justify-between items-center mb-4">
+            <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+                <div className="flex justify-between items-center mb-4">
                 <h2 className="text-xl font-bold text-gray-800">
                   {isEditing ? 'Edit Pegawai' : 'Tambah Pegawai'}
                 </h2>
@@ -508,6 +512,27 @@ const fetchData = async (page = 1) => {
 
               <div onSubmit={handleSubmit}>
                 <div className="grid grid-cols-2 gap-4">
+                  <div className="col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      ID Pegawai <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      name="id"
+                      value={formData.id}
+                      onChange={handleChange}
+                      required
+                      placeholder="Contoh: 101, 102, 103..."
+                      disabled={isEditing} // <-- Tambahkan ini
+                      className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                        isEditing ? "bg-gray-100 cursor-not-allowed" : ""
+                      }`}
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      Masukkan ID unik untuk pegawai (angka)
+                    </p>
+                  </div>
+
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Nama <span className="text-red-500">*</span>
@@ -569,7 +594,7 @@ const fetchData = async (page = 1) => {
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      TMK <span className="text-red-500">*</span>
+                      TMK(Tanggal Mulai Kerja)
                     </label>
                     <input
                       type="date"

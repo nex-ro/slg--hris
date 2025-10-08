@@ -64,6 +64,7 @@ class UserController extends Controller
         $divisiList = User::select('divisi')
             ->distinct()
             ->whereNotNull('divisi')
+            ->where('active', 1)
             ->where('divisi', '!=', '')
             ->orderBy('divisi')
             ->pluck('divisi');
@@ -126,12 +127,13 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'id' => 'required|integer|unique:users,id', 
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => 'required|min:8',
             'role' => 'required|string',
             'active' => 'boolean',
-            'tmk' => 'required|date',
+            'tmk' => 'nullable|date',
             'divisi' => 'required|string|max:255',
             'jabatan' => 'required|string|max:255',
             'tower' => 'required|string',
@@ -163,7 +165,7 @@ class UserController extends Controller
             'password' => 'nullable|min:8',
             'role' => 'required|string',
             'active' => 'boolean',
-            'tmk' => 'required|date',
+            'tmk' => 'nullable|date',
             'divisi' => 'required|string|max:255',
             'jabatan' => 'required|string|max:255',
             'keterangan' => 'nullable|string',

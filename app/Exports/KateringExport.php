@@ -39,7 +39,9 @@ class KateringExport implements FromCollection, WithHeadings, WithStyles, WithCo
                 'late',
                 'telat',
                 'FP-TR',
-                'fp-tr'
+                'fp-tr',
+                'c2',
+                'p2',
             ]);
         });
 
@@ -65,17 +67,17 @@ class KateringExport implements FromCollection, WithHeadings, WithStyles, WithCo
 
         // Data Eifel
         $eifelSakit = $getByStatus($eifelAll, ['sakit']);
-        $eifelCuti = $getByStatus($eifelAll, ['c1', 'c2', 'c3', 'cuti']);
+        $eifelCuti = $getByStatus($eifelAll, ['c1','c3', 'cuti']);
         $eifelWFH = $getByStatus($eifelAll, ['wfh']);
         $eifelDinasLuar = $getByStatus($eifelAll, ['dinas_luar', 'dinas luar','dl']);
-        $eifelKeluar = $getByStatus($eifelAll, ['p1', 'p2', 'p3', 'keluar_kantor', 'keluar kantor']);
+        $eifelKeluar = $getByStatus($eifelAll, ['p1', 'p3', 'keluar_kantor', 'keluar kantor']);
 
         // Data Liberty
         $libertySakit = $getByStatus($libertyAll, ['sakit']);
-        $libertyCuti = $getByStatus($libertyAll, ['c1', 'c2', 'c3', 'cuti']);
+        $libertyCuti = $getByStatus($libertyAll, ['c1', 'c3', 'cuti']);
         $libertyWFH = $getByStatus($libertyAll, ['wfh']);
         $libertyDinasLuar = $getByStatus($libertyAll, ['dinas_luar', 'dinas luar','dl']);
-        $libertyKeluar = $getByStatus($libertyAll, ['p1', 'p2', 'p3', 'keluar_kantor', 'keluar kantor']);
+        $libertyKeluar = $getByStatus($libertyAll, ['p1', 'p3', 'keluar_kantor', 'keluar kantor']);
 
         // Total keseluruhan
         $eifelTotal = $eifelAll->count();

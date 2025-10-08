@@ -4,7 +4,8 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\HrdController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\AbsensiController;
-
+use App\Http\Controllers\HolidayController;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -63,6 +64,18 @@ Route::middleware('hrd')->group(function () {
     Route::get('/kehadiran/print-monthly-pdf', [AbsensiController::class, 'printAbsensiMonthlyPDF'])->name('kehadiran.print-monthly-pdf');
     Route::get('/kehadiran/print-custom', [AbsensiController::class, 'printAbsensiCustom']);
     Route::get('/kehadiran/print-rekapall', [AbsensiController::class, 'printRekapAll']);
+
+    Route::get('/holidays', [HolidayController::class, 'index'])->name('holidays.index');
+    Route::post('/kehadiran/update-status', [AbsensiController::class, 'updateStatus'])->middleware(['auth']);
+
+// CRUD Operations
+Route::post('/holidays', [HolidayController::class, 'store'])->name('holidays.store');
+Route::put('/holidays/{holiday}', [HolidayController::class, 'update'])->name('holidays.update');
+Route::delete('/holidays/{holiday}', [HolidayController::class, 'destroy'])->name('holidays.destroy');
+
+// Delete by date (untuk hapus dari kalender langsung)
+Route::post('/holidays/delete-by-date', [HolidayController::class, 'destroyByDate'])->name('holidays.destroyByDate');
+
 });
 Route::middleware('head')->group(function () {
     Route::get('/HEAD/dashboard', [UserController::class, 'head'])->middleware(['auth', 'verified'])->name('head.dashboard');
