@@ -32,6 +32,27 @@ class User extends Authenticatable
         'ttd',
        
     ];
+        public function notifications()
+    {
+        return $this->hasMany(Notification::class);
+    }
+
+    /**
+     * Ambil notifikasi yang belum dibaca
+     */
+    public function unreadNotifications()
+    {
+        return $this->notifications()->unread();
+    }
+
+    /**
+     * Hitung jumlah notifikasi yang belum dibaca
+     */
+    public function unreadNotificationsCount()
+    {
+        return $this->notifications()->unread()->count();
+    }
+
 
     /**
      * The attributes that should be hidden for serialization.
@@ -55,4 +76,5 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+    
 }

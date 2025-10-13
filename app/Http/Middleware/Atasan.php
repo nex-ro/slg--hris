@@ -17,6 +17,10 @@ class atasan
     public function handle(Request $request, Closure $next): Response
     {
 
+        if (!Auth::check()) {
+            return redirect('/');
+        }
+
         if (Auth::user()->role != 'atasan') {
             return redirect('/');
         }

@@ -551,13 +551,14 @@ private function getYearlyTableData($year, $tower, $divisi)
 
         // Tentukan apakah hari libur
         $isHoliday = $isSaturdayOrSunday || $isNationalHoliday;
+        
         // Ambil semua users yang aktif
         $users = User::where('active', true)
-            ->select('id', 'name', 'email', 'tower','divisi','jabatan','tmk')
-            ->where('active', true)
+            ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk')
             ->orderBy('tower', 'asc')
             ->orderBy('name', 'asc')
             ->get();
+            
         $kehadiran = Kehadiran::where('tanggal', $tanggal)->get()->keyBy('uid');
     
         // Format response data
@@ -570,6 +571,7 @@ private function getYearlyTableData($year, $tower, $divisi)
                 $status = 'Libur Kerja';
                 $jamKedatangan = '00:00';
                 $jamPulang = '00:00';
+                $keterangan = null; // TAMBAHKAN INI
             } elseif ($attendance) {
                 $status = $attendance->status;
                 $jamKedatangan = $attendance->jam_kedatangan 
@@ -578,10 +580,12 @@ private function getYearlyTableData($year, $tower, $divisi)
                 $jamPulang = $attendance->jam_pulang 
                     ? Carbon::parse($attendance->jam_pulang)->format('H:i') 
                     : null;
+                $keterangan = $attendance->keterangan ?? null; // PERBAIKAN: Tambahkan null coalescing
             } else {
                 $status = 'N/A';
                 $jamKedatangan = null;
                 $jamPulang = null;
+                $keterangan = null; // TAMBAHKAN INI
             }
 
             return [
@@ -591,6 +595,7 @@ private function getYearlyTableData($year, $tower, $divisi)
                 'status' => $status,
                 'jam_kedatangan' => $jamKedatangan,
                 'jam_pulang' => $jamPulang,
+                'keterangan' => $keterangan, // GUNAKAN VARIABLE YANG SUDAH DIDEFINISIKAN
                 'user' => [
                     'id' => $user->id,
                     'name' => $user->name,  

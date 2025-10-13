@@ -16,6 +16,10 @@ class Hrd
      */
     public function handle(Request $request, Closure $next): Response
     {
+        if (!Auth::check()) {
+            return redirect('/');
+        }
+
         if (Auth::user()->role != 'hrd' && Auth::user()->role != 'head') {
             return redirect('/');
         }

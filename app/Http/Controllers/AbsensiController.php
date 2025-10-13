@@ -132,6 +132,41 @@ public function saveAbsensi(Request $request)
         ]);
     }
 }
+    public function updateKeterangan(Request $request)
+    {
+        try {
+            $request->validate([
+                'id' => 'required|exists:kehadiran,id',
+                'keterangan' => 'required|string|max:500'
+            ]);
+
+            $kehadiran = Kehadiran::findOrFail($request->id);
+            
+            // Pastikan status adalah Terlambat
+            if ($kehadiran->status !== 'Terlambat') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Keterangan hanya bisa ditambahkan untuk status Terlambat'
+                ], 400);
+            }
+
+            $kehadiran->keterangan = $request->keterangan;
+            $kehadiran->save();
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Keterangan berhasil disimpan',
+                'data' => $kehadiran
+            ]);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Terjadi kesalahan: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
 
 public function storeInputTidak(Request $request)
 {

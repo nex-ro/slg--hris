@@ -10,6 +10,16 @@ use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
+use App\Http\Controllers\ResignController;
+use App\Http\Controllers\PegawaiController;
+use App\Models\Resign;
+use App\Http\Controllers\NotificationController;
+
+Route::get('/tes', function () {
+    return Inertia::render('tes', []);
+});
+    Route::post('/dokumen/file-resign/{id}', [PegawaiController::class, 'filestore']);
+
 Route::get('/', function () {
     if (!Auth::check()) {
         return redirect('/login');
@@ -26,24 +36,42 @@ Route::get('/', function () {
 
     return redirect('/login');
 });
-
-
-
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/notifications', [NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
+    Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
+    Route::post('/notifications/{id}/click', [NotificationController::class, 'markAsReadOnClick']); // NEW
+    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
+    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
+});
 
 Route::middleware('pegawai')->group(function () {
     Route::get('/dashboard', [UserController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
+    Route::get('/dokumen/file/resign/{id}', function ($id) {
+    $resign = Resign::findOrFail($id);
+    return Inertia::render('User/Pengajuan/FileResign', [
+        'resign' => $resign
+    ]);
+});
+
+
+    Route::get('/dokumen', [PegawaiController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
+    Route::post('/dokumen/resign', [PegawaiController::class, 'store'])->name('pegawai.resign.store');
+    Route::put('/dokumen/resign/{id}', [PegawaiController::class, 'update'])->name('pegawai.resign.update');
+
 });
 
 Route::middleware('hrd')->group(function () {
     Route::get('/api/pegawai', [UserController::class, 'getPegawai'])->middleware(['auth', 'verified'])->name('getPegawai');
     Route::get('/HRD/dashboard', [HrdController::class, 'index'])->middleware(['auth', 'verified'])->name('hrd.dashboard');
-    Route::get('/pegawai', [UserController::class, 'pegawai'])->middleware(['auth', 'verified'])->name('pegawai');
+    Route::get('/pegawai/list', [UserController::class, 'pegawai'])->middleware(['auth', 'verified'])->name('pegawai');
     Route::post('/pegawai', [UserController::class, 'store'])->name('pegawai.store');
     Route::put('/pegawai/{id}', [UserController::class, 'update'])->name('pegawai.update');
     Route::delete('/pegawai/{id}', [UserController::class, 'destroy'])->name('pegawai.destroy');
     Route::get('/absensi/list', [AbsensiController::class, 'absensi'])->name('absensi');
     Route::post('absensi/save', [AbsensiController::class, 'saveAbsensi'])->name('absensi.save');
     Route::get('/absensi/input-harian', [AbsensiController::class, 'inputHarian'])->name('absensi.harian');
+    Route::post('/kehadiran/update-keterangan', [AbsensiController::class, 'updateKeterangan'])->name('kehadiran.update-keterangan');
 
     Route::post('/kehadiran/manual', [AbsensiController::class, 'ManualInput'])->name('kehadiran.manual');
     Route::get('/absensi/input-tidak-hadir', [AbsensiController::class, 'inputTidak'])->name('absensi.tidak');
@@ -76,6 +104,12 @@ Route::delete('/holidays/{holiday}', [HolidayController::class, 'destroy'])->nam
 // Delete by date (untuk hapus dari kalender langsung)
 Route::post('/holidays/delete-by-date', [HolidayController::class, 'destroyByDate'])->name('holidays.destroyByDate');
 
+Route::get('/pegawai/resign', [ResignController::class, 'index'])->name('Resign.index');
+Route::get('/pegawai/resign', [ResignController::class, 'index'])->name('Resign.index');
+Route::post('/resign', [ResignController::class, 'store'])->name('Resign.store');
+Route::put('/resign/{id}/status', [ResignController::class, 'updateStatus'])->name('Resign.updateStatus');
+Route::delete('/resign/{id}', [ResignController::class, 'destroy'])->name('Resign.destroy');
+
 });
 Route::middleware('head')->group(function () {
     Route::get('/HEAD/dashboard', [UserController::class, 'head'])->middleware(['auth', 'verified'])->name('head.dashboard');
@@ -84,7 +118,7 @@ Route::middleware('head')->group(function () {
 Route::middleware('auth')->group(function () {
     Route::get('/api/users', [UserController::class, 'getUsers']);
     Route::get('/kehadiran', [HrdController::class, 'getByDate']);
-    Route::get('/api/holidays', [UserController::class, 'index']);
+    Route::get('/api/holidays', [UserController::class, 'holiday']);
     
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');

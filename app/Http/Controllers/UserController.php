@@ -7,20 +7,29 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use App\Models\Holiday;
 
 
 class UserController extends Controller
 {
-        public function holiday(Request $request)
-    {
-        $year = $request->query('year', date('Y'));
-        
-        $holidays = Holiday::where('year', $year)
-            ->orderBy('date', 'asc')
-            ->get(['date', 'name']);
-        
-        return response()->json($holidays);
-    }
+        public function holiday(Request $request){
+               try {
+            $year = $request->query('year', date('Y'));
+            
+            // Ambil data holiday berdasarkan tahun
+            $holidays = Holiday::whereYear('date', $year)
+                ->orderBy('date', 'asc')
+                ->get(['date', 'name']);
+            
+            return response()->json($holidays);
+            
+        } catch (\Exception $e) {
+            return response()->json([
+                'error' => 'Error fetching holidays',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+        }
 
     public function pegawai()
     {
@@ -72,6 +81,7 @@ class UserController extends Controller
         $jabatanList = User::select('jabatan')
             ->distinct()
             ->whereNotNull('jabatan')
+            
             ->where('jabatan', '!=', '')
             ->orderBy('jabatan')
             ->pluck('jabatan');

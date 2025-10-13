@@ -17,6 +17,7 @@ class Kehadiran extends Model
         'jam_kedatangan',
         'jam_pulang',
         'status',
+        'keterangan'
     ];
     public function user()
     {

@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('status')->nullable(); 
             $table->string('tower')->nullable(); 
             $table->timestamps(); 
+            $table->string('keterangan')->nullable(); 
         });
     }
     public function down(): void

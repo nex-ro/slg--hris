@@ -23,10 +23,13 @@ import {
   ClipboardCheck,
   XCircle,
   FolderOpen,
-  Calendar1
+  Calendar1,
+  LogOutIcon,
+  Clock,
+  UserCheck
 } from 'lucide-react';
 
-const DashboardLayouts = ({ children }) => {
+const LayoutTemplate = ({ children }) => {
   const { auth = {}, url } = usePage().props;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -36,26 +39,74 @@ const DashboardLayouts = ({ children }) => {
   const dropdownRef = useRef(null);
   
   const currentPath = usePage().url;
+  const userRole = auth?.user?.role; // Asumsi role ada di auth.user.role
 
-  const menuItems = [
-    { icon: LayoutDashboard, label: 'Dashboard', href: '/HRD/dashboard' },
-    { icon: Users, label: 'Pegawai', href: '/pegawai' },
-    { 
-      icon: Calendar, 
-      label: 'Absensi', 
-      href: '/absensi',
-      subItems: [
-        { icon: List, label: 'List Absensi', href: '/absensi/list' },
-        { icon: ClipboardCheck, label: 'Input Absensi Harian', href: '/absensi/input-harian' },
-        { icon: XCircle, label: 'Input Absensi Tidak Hadir', href: '/absensi/input-tidak-hadir' },
-                  { icon: Calendar1, label: 'Atur Liburan', href: '/holidays' },
+  // Menu Items berdasarkan Role
+  const getMenuItems = () => {
+    // Menu untuk HRD dan Atasan
+    const hrdAtasanMenu = [
+      { icon: LayoutDashboard, label: 'Dashboard', href: '/HRD/dashboard' },
+      { 
+        icon: Users, 
+        label: 'Pegawai', 
+        href: '/pegawai',
+        subItems: [
+          { icon: List, label: 'Daftar Pegawai', href: '/pegawai/list' },
+          { icon: LogOutIcon, label: 'Resign', href: '/pegawai/resign' },
+        ]
+      },
+      { 
+        icon: Calendar, 
+        label: 'Absensi', 
+        href: '/absensi',
+        subItems: [
+          { icon: List, label: 'List Absensi', href: '/absensi/list' },
+          { icon: ClipboardCheck, label: 'Input Absensi Harian', href: '/absensi/input-harian' },
+          { icon: XCircle, label: 'Input Absensi Tidak Hadir', href: '/absensi/input-tidak-hadir' },
+          { icon: Calendar1, label: 'Atur Liburan', href: '/holidays' },
+          { icon: FolderOpen, label: 'Dokumen Absensi', href: '/absensi/dokumen' },
+        ]
+      },
+      { icon: BarChart3, label: 'Laporan', href: '/reports/index' },
+    ];
 
-        { icon: FolderOpen, label: 'Dokumen Absensi', href: '/absensi/dokumen' },
-      ]
-    },
-    // { icon: BarChart3, label: 'Laporan', href: '/reports/index' },
-    // { icon: FileText, label: 'Dokumen', href: '/documents/index' },
-  ];
+    // Menu untuk Pegawai
+    const pegawaiMenu = [
+      { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
+      { 
+        icon: Calendar, 
+        label: 'Absensi Saya', 
+        href: '/pegawai/absensi',
+        subItems: [
+          { icon: ClipboardCheck, label: 'Absen Hari Ini', href: '/pegawai/absensi/checkin' },
+          { icon: Clock, label: 'Riwayat Absensi', href: '/pegawai/absensi/history' },
+          { icon: XCircle, label: 'Pengajuan Izin', href: '/pegawai/absensi/izin' },
+        ]
+      },
+      { 
+        icon: FileText, 
+        label: 'Dokumen', 
+        href: '/dokumen',
+      },
+      { 
+        icon: LogOutIcon, 
+        label: 'Resign', 
+        href: '/pegawai/resign/request'
+      },
+    ];
+
+    // Return menu berdasarkan role
+    if (userRole === 'pegawai' || userRole === 'karyawan' || userRole === 'employee') {
+      return pegawaiMenu;
+    } else if (userRole === 'hrd' || userRole === 'atasan' || userRole === 'admin') {
+      return hrdAtasanMenu;
+    } else {
+      // Default menu jika role tidak dikenali
+      return hrdAtasanMenu;
+    }
+  };
+
+  const menuItems = getMenuItems();
 
   const isActive = (href) => {
     if (currentPath === href) return true;
@@ -113,6 +164,34 @@ const DashboardLayouts = ({ children }) => {
     return 'Dashboard';
   };
 
+  // Function untuk mendapatkan badge role
+  const getRoleBadge = () => {
+    const roleColors = {
+      'hrd': 'from-purple-500 to-purple-600',
+      'atasan': 'from-blue-500 to-blue-600',
+      'admin': 'from-red-500 to-red-600',
+      'pegawai': 'from-green-500 to-green-600',
+      'karyawan': 'from-green-500 to-green-600',
+      'employee': 'from-green-500 to-green-600',
+    };
+
+    const roleLabels = {
+      'hrd': 'HRD',
+      'atasan': 'Atasan',
+      'admin': 'Admin',
+      'pegawai': 'Pegawai',
+      'karyawan': 'Pegawai',
+      'employee': 'Pegawai',
+    };
+
+    const color = roleColors[userRole?.toLowerCase()] || 'from-gray-500 to-gray-600';
+    const label = roleLabels[userRole?.toLowerCase()] || 'User';
+
+    return { color, label };
+  };
+
+  const roleBadge = getRoleBadge();
+
   return (
     <div className="min-h-screen bg-gray-50 flex">
       {/* Mobile Overlay */}
@@ -131,13 +210,13 @@ const DashboardLayouts = ({ children }) => {
           {/* Header */}
           <div className="flex items-center justify-between p-6 border-b border-gray-700/50 flex-shrink-0">
             <div className={`flex items-center space-x-3 ${sidebarCollapsed ? 'lg:justify-center lg:w-full' : ''}`}>
-            <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-md hover:shadow-lg transition-all duration-300">
-              <img
-                src="/asset/logo.png"
-                alt="Logo"
-                className="w-12 h-12 object-contain drop-shadow-md"
-              />
-            </div>
+              <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-md hover:shadow-lg transition-all duration-300">
+                <img
+                  src="/asset/logo.png"
+                  alt="Logo"
+                  className="w-12 h-12 object-contain drop-shadow-md"
+                />
+              </div>
 
               {!sidebarCollapsed && (
                 <div>
@@ -182,23 +261,26 @@ const DashboardLayouts = ({ children }) => {
                   <p className="text-white font-medium text-sm truncate">
                     {auth?.user?.name || 'User'}
                   </p>
-                  <p className="text-gray-400 text-xs truncate">
-                    {auth?.user?.email || 'user@example.com'}
-                  </p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <span className={`px-2 py-0.5 text-xs font-medium rounded-full bg-gradient-to-r ${roleBadge.color} text-white`}>
+                      {roleBadge.label}
+                    </span>
+                    <Activity className="w-3 h-3 text-green-400" />
+                  </div>
                 </div>
-                <Activity className="w-4 h-4 text-green-400" />
               </div>
             </div>
           )}
           
           {/* Collapsed User Avatar */}
           {auth?.user && sidebarCollapsed && (
-            <div className="mx-4 mt-4 flex justify-center flex-shrink-0">
+            <div className="mx-4 mt-4 flex flex-col items-center gap-2 flex-shrink-0">
               <div className="w-10 h-10 bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-full flex items-center justify-center">
                 <span className="text-gray-900 font-semibold text-sm">
                   {auth?.user?.name?.charAt(0)?.toUpperCase() || 'U'}
                 </span>
               </div>
+              <span className={`w-2 h-2 rounded-full bg-gradient-to-r ${roleBadge.color}`}></span>
             </div>
           )}
 
@@ -316,7 +398,7 @@ const DashboardLayouts = ({ children }) => {
 
       {/* Main Content */}
       <div className="flex-1 flex flex-col min-w-0 lg:ml-0 h-screen">
-          {/* Top Navigation - Sticky */}
+        {/* Top Navigation - Sticky */}
         <header className="bg-white shadow-sm border-b border-gray-200 flex-shrink-0 z-10">
           <div className="flex items-center justify-between px-4 sm:px-6 py-4">
             {/* Left Side - Mobile Menu + Breadcrumb */}
@@ -400,6 +482,9 @@ const DashboardLayouts = ({ children }) => {
                           <div className="px-4 py-3 border-b border-gray-100">
                             <p className="text-sm font-medium text-gray-900">{auth?.user?.name}</p>
                             <p className="text-sm text-gray-600 truncate">{auth?.user?.email}</p>
+                            <span className={`inline-block mt-2 px-2 py-0.5 text-xs font-medium rounded-full bg-gradient-to-r ${roleBadge.color} text-white`}>
+                              {roleBadge.label}
+                            </span>
                           </div>
                           <Link 
                             href="/profile/edit" 
@@ -451,35 +536,11 @@ const DashboardLayouts = ({ children }) => {
 
         {/* Scrollable Content Area */}
         <div className="flex-1 overflow-y-auto custom-scrollbar">
-            {/* Page Title & Stats Cards */}
-        
+          {/* Page Title & Stats Cards */}
+       
+
           {/* Main Content Area */}
           <main className="p-4 sm:p-6 space-y-6">
-            {/* Quick Stats */}
-            {/* <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {[
-                { title: 'Total Pegawai', value: '127', icon: Users, color: 'from-blue-500 to-blue-600', change: '+12%' },
-                { title: 'Hadir Hari Ini', value: '98', icon: Calendar, color: 'from-green-500 to-green-600', change: '+8%' },
-                { title: 'Terlambat', value: '5', icon: Activity, color: 'from-yellow-500 to-yellow-600', change: '-3%' },
-                { title: 'Izin/Sakit', value: '12', icon: FileText, color: 'from-red-500 to-red-600', change: '+2%' },
-              ].map((stat, index) => (
-                <div key={index} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-gray-600 text-sm font-medium">{stat.title}</p>
-                      <p className="text-3xl font-bold text-gray-900 mt-2">{stat.value}</p>
-                      <p className={`text-sm mt-2 ${stat.change.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-                        {stat.change} dari bulan lalu
-                      </p>
-                    </div>
-                    <div className={`w-12 h-12 bg-gradient-to-r ${stat.color} rounded-xl flex items-center justify-center shadow-lg`}>
-                      <stat.icon className="w-6 h-6 text-white" />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div> */}
-
             {/* Content Area for Children */}
             {children && (
               <div>
@@ -506,4 +567,4 @@ const DashboardLayouts = ({ children }) => {
   );
 };
 
-export default DashboardLayouts;
+export default LayoutTemplate;

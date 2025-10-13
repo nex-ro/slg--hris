@@ -18,11 +18,15 @@ function Absensi() {
   const [showKateringModal, setShowKateringModal] = useState(false);
   const [showAbsensiModal, setShowAbsensiModal] = useState(false);
   const [holidays, setHolidays] = useState([]);
-const [openStatusDropdown, setOpenStatusDropdown] = useState(null);
-const [updatingStatus, setUpdatingStatus] = useState(false);
+  const [openStatusDropdown, setOpenStatusDropdown] = useState(null);
+  const [updatingStatus, setUpdatingStatus] = useState(false);
   // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [showKeteranganModal, setShowKeteranganModal] = useState(false);
+const [selectedKehadiran, setSelectedKehadiran] = useState(null);
+const [keteranganText, setKeteranganText] = useState('');
+
 
   // Fungsi untuk mengecek apakah tanggal adalah weekend (Sabtu/Minggu)
   const isWeekend = (date) => {
@@ -43,31 +47,49 @@ const [updatingStatus, setUpdatingStatus] = useState(false);
     return holiday ? holiday.name : null;
   };
 
-  // Fetch holidays saat komponen mount atau bulan berubah
   useEffect(() => {
     fetchHolidays(currentMonth.getFullYear());
   }, [currentMonth]);
 
   const fetchHolidays = async (year) => {
-    try {
-      const response = await fetch(`/api/holidays?year=${year}`, {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        credentials: 'same-origin'
-      });
+  try {
+    const response = await fetch(`/api/holidays?year=${year}`, {
+      method: 'GET',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'same-origin'
+    });
 
-      if (response.ok) {
-        const data = await response.json();
-        setHolidays(data);
-      }
-    } catch (error) {
-      console.error('Error fetching holidays:', error);
+    if (!response.ok) {
+      console.error(`HTTP error! status: ${response.status}`);
+      return;
     }
-  };
+
+    // Cek apakah response benar-benar JSON
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      console.error('Response bukan JSON, kemungkinan route belum dibuat');
+      return;
+    }
+
+    const data = await response.json();
+    
+    // Normalize data: ubah format date dari ISO ke YYYY-MM-DD
+    const normalizedData = data.map(holiday => ({
+      ...holiday,
+      date: holiday.date.split('T')[0]
+    }));
+    
+    setHolidays(normalizedData);
+  } catch (error) {
+    console.error('Error fetching holidays:', error.message);
+    // Set holidays kosong jika error
+    setHolidays([]);
+  }
+};
 
   // Fungsi untuk mendapatkan CSRF token fresh
   const fetchFreshCsrfToken = async () => {
@@ -439,6 +461,78 @@ const handleStatusChange = async (kehadiranId, newStatus, userData = null, tangg
     });
   };
 
+  const handleUpdateKeterangan = async () => {
+  if (!selectedKehadiran || !keteranganText.trim()) {
+    alert('Keterangan tidak boleh kosong!');
+    return;
+  }
+
+  setUpdatingStatus(true);
+  try {
+    let csrfToken = getCsrfToken();
+    
+    const response = await fetch('/kehadiran/update-keterangan', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        id: selectedKehadiran.id,
+        keterangan: keteranganText
+      })
+    });
+
+    if (response.status === 419) {
+      const newToken = await fetchFreshCsrfToken();
+      
+      if (!newToken) {
+        throw new Error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.');
+      }
+
+      const retryResponse = await fetch('/kehadiran/update-keterangan', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': newToken,
+          'X-Requested-With': 'XMLHttpRequest'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          id: selectedKehadiran.id,
+          keterangan: keteranganText
+        })
+      });
+
+      if (!retryResponse.ok) {
+        throw new Error(`HTTP error! status: ${retryResponse.status}`);
+      }
+    } else if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    // Refresh data setelah berhasil update
+    await fetchKehadiranData(selectedDate);
+    setShowKeteranganModal(false);
+    setKeteranganText('');
+    setSelectedKehadiran(null);
+    
+  } catch (error) {
+    console.error('Error updating keterangan:', error);
+    if (error.message.includes('419') || error.message.includes('CSRF')) {
+      alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
+      window.location.reload();
+    } else {
+      alert(`Error: ${error.message}`);
+    }
+  } finally {
+    setUpdatingStatus(false);
+  }
+};
+
+
   const getDaysInMonth = (date) => {
     const year = date.getFullYear();
     const month = date.getMonth();
@@ -476,9 +570,10 @@ const handleStatusChange = async (kehadiranId, newStatus, userData = null, tangg
            currentMonth.getFullYear() === selectedDate.getFullYear();
   };
 
- const getStatusBadge = (item, idx) => {
+const getStatusBadge = (item, idx) => {
   const status = item.status;
-  const kehadiranId = item.id; // Bisa null
+  const kehadiranId = item.id;
+  console.log(item)
   
   const statusInfo = statusOptions.find(s => s.value === status) || {
     label: status || 'Unknown',
@@ -542,6 +637,33 @@ const handleStatusChange = async (kehadiranId, newStatus, userData = null, tangg
     );
   }
   
+ if (status === 'Terlambat') {
+  return (
+    <div className="flex items-center gap-2">
+      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${statusInfo.color} ${statusInfo.textColor} ${statusInfo.borderColor}`}>
+        {statusInfo.label}
+        {item.keterangan && (
+          <span className="ml-1 text-[10px] opacity-75">✓</span>
+        )}
+      </span>
+      {/* Icon HANYA muncul jika BELUM ada keterangan */}
+      {!item.keterangan && (
+        <button
+          onClick={() => {
+            setSelectedKehadiran(item);
+            setKeteranganText('');
+            setShowKeteranganModal(true);
+          }}
+          className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 p-1.5 rounded-lg transition-all"
+          title="Tambah keterangan"
+        >
+          <FileText className="w-4 h-4" />
+        </button>
+      )}
+    </div>
+  );
+}
+  
   // Untuk status lainnya, tampilkan badge biasa
   return (
     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${statusInfo.color} ${statusInfo.textColor} ${statusInfo.borderColor}`}>
@@ -596,6 +718,89 @@ const handleStatusChange = async (kehadiranId, newStatus, userData = null, tangg
   return (
     <LayoutTemplate>
       <Head title="Absensi" />
+      {showKeteranganModal && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">
+      <div className="bg-gradient-to-r from-orange-600 to-orange-500 px-6 py-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="bg-white/20 p-2 rounded-lg">
+              <FileText className="w-6 h-6 text-white" />
+            </div>
+            <h3 className="text-xl font-bold text-white">Keterangan Keterlambatan</h3>
+          </div>
+          <button
+            onClick={() => {
+              setShowKeteranganModal(false);
+              setKeteranganText('');
+              setSelectedKehadiran(null);
+            }}
+            className="text-white hover:bg-white/20 p-1 rounded-lg transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        {selectedKehadiran && (
+          <p className="text-orange-100 text-sm mt-2">
+            {selectedKehadiran.user?.name} - {selectedKehadiran.jam_kedatangan}
+          </p>
+        )}
+      </div>
+
+      <div className="p-6">
+        <div className="mb-4">
+          <label className="block text-sm font-semibold text-gray-700 mb-2">
+            Alasan Keterlambatan <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            value={keteranganText}
+            onChange={(e) => setKeteranganText(e.target.value)}
+            placeholder="Contoh: Terjebak macet di jalan tol..."
+            rows={4}
+            className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-transparent text-sm resize-none"
+            disabled={updatingStatus}
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            {keteranganText.length}/500 karakter
+          </p>
+        </div>
+
+        {selectedKehadiran?.keterangan && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-xs font-semibold text-blue-700 mb-1">Keterangan Sebelumnya:</p>
+            <p className="text-xs text-blue-600">{selectedKehadiran.keterangan}</p>
+          </div>
+        )}
+      </div>
+
+      <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex gap-3">
+        <button
+          onClick={() => {
+            setShowKeteranganModal(false);
+            setKeteranganText('');
+            setSelectedKehadiran(null);
+          }}
+          className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
+          disabled={updatingStatus}
+        >
+          Batal
+        </button>
+        <button
+          onClick={handleUpdateKeterangan}
+          disabled={updatingStatus || !keteranganText.trim()}
+          className={`flex-1 px-4 py-2.5 rounded-lg transition font-medium ${
+            updatingStatus || !keteranganText.trim()
+              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              : 'bg-orange-600 text-white hover:bg-orange-700'
+          }`}
+        >
+          {updatingStatus ? 'Menyimpan...' : 'Simpan Keterangan'}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
       
       {showAbsensiModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -993,40 +1198,52 @@ const handleStatusChange = async (kehadiranId, newStatus, userData = null, tangg
                       </div>
                     ) : (
                       <>
-                      {paginatedKehadiran.map((item, idx) => (
-  <div 
-    key={item.id}
-    className="border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-indigo-200 transition-all bg-gradient-to-r from-gray-50 to-white"
-  >
-    <div className="flex items-start justify-between gap-4 mb-3">
-      <div className="flex items-center gap-3">
-        <div className="bg-indigo-100 text-indigo-600 w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm">
-          {(item.user?.name || 'U').charAt(0).toUpperCase()}
-        </div>
-        <div>
-          <h4 className="font-bold text-gray-800">
-            {item.user?.name || 'Nama Tidak Tersedia'}
-          </h4>
-          <p className="text-xs text-gray-500">ID: {item.user?.id || '-'}</p>
-        </div>
-      </div>
-      {getStatusBadge(item, idx)}
-    </div>
+                     {paginatedKehadiran.map((item, idx) => (
+                      <div 
+                        key={item.id || `temp-${item.user?.id}-${idx}`} // Tambahkan fallback key yang unik
+                        className="border border-gray-200 rounded-xl p-4 hover:shadow-md hover:border-indigo-200 transition-all bg-gradient-to-r from-gray-50 to-white"
+                      >
+                        <div className="flex items-start justify-between gap-4 mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className="bg-indigo-100 text-indigo-600 w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm">
+                              {(item.user?.name || 'U').charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-gray-800">
+                                {item.user?.name || 'Nama Tidak Tersedia'}
+                              </h4>
+                              <p className="text-xs text-gray-500">ID: {item.user?.id || '-'}</p>
+                            </div>
+                          </div>
+                          {getStatusBadge(item, `${item.id || 'new'}-${idx}`)} {/* Ubah idx jadi unique identifier */}
+                        </div>
+                        
 
-    <div className="flex flex-wrap gap-4 text-sm">
-      <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg">
-        <Clock className="w-4 h-4 text-green-600" />
-        <span className="font-medium">Masuk:</span>
-        <span className="font-bold text-gray-800">{item.jam_kedatangan || '-'}</span>
-      </div>
-      <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg">
-        <Clock className="w-4 h-4 text-orange-600" />
-        <span className="font-medium">Pulang:</span>
-        <span className="font-bold text-gray-800">{item.jam_pulang || '-'}</span>
+                        <div className="flex flex-wrap gap-4 text-sm">
+                          <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg">
+                            <Clock className="w-4 h-4 text-green-600" />
+                            <span className="font-medium">Masuk:</span>
+                            <span className="font-bold text-gray-800">{item.jam_kedatangan || '-'}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg">
+                            <Clock className="w-4 h-4 text-orange-600" />
+                            <span className="font-medium">Pulang:</span>
+                            <span className="font-bold text-gray-800">{item.jam_pulang || '-'}</span>
+                          </div>
+                        </div>
+                        {item.status === 'Terlambat' && item.keterangan && (
+  <div className="mt-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+    <div className="flex items-start gap-2">
+      <FileText className="w-4 h-4 text-orange-600 mt-0.5 flex-shrink-0" />
+      <div className="flex-1">
+        <p className="text-xs font-semibold text-orange-700 mb-1">Keterangan:</p>
+        <p className="text-xs text-orange-600 leading-relaxed">{item.keterangan}</p>
       </div>
     </div>
   </div>
-))}
+)}
+                      </div>
+                    ))}
                       </>
                     )}
                   </div>
