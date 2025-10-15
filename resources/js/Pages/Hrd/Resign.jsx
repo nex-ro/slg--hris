@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { PlusCircle, Eye, Trash2, X, FileText, Search, Check, XCircle, ChevronDown } from 'lucide-react';
-import { router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
 
 const Resign = ({ resigns: initialResigns = [], users: initialUsers = [] }) => {
@@ -166,6 +166,8 @@ const Resign = ({ resigns: initialResigns = [], users: initialUsers = [] }) => {
 
   return (
     <LayoutTemplate>
+      <Head title="Resign" />
+
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto">
           {/* Header */}

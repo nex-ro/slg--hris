@@ -3,7 +3,7 @@ import { Link, usePage } from '@inertiajs/react';
 import { 
   Search, User, Settings, Bell, LayoutDashboard, Users, Calendar, LogOut, LogIn,
   Menu, X, Home, ChevronRight, ChevronDown, Activity, BarChart3, FileText,
-  List, ClipboardCheck, XCircle, FolderOpen, Calendar1, LogOutIcon, Clock
+  List, ClipboardCheck, XCircle, FolderOpen, Calendar1, LogOutIcon, Clock,Thermometer,CalendarClock,MapPin
 } from 'lucide-react';
 
 const DashboardLayouts = ({ children }) => {
@@ -153,11 +153,33 @@ const DashboardLayouts = ({ children }) => {
           { icon: FolderOpen, label: 'Dokumen Absensi', href: '/absensi/dokumen' },
         ]
       },
-      { icon: BarChart3, label: 'Laporan', href: '/reports/index' },
+      {
+    icon: FileText,
+    label: 'Perizinan',
+    href: '/perizinan',
+    subItems: [
+      {
+        icon: Thermometer,
+        label: 'Sakit',
+        href: '/perizinan/sakit',
+      },
+      {
+        icon: CalendarClock,
+        label: 'Keluar Kantor',
+        href: '/perizinan/keluar-kantor',
+      },
+      {
+        icon: MapPin,
+        label: 'Dinas Luar',
+        href: '/perizinan/dinas-luar',
+      },
+    ],
+  },
+      // { icon: BarChart3, label: 'Laporan', href: '/reports/index' },
     ];
 
     const pegawaiMenu = [
-      { icon: LayoutDashboard, label: 'Dashboard', href: '/pegawai/dashboard' },
+      { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
       { icon: Calendar, label: 'Absensi Saya', href: '/pegawai/absensi',
         subItems: [
           { icon: ClipboardCheck, label: 'Absen Hari Ini', href: '/pegawai/absensi/checkin' },
@@ -166,7 +188,9 @@ const DashboardLayouts = ({ children }) => {
         ]
       },
       { icon: FileText, label: 'Dokumen', href: '/dokumen' },
-      { icon: LogOutIcon, label: 'Resign', href: '/pegawai/resign/request' },
+      { icon: Thermometer, label: 'Sakit', href: '/pegawai/sakit' },
+      { icon: CalendarClock, label: 'Perizinan', href: '/pegawai/izin' },
+
     ];
 
     if (userRole === 'pegawai' || userRole === 'karyawan' || userRole === 'employee') {

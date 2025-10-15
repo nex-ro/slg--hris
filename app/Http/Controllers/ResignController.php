@@ -20,6 +20,38 @@ class ResignController extends Controller
             'users' => User::select('id', 'name', 'email')->get(),
         ]);
     }
+      public function updateStatus(Request $request, $id)
+    {
+        $request->validate([
+            'status' => 'required|in:Diajukan,Diproses,Ditolak,Diterima',
+        ]);
+
+        $resign = Resign::with('user')->findOrFail($id);
+        $oldStatus = $resign->status;
+        $newStatus = $request->status;
+        
+        $resign->update(['status' => $newStatus]);
+
+        // Kirim notifikasi ke user jika status berubah
+        if ($oldStatus !== $newStatus) {
+            $statusMessages = [
+                'Diproses' => 'Pengajuan resign Anda sedang diproses oleh HRD.',
+                'Ditolak' => 'Pengajuan resign Anda ditolak. Silakan hubungi HRD untuk informasi lebih lanjut.',
+                'Diterima' => 'Pengajuan resign Anda telah diterima. Tanggal efektif berhenti: ' . date('d F Y', strtotime($resign->tanggal_resign)),
+            ];
+
+            Notification::create([
+                'user_id' => Auth::id(), // Admin/HR yang mengubah
+                'to_uid' => $resign->uid, // User yang resign
+                'type' => 'personal',
+                'title' => "Status Resign Diubah: {$newStatus}",
+                'message' => $statusMessages[$newStatus] ?? "Status resign Anda diubah menjadi: {$newStatus}",
+                'link' => '/pegawai/resign',
+            ]);
+        }
+
+        return redirect()->back()->with('success', 'Status resign berhasil diupdate');
+    }
 
 public function store(Request $request)
 {

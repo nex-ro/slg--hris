@@ -62,7 +62,7 @@ public function saveAbsensi(Request $request)
                 else if ($absensi['jam_kedatangan'] && !$kehadiran->jam_kedatangan) {
                     $jamKedatangan = $absensi['jam_kedatangan'];
                     $waktuKedatangan = \Carbon\Carbon::parse($jamKedatangan);
-                    $batasWaktu = \Carbon\Carbon::parse('08:00:00');
+                    $batasWaktu = \Carbon\Carbon::parse('08:00:59');
                     
                     $kehadiran->jam_kedatangan = $jamKedatangan;
                     $kehadiran->status = $waktuKedatangan->lte($batasWaktu) ? 'On Time' : 'Terlambat';

@@ -457,9 +457,8 @@ const Dashboard = ({
           {monthlyTable.map((row, idx) => {
             const total = localFilters.periodType === 'month'
               ? Array.from({ length: new Date(localFilters.year, localFilters.month, 0).getDate() }, (_, i) => i + 1)
-                  .reduce((sum, day) => sum + (row[`day${day}`] || 0), 0)
-              : monthNames.reduce((sum, month) => sum + (row[month.toLowerCase()] || 0), 0);
-            
+                  .reduce((sum, day) => sum + (parseInt(row[`day${day}`]) || 0), 0)
+              : monthNames.reduce((sum, month) => sum + (parseInt(row[month.toLowerCase()]) || 0), 0);            
             return (
               <tr key={idx} className="border-b border-gray-100 hover:bg-blue-50 transition-colors">
                 <td className="text-gray-800 p-2 text-xs font-medium sticky left-0 bg-white hover:bg-blue-50 z-10">

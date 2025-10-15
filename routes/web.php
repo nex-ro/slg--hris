@@ -14,6 +14,8 @@ use App\Http\Controllers\ResignController;
 use App\Http\Controllers\PegawaiController;
 use App\Models\Resign;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\SakitController;
+use App\Http\Controllers\IzinController;
 
 Route::get('/tes', function () {
     return Inertia::render('tes', []);
@@ -51,9 +53,15 @@ Route::middleware('pegawai')->group(function () {
     $resign = Resign::findOrFail($id);
     return Inertia::render('User/Pengajuan/FileResign', [
         'resign' => $resign
-    ]);
-});
+    ]); 
+    });
 
+    Route::get('/pegawai/sakit', [SakitController::class, 'index'])->middleware(['auth', 'verified'])->name('sakit.index');
+    Route::post('/sakit', [SakitController::class, 'store'])->name('sakit.store');
+    Route::put('/sakit/{id}', [SakitController::class, 'update'])->name('sakit.update');
+    Route::delete('/sakit/{id}', [SakitController::class, 'destroy'])->name('sakit.destroy');
+    Route::get('/sakit/{id}/download', [SakitController::class, 'downloadBukti'])->name('sakit.download');
+    Route::get('/pegawai/izin', [IzinController::class, 'index'])->middleware(['auth', 'verified'])->name('pegawai.izin');
 
     Route::get('/dokumen', [PegawaiController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
     Route::post('/dokumen/resign', [PegawaiController::class, 'store'])->name('pegawai.resign.store');
@@ -62,6 +70,11 @@ Route::middleware('pegawai')->group(function () {
 });
 
 Route::middleware('hrd')->group(function () {
+    Route::get('/perizinan/sakit', [SakitController::class, 'admin'])->middleware(['auth', 'verified'])->name('sakit.admin');
+    Route::put('/admin/sakit/{id}/status', [SakitController::class, 'updateStatus'])->name('sakit.updateStatus');
+    Route::put('/admin/sakit/{id}', [SakitController::class, 'adminUpdate'])->name('sakit.adminUpdate');
+    Route::delete('/admin/sakit/{id}', [SakitController::class, 'adminDestroy'])->name('sakit.adminDestroy');
+
     Route::get('/api/pegawai', [UserController::class, 'getPegawai'])->middleware(['auth', 'verified'])->name('getPegawai');
     Route::get('/HRD/dashboard', [HrdController::class, 'index'])->middleware(['auth', 'verified'])->name('hrd.dashboard');
     Route::get('/pegawai/list', [UserController::class, 'pegawai'])->middleware(['auth', 'verified'])->name('pegawai');
