@@ -137,6 +137,38 @@ const [keteranganText, setKeteranganText] = useState('');
   { value: 'WFH', label: 'Work From Home', desc: 'Bekerja dari rumah', color: 'bg-orange-500', textColor: 'text-white', borderColor: 'border-orange-500' },
   { value: 'FP-TR', label: 'FP Tidak Ter-Record', desc: 'Fingerprint tidak terekam sistem', color: 'bg-red-500', textColor: 'text-white', borderColor: 'border-red-500' }
 ];
+// Helper function untuk fetch dengan CSRF token otomatis retry
+const fetchWithCsrf = async (url, options = {}) => {
+  let csrfToken = getCsrfToken();
+  
+  const defaultOptions = {
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': csrfToken,
+      'X-Requested-With': 'XMLHttpRequest',
+      'Accept': 'application/json'
+    },
+    credentials: 'same-origin',
+    ...options
+  };
+
+  let response = await fetch(url, defaultOptions);
+
+  // Jika 419 (CSRF mismatch), coba refresh token dan retry
+  if (response.status === 419) {
+    const newToken = await fetchFreshCsrfToken();
+    
+    if (!newToken) {
+      throw new Error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.');
+    }
+
+    // Retry dengan token baru
+    defaultOptions.headers['X-CSRF-TOKEN'] = newToken;
+    response = await fetch(url, defaultOptions);
+  }
+
+  return response;
+};
 const handleStatusChange = async (kehadiranId, newStatus, userData = null, tanggal = null) => {
   setUpdatingStatus(true);
   try {
@@ -157,6 +189,7 @@ const handleStatusChange = async (kehadiranId, newStatus, userData = null, tangg
       payload.uid = userData?.id;
     }
     
+
     const response = await fetch('/kehadiran/update-status', {
       method: 'POST',
       headers: {
@@ -937,11 +970,14 @@ const getStatusBadge = (item, idx) => {
       )}
 
       <ManualInputModal 
-        isOpen={showManualInput}
-        kalender={selectedDate}
-        onClose={() => setShowManualInput(false)} 
-        onSave={handleManualSave}
-      />
+  isOpen={showManualInput}
+  kalender={selectedDate}
+  onClose={() => setShowManualInput(false)} 
+  onSave={handleManualSave}
+  getCsrfToken={getCsrfToken}        
+  fetchWithCsrf={fetchWithCsrf}      
+/>
+
 
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto">

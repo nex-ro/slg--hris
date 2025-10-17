@@ -34,6 +34,9 @@ Route::get('/', function () {
         return redirect()->route('hrd.dashboard');
     } elseif ($role === 'head') {
         return redirect()->route('head.dashboard');
+    }elseif($role ==='eksekutif'){
+        return redirect()->route('head.dashboard');
+
     }
 
     return redirect('/login');
@@ -55,13 +58,17 @@ Route::middleware('pegawai')->group(function () {
         'resign' => $resign
     ]); 
     });
-
+    Route::put('/izin/{id}', [IzinController::class, 'update'])->name('izin.update');
     Route::get('/pegawai/sakit', [SakitController::class, 'index'])->middleware(['auth', 'verified'])->name('sakit.index');
     Route::post('/sakit', [SakitController::class, 'store'])->name('sakit.store');
     Route::put('/sakit/{id}', [SakitController::class, 'update'])->name('sakit.update');
     Route::delete('/sakit/{id}', [SakitController::class, 'destroy'])->name('sakit.destroy');
     Route::get('/sakit/{id}/download', [SakitController::class, 'downloadBukti'])->name('sakit.download');
+
+
     Route::get('/pegawai/izin', [IzinController::class, 'index'])->middleware(['auth', 'verified'])->name('pegawai.izin');
+    Route::post('/izin', [IzinController::class, 'store'])->name('izin.store');
+    Route::delete('/izin/{id}', [IzinController::class, 'destroy'])->name('izin.destroy');
 
     Route::get('/dokumen', [PegawaiController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
     Route::post('/dokumen/resign', [PegawaiController::class, 'store'])->name('pegawai.resign.store');
@@ -70,10 +77,6 @@ Route::middleware('pegawai')->group(function () {
 });
 
 Route::middleware('hrd')->group(function () {
-    Route::get('/perizinan/sakit', [SakitController::class, 'admin'])->middleware(['auth', 'verified'])->name('sakit.admin');
-    Route::put('/admin/sakit/{id}/status', [SakitController::class, 'updateStatus'])->name('sakit.updateStatus');
-    Route::put('/admin/sakit/{id}', [SakitController::class, 'adminUpdate'])->name('sakit.adminUpdate');
-    Route::delete('/admin/sakit/{id}', [SakitController::class, 'adminDestroy'])->name('sakit.adminDestroy');
 
     Route::get('/api/pegawai', [UserController::class, 'getPegawai'])->middleware(['auth', 'verified'])->name('getPegawai');
     Route::get('/HRD/dashboard', [HrdController::class, 'index'])->middleware(['auth', 'verified'])->name('hrd.dashboard');
@@ -109,19 +112,36 @@ Route::middleware('hrd')->group(function () {
     Route::get('/holidays', [HolidayController::class, 'index'])->name('holidays.index');
     Route::post('/kehadiran/update-status', [AbsensiController::class, 'updateStatus'])->middleware(['auth']);
 
-// CRUD Operations
-Route::post('/holidays', [HolidayController::class, 'store'])->name('holidays.store');
-Route::put('/holidays/{holiday}', [HolidayController::class, 'update'])->name('holidays.update');
-Route::delete('/holidays/{holiday}', [HolidayController::class, 'destroy'])->name('holidays.destroy');
+    Route::post('/holidays', [HolidayController::class, 'store'])->name('holidays.store');
+    Route::put('/holidays/{holiday}', [HolidayController::class, 'update'])->name('holidays.update');
+    Route::delete('/holidays/{holiday}', [HolidayController::class, 'destroy'])->name('holidays.destroy');
 
-// Delete by date (untuk hapus dari kalender langsung)
-Route::post('/holidays/delete-by-date', [HolidayController::class, 'destroyByDate'])->name('holidays.destroyByDate');
+    Route::post('/holidays/delete-by-date', [HolidayController::class, 'destroyByDate'])->name('holidays.destroyByDate');
 
-Route::get('/pegawai/resign', [ResignController::class, 'index'])->name('Resign.index');
-Route::get('/pegawai/resign', [ResignController::class, 'index'])->name('Resign.index');
-Route::post('/resign', [ResignController::class, 'store'])->name('Resign.store');
-Route::put('/resign/{id}/status', [ResignController::class, 'updateStatus'])->name('Resign.updateStatus');
-Route::delete('/resign/{id}', [ResignController::class, 'destroy'])->name('Resign.destroy');
+    Route::get('/pegawai/resign', [ResignController::class, 'index'])->name('Resign.index');
+    Route::get('/pegawai/resign', [ResignController::class, 'index'])->name('Resign.index');
+    Route::post('/resign', [ResignController::class, 'store'])->name('Resign.store');
+    Route::put('/resign/{id}/status', [ResignController::class, 'updateStatus'])->name('Resign.updateStatus');
+    Route::delete('/resign/{id}', [ResignController::class, 'destroy'])->name('Resign.destroy');
+
+    Route::get('/perizinan/sakit', [SakitController::class, 'admin'])->middleware(['auth', 'verified'])->name('sakit.admin');
+    Route::put('/admin/sakit/{id}/status', [SakitController::class, 'updateStatus'])->name('sakit.updateStatus');
+    Route::put('/admin/sakit/{id}', [SakitController::class, 'adminUpdate'])->name('sakit.adminUpdate');
+    Route::post('/admin/sakit', [SakitController::class, 'adminStore'])->name('sakit.admin.store');
+    Route::delete('/admin/sakit/{id}', [SakitController::class, 'adminDestroy'])->name('sakit.adminDestroy');
+
+    Route::get('/perizinan/keluar-kantor', [IzinController::class, 'hrd'])->middleware(['auth', 'verified'])->name('perizinan.keluar');
+    Route::post('/perizinan/{id}/approve', [IzinController::class, 'approve'])->name('hrd.perizinan.approve');
+    Route::post('/perizinan/{id}/reject', [IzinController::class, 'reject'])->name('hrd.perizinan.reject');
+    Route::get('/hrd/perizinan', [IzinController::class, 'hrd']);
+    Route::post('/hrd/perizinan/store', [IzinController::class, 'storeByHrd']);
+
+    Route::post('/hrd/perizinan/{id}/approve', [IzinController::class, 'approve']);
+    Route::post('/hrd/perizinan/{id}/reject', [IzinController::class, 'reject']);
+    
+    // Delete perizinan
+    Route::delete('/perizinan/{id}', [IzinController::class, 'destroy']);
+
 
 });
 Route::middleware('head')->group(function () {
@@ -136,6 +156,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::get('/api/userss', [IzinController::class, 'getUsers']);
+    Route::get('/api/heads', [IzinController::class, 'getHeads']);
+Route::get('/izin/{id}/pdf', [IzinController::class, 'generatePdf'])->name('izin.pdf');
+
 });
 
 require __DIR__.'/auth.php';

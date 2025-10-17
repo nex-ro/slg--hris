@@ -6,7 +6,7 @@ import {
   List, ClipboardCheck, XCircle, FolderOpen, Calendar1, LogOutIcon, Clock,Thermometer,CalendarClock,MapPin
 } from 'lucide-react';
 
-const DashboardLayouts = ({ children }) => {
+const LayoutTemplate = ({ children }) => {
   const { auth = {}, url } = usePage().props;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -550,6 +550,8 @@ const DashboardLayouts = ({ children }) => {
             </div>
           </div>
         </header>
+
+
         <div className="flex-1 overflow-y-auto">
           <main className="p-4 sm:p-6 space-y-6">
             {children || (
@@ -563,9 +565,9 @@ const DashboardLayouts = ({ children }) => {
             )}
           </main>
         </div>
-        
+
       </div>
     </div>
   );
 };
-export default DashboardLayouts;
+export default LayoutTemplate;

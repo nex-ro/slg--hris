@@ -67,7 +67,7 @@ class UserController extends Controller
         }
     
         // Paginate dengan 15 item per page
-        $users = $query->orderBy('id', 'desc')->paginate(15);
+        $users = $query->orderBy('id', 'asc')->paginate(15);
     
         // Get unique values untuk filter dropdowns
         $divisiList = User::select('divisi')
@@ -217,8 +217,6 @@ class UserController extends Controller
     }
     public function head()
     {
-        return Inertia::render('Head/Dashboard', []);
-    }
-   
-    
+        return Inertia::render('Atasan/Dashboard', []);
+    }   
 }

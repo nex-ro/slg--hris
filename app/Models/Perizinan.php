@@ -16,11 +16,14 @@ class Perizinan extends Model
         'uid_diketahui',
         'uid_disetujui',
         'type_perizinan',
-        'durasi',
-        'tanggal_mulai',
-        'tanggal_selesai',
+        'tanggal',
+        'jam_keluar',
+        'jam_kembali',
         'keperluan',
         'status',
+        'status_disetujui',
+        'status_diketahui',
+        'catatan',
     ];
 
     /**

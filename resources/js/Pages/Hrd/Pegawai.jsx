@@ -48,26 +48,26 @@ useEffect(() => {
   ttd: null
 });
   const [ttdPreview, setTtdPreview] = useState(null);
+// Debounced effect untuk semua filter changes
 useEffect(() => {
   const timer = setTimeout(() => {
-    if (searchTerm !== '' || selectedDivisi || selectedJabatan || selectedTower) {
-      fetchData(1);
-    } else {
-      fetchData(currentPage);
-    }
-  }, 500);
+    fetchData(1); // Selalu fetch dari page 1 ketika filter berubah
+  }, 500); // 500ms debounce
   
   return () => clearTimeout(timer);
-}, [searchTerm]);
+}, [searchTerm, selectedDivisi, selectedJabatan, selectedTower]);
 
-const handleFilter = () => {
-  fetchData(1);
+
+const resetFilters = () => {
+  setSearchTerm('');
+  setSelectedDivisi('');
+  setSelectedJabatan('');
+  setSelectedTower('');
+  // Data akan otomatis di-fetch karena useEffect akan trigger
 };
 
-const handleFilterChange = (filterFn) => {
-  filterFn();
-  setTimeout(() => fetchData(1), 100);
-};
+
+
 const fetchData = async (page = 1) => {
   setLoading(true);
   try {
@@ -100,13 +100,6 @@ const fetchData = async (page = 1) => {
   }
 };
 
-  const resetFilters = () => {
-  setSearchTerm('');
-  setSelectedDivisi('');
-  setSelectedJabatan('');
-  setSelectedTower('');
-  setTimeout(() => fetchData(1), 100);
-};
 
   const resetForm = () => {
     setFormData({
@@ -252,7 +245,6 @@ const fetchData = async (page = 1) => {
   return (
     <LayoutTemplate>
         <Head title="Pegawai" />
-      
       <div className="">
        <div className="mb-6 flex justify-between items-center">
   <div className="flex items-center gap-4">
@@ -326,7 +318,7 @@ const fetchData = async (page = 1) => {
             <div className="mt-4 pt-4 border-t grid grid-cols-1 md:grid-cols-3 gap-4">
 <select
   value={selectedDivisi}
-  onChange={(e) => handleFilterChange(() => setSelectedDivisi(e.target.value))}
+  onChange={(e) => setSelectedDivisi(e.target.value)}
   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
 >
   <option value="">Semua Divisi</option>
@@ -337,7 +329,7 @@ const fetchData = async (page = 1) => {
 
 <select
   value={selectedJabatan}
-  onChange={(e) => handleFilterChange(() => setSelectedJabatan(e.target.value))}
+  onChange={(e) => setSelectedJabatan(e.target.value)}
   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
 >
   <option value="">Semua Jabatan</option>
@@ -347,7 +339,7 @@ const fetchData = async (page = 1) => {
 </select>
 <select
   value={selectedTower}
-  onChange={(e) => handleFilterChange(() => setSelectedTower(e.target.value))}
+  onChange={(e) => setSelectedTower(e.target.value)}
   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
 >
   <option value="">Semua Tower</option>
@@ -589,6 +581,7 @@ const fetchData = async (page = 1) => {
                       <option value="pegawai">Pegawai</option>
                       <option value="hrd">HRD</option>
                       <option value="head">Head</option>
+                      <option value="head">Eksekutif</option>
                     </select>
                   </div>
 

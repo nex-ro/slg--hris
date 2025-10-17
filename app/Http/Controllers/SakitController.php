@@ -81,6 +81,51 @@ class SakitController extends Controller
     }
 
     /**
+ * Simpan data izin sakit baru dari admin
+ */
+public function adminStore(Request $request)
+{
+    $request->validate([
+        'uid' => 'required|exists:users,id',
+        'tanggal_mulai' => 'required|date',
+        'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
+        'keterangan' => 'required|string|max:500',
+        'bukti' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+        'status' => 'nullable|in:Diproses,Disetujui,Ditolak',
+    ], [
+        'uid.required' => 'Karyawan harus dipilih',
+        'uid.exists' => 'Karyawan tidak ditemukan',
+        'tanggal_mulai.required' => 'Tanggal mulai harus diisi',
+        'tanggal_selesai.required' => 'Tanggal selesai harus diisi',
+        'tanggal_selesai.after_or_equal' => 'Tanggal selesai harus sama atau setelah tanggal mulai',
+        'keterangan.required' => 'Keterangan harus diisi',
+        'bukti.mimes' => 'Format file harus PDF, JPG, JPEG, atau PNG',
+        'bukti.max' => 'Ukuran file maksimal 2MB',
+        'status.in' => 'Status harus Diproses, Disetujui, atau Ditolak',
+    ]);
+
+    $buktiPath = null;
+    if ($request->hasFile('bukti')) {
+        $file = $request->file('bukti');
+        $fileName = time() . '_' . $request->uid . '_' . $file->getClientOriginalName();
+        $buktiPath = $file->storeAs('bukti_sakit', $fileName, 'public');
+    }
+
+    Sakit::create([
+        'uid' => $request->uid,
+        'tanggal_mulai' => $request->tanggal_mulai,
+        'tanggal_selesai' => $request->tanggal_selesai,
+        'keterangan' => $request->keterangan,
+        'bukti' => $buktiPath,
+        'status' => $request->status ?? 'Diproses',
+    ]);
+
+    return redirect()->route('sakit.admin')
+        ->with('flash', [
+            'success' => 'Data izin sakit berhasil ditambahkan'
+        ]);
+}
+    /**
      * Update data izin sakit (User)
      */
     public function update(Request $request, $id)
@@ -221,7 +266,7 @@ public function admin()
             ];
         });
 
-    return Inertia::render('Hrd/SakitAdmin', [
+    return Inertia::render('Hrd/Perizinan/SakitAdmin', [
         'sakits' => $sakits,
         'flash' => session('flash'),
     ]);
@@ -282,13 +327,10 @@ public function adminUpdate(Request $request, $id)
 public function adminDestroy($id)
 {
     $sakit = Sakit::findOrFail($id);
-
     if ($sakit->bukti && Storage::disk('public')->exists($sakit->bukti)) {
         Storage::disk('public')->delete($sakit->bukti);
     }
-
     $sakit->delete();
-
     return redirect()->route('sakit.admin')
         ->with('flash', [
             'success' => 'Data izin sakit berhasil dihapus'

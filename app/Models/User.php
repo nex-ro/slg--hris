@@ -25,12 +25,12 @@ class User extends Authenticatable
         'role',
         'active',
         'tmk',
+        'tanggal_keluar',
         'divisi',
         'jabatan',
         'keterangan',
         'tower',
         'ttd',
-       
     ];
         public function notifications()
     {

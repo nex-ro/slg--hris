@@ -533,95 +533,108 @@ private function getYearlyTableData($year, $tower, $divisi)
         return Inertia::render('Hrd/Absensi', []);
     }
 
-    public function getByDate(Request $request): JsonResponse
-{
-    try {
-        $request->validate([
-            'tanggal' => 'required|date_format:Y-m-d'
-        ]);
-    
-        $tanggal = $request->query('tanggal');
-
-        // Cek apakah hari Sabtu atau Minggu
-        $carbonDate = Carbon::parse($tanggal);
-        $isSaturdayOrSunday = $carbonDate->isSaturday() || $carbonDate->isSunday();
-
-        // Cek apakah libur nasional
-        $isNationalHoliday = Holiday::isHoliday($tanggal);
-
-        // Tentukan apakah hari libur
-        $isHoliday = $isSaturdayOrSunday || $isNationalHoliday;
-        
-        // Ambil semua users yang aktif
-        $users = User::where('active', true)
-            ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk')
-            ->orderBy('tower', 'asc')
-            ->orderBy('name', 'asc')
-            ->get();
-            
-        $kehadiran = Kehadiran::where('tanggal', $tanggal)->get()->keyBy('uid');
-    
-        // Format response data
-        $formattedData = $users->map(function ($user) use ($kehadiran, $tanggal, $isHoliday) {
-            // Ambil data kehadiran berdasarkan user_id
-            $attendance = $kehadiran->get($user->id);
-
-            // Tentukan status, jam kedatangan, dan jam pulang
-            if ($isHoliday) {
-                $status = 'Libur Kerja';
-                $jamKedatangan = '00:00';
-                $jamPulang = '00:00';
-                $keterangan = null; // TAMBAHKAN INI
-            } elseif ($attendance) {
-                $status = $attendance->status;
-                $jamKedatangan = $attendance->jam_kedatangan 
-                    ? Carbon::parse($attendance->jam_kedatangan)->format('H:i') 
-                    : null;
-                $jamPulang = $attendance->jam_pulang 
-                    ? Carbon::parse($attendance->jam_pulang)->format('H:i') 
-                    : null;
-                $keterangan = $attendance->keterangan ?? null; // PERBAIKAN: Tambahkan null coalescing
-            } else {
-                $status = 'N/A';
-                $jamKedatangan = null;
-                $jamPulang = null;
-                $keterangan = null; // TAMBAHKAN INI
-            }
-
-            return [
-                'id' => $attendance->id ?? null,
-                'tanggal' => $tanggal,
-                'tower' => $user->tower ?? 'Tanpa Tower',
-                'status' => $status,
-                'jam_kedatangan' => $jamKedatangan,
-                'jam_pulang' => $jamPulang,
-                'keterangan' => $keterangan, // GUNAKAN VARIABLE YANG SUDAH DIDEFINISIKAN
-                'user' => [
-                    'id' => $user->id,
-                    'name' => $user->name,  
-                    'divisi' => $user->divisi,
-                    'jabatan' => $user->jabatan,
-                    'tmk' => $user->tmk,
-                    'tower' => $user->tower ?? 'Tanpa Tower',
-                ]
-            ];
-        });
-    
-        return response()->json($formattedData, 200);
-    
-    } catch (\Illuminate\Validation\ValidationException $e) {
-        return response()->json([
-            'error' => 'Validasi gagal',
-            'message' => 'Format tanggal harus Y-m-d (contoh: 2024-01-15)',
-            'details' => $e->errors()
-        ], 422);
-    
-    } catch (\Exception $e) {
-        return response()->json([
-            'error' => 'Terjadi kesalahan',
-            'message' => $e->getMessage()
-        ], 500);
-    }
+    public function getByDate(Request $request): JsonResponse 
+{ 
+    try { 
+        $request->validate([ 
+            'tanggal' => 'required|date_format:Y-m-d' 
+        ]); 
+     
+        $tanggal = $request->query('tanggal'); 
+ 
+        // Cek apakah hari Sabtu atau Minggu 
+        $carbonDate = Carbon::parse($tanggal); 
+        $isSaturdayOrSunday = $carbonDate->isSaturday() || $carbonDate->isSunday(); 
+ 
+        // Cek apakah libur nasional 
+        $isNationalHoliday = Holiday::isHoliday($tanggal); 
+ 
+        // Tentukan apakah hari libur 
+        $isHoliday = $isSaturdayOrSunday || $isNationalHoliday; 
+         
+        // Ambil semua users yang aktif dengan filter TMK dan tanggal keluar
+        $users = User::where('active', true) 
+            ->where('role', '!=', 'eksekutif') 
+            ->where(function ($query) use ($tanggal) {
+                // TMK harus <= tanggal yang dipilih ATAU TMK null
+                $query->where('tmk', '<=', $tanggal)
+                      ->orWhereNull('tmk');
+            })
+            ->where(function ($query) use ($tanggal) {
+                // tanggal_keluar harus >= tanggal yang dipilih ATAU tanggal_keluar null
+                $query->where('tanggal_keluar', '>=', $tanggal)
+                      ->orWhereNull('tanggal_keluar');
+            })
+            ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk', 'tanggal_keluar') 
+            ->orderBy('tower', 'asc') 
+            ->orderBy('name', 'asc') 
+            ->get(); 
+ 
+             
+        $kehadiran = Kehadiran::where('tanggal', $tanggal)->get()->keyBy('uid'); 
+     
+        // Format response data 
+        $formattedData = $users->map(function ($user) use ($kehadiran, $tanggal, $isHoliday) { 
+            // Ambil data kehadiran berdasarkan user_id 
+            $attendance = $kehadiran->get($user->id); 
+ 
+            // Tentukan status, jam kedatangan, dan jam pulang 
+            if ($isHoliday) { 
+                $status = 'Libur Kerja'; 
+                $jamKedatangan = '00:00'; 
+                $jamPulang = '00:00'; 
+                $keterangan = null;
+            } elseif ($attendance) { 
+                $status = $attendance->status; 
+                $jamKedatangan = $attendance->jam_kedatangan  
+                    ? Carbon::parse($attendance->jam_kedatangan)->format('H:i')  
+                    : null; 
+                $jamPulang = $attendance->jam_pulang  
+                    ? Carbon::parse($attendance->jam_pulang)->format('H:i')  
+                    : null; 
+                $keterangan = $attendance->keterangan ?? null;
+            } else { 
+                $status = 'N/A'; 
+                $jamKedatangan = null; 
+                $jamPulang = null; 
+                $keterangan = null;
+            } 
+ 
+            return [ 
+                'id' => $attendance->id ?? null, 
+                'tanggal' => $tanggal, 
+                'tower' => $user->tower ?? 'Tanpa Tower', 
+                'status' => $status, 
+                'jam_kedatangan' => $jamKedatangan, 
+                'jam_pulang' => $jamPulang, 
+                'keterangan' => $keterangan,
+                'user' => [ 
+                    'id' => $user->id, 
+                    'name' => $user->name,   
+                    'divisi' => $user->divisi, 
+                    'jabatan' => $user->jabatan, 
+                    'tmk' => $user->tmk, 
+                    'tanggal_keluar' => $user->tanggal_keluar,
+                    'tower' => $user->tower ?? 'Tanpa Tower', 
+                ] 
+            ]; 
+        }); 
+     
+        return response()->json($formattedData, 200); 
+     
+    } catch (\Illuminate\Validation\ValidationException $e) { 
+        return response()->json([ 
+            'error' => 'Validasi gagal', 
+            'message' => 'Format tanggal harus Y-m-d (contoh: 2024-01-15)', 
+            'details' => $e->errors() 
+        ], 422); 
+     
+    } catch (\Exception $e) { 
+        return response()->json([ 
+            'error' => 'Terjadi kesalahan', 
+            'message' => $e->getMessage() 
+        ], 500); 
+    } 
 }
     public function getByMonth(Request $request): JsonResponse
 {

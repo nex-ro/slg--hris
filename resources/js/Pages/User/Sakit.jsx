@@ -18,6 +18,12 @@ function Sakit() {
   const [fileName, setFileName] = useState("");
   const [processing, setProcessing] = useState(false);
 
+   const handleView = (bukti) => {
+    // Akses langsung via storage URL
+    console.log(bukti)
+    const url = `/storage/${bukti}`;
+    window.open(url, '_blank');
+  };
   const handleOpenModal = (data = null) => {
     if (data) {
       setEditMode(true);
@@ -154,8 +160,8 @@ function Sakit() {
   };
 
   const handleDownload = (id, bukti) => {
-    window.open(`/sakit/${id}/download`, '_blank');
-  };
+  window.open(`/sakit/${id}/download`, '_blank');
+};
 
   const getStatusBadge = (status) => {
     const statusConfig = {
@@ -213,21 +219,22 @@ function Sakit() {
           )}
 
           {/* Header */}
-          <div className="mb-6">
+         <div className="flex items-center justify-between mb-6">
+          <div>
             <h1 className="text-3xl font-bold text-gray-900">Izin Sakit</h1>
             <p className="text-gray-600 mt-1">Kelola pengajuan izin sakit Anda</p>
           </div>
 
-          {/* Action Button */}
-          <div className="mb-6">
-            <button
-              onClick={() => handleOpenModal()}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
-            >
-              <Plus className="w-5 h-5" />
-              Ajukan Izin Sakit
-            </button>
-          </div>
+          {/* Tombol aksi */}
+          <button
+            onClick={() => handleOpenModal()}
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
+          >
+            <Plus className="w-5 h-5" />
+            Ajukan Izin Sakit
+          </button>
+        </div>
+
 
           {/* Stats Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -318,13 +325,13 @@ function Sakit() {
                           <div className="line-clamp-2">{item.keterangan || '-'}</div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
-                          {item.bukti ? (
+                         {item.bukti ? (
                             <button
-                              onClick={() => handleDownload(item.id, item.bukti)}
+                              onClick={() => handleView(item.bukti)}
                               className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 hover:underline"
                             >
                               <FileText className="w-4 h-4" />
-                              {item.bukti.split('/').pop()}
+                              Lihat Bukti
                             </button>
                           ) : (
                             <span className="text-sm text-gray-400">-</span>
@@ -471,19 +478,20 @@ function Sakit() {
                 </div>
 
                 <div className="flex gap-3 pt-6 mt-6 border-t">
-                  <button
-                    onClick={handleSubmit}
-                    disabled={processing}
-                    className={`flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
-                  >
-                    {processing ? '⏳ Memproses...' : (editMode ? "💾 Update Data" : "📤 Ajukan Izin")}
-                  </button>
+                  
                   <button
                     onClick={handleCloseModal}
                     disabled={processing}
                     className={`flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
                   >
-                    ✕ Batal
+                    Batal
+                  </button>
+                  <button
+                    onClick={handleSubmit}
+                    disabled={processing}
+                    className={`flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    {processing ? '⏳ Memproses...' : (editMode ? "💾 Update Data" : "Ajukan Izin")}
                   </button>
                 </div>
               </div>

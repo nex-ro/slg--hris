@@ -29,9 +29,9 @@ class ResignController extends Controller
         $resign = Resign::with('user')->findOrFail($id);
         $oldStatus = $resign->status;
         $newStatus = $request->status;
-        
-        $resign->update(['status' => $newStatus]);
 
+        $resign->update(['status' => $newStatus]);
+        
         // Kirim notifikasi ke user jika status berubah
         if ($oldStatus !== $newStatus) {
             $statusMessages = [
@@ -64,7 +64,6 @@ public function store(Request $request)
         'tanggal_keluar.date' => 'Format tanggal tidak valid',
         'tanggal_keluar.after_or_equal' => 'Tanggal keluar tidak boleh kurang dari hari ini',
         'alasan.required' => 'Alasan keluar harus diisi',
-        'alasan.min' => 'Alasan keluar minimal 10 karakter',
         'alasan.max' => 'Alasan keluar maksimal 1000 karakter',
     ]);
     try {

@@ -33,8 +33,7 @@ public function saveAbsensi(Request $request)
         $data = $request->input('data', []);
         $savedCount = 0;
         $updatedCount = 0;
-        $errorMessages = []; // Ubah dari array of objects ke array of strings
-        
+        $errorMessages = []; 
         foreach ($data as $index => $absensi) {
             // Cek apakah UID ada di tabel users
             $userExists = \App\Models\User::where('id', $absensi['uid'])->exists();
@@ -62,7 +61,7 @@ public function saveAbsensi(Request $request)
                 else if ($absensi['jam_kedatangan'] && !$kehadiran->jam_kedatangan) {
                     $jamKedatangan = $absensi['jam_kedatangan'];
                     $waktuKedatangan = \Carbon\Carbon::parse($jamKedatangan);
-                    $batasWaktu = \Carbon\Carbon::parse('08:00:59');
+                    $batasWaktu = \Carbon\Carbon::parse('08:01:00');
                     
                     $kehadiran->jam_kedatangan = $jamKedatangan;
                     $kehadiran->status = $waktuKedatangan->lte($batasWaktu) ? 'On Time' : 'Terlambat';
@@ -82,31 +81,25 @@ public function saveAbsensi(Request $request)
             // Jika data belum ada, buat baru
             else {
                 $status = null; // PERBAIKAN: Default null, bukan 'hadir'
-                
-                // Tentukan status HANYA jika ada jam kedatangan
                 if ($absensi['jam_kedatangan']) {
                     $jamKedatangan = $absensi['jam_kedatangan'];
                     $waktuKedatangan = \Carbon\Carbon::parse($jamKedatangan);
-                    $batasWaktu = \Carbon\Carbon::parse('08:00:00');
+                    $batasWaktu = \Carbon\Carbon::parse('08:01:00');
                     $status = $waktuKedatangan->lte($batasWaktu) ? 'On Time' : 'Terlambat';
                 }
-                
                 Kehadiran::create([
                     'tanggal' => $absensi['tanggal'],
                     'uid' => $absensi['uid'],
                     'jam_kedatangan' => $absensi['jam_kedatangan'],
                     'jam_pulang' => $absensi['jam_pulang'],
-                    'status' => $status, // Bisa null jika jam_kedatangan null
+                    'status' => $status, 
                     'tower' => $absensi['tower'] ?? null
                 ]);
                 
                 $savedCount++;
             }
         }
-        
-        // Response berdasarkan hasil
         if (count($errorMessages) > 0 && $savedCount === 0 && $updatedCount === 0) {
-            // PERBAIKAN: Return error dengan format yang benar untuk Inertia
             return back()->withErrors([
                 'error' => 'Semua data gagal disimpan: ' . implode(', ', $errorMessages)
             ]);
@@ -362,7 +355,7 @@ private function formatTanggalIndonesia($tanggal)
     if (!$tanggalObj) {
         $tanggalObj = new \DateTime($tanggal);
     }
-    
+
     $hari = $tanggalObj->format('d');
     $bulan = $bulanIndo[(int)$tanggalObj->format('m')];
     $tahun = $tanggalObj->format('Y');

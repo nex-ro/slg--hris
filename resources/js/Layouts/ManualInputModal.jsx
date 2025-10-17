@@ -7,7 +7,7 @@ function formatDateLocal(dateObj) {
   return `${year}-${month}-${day}`;
 }
 
-function ManualInputModal({ isOpen,kalender, onClose, onSave }) {
+function ManualInputModal({ isOpen, kalender, onClose, onSave, getCsrfToken, fetchWithCsrf }) {
   const [formData, setFormData] = useState({
     tanggal: '',
     userId: '',
@@ -15,7 +15,8 @@ function ManualInputModal({ isOpen,kalender, onClose, onSave }) {
     jam_kedatangan: '',
     jam_pulang: ''
   });
-  
+  const [submitting, setSubmitting] = useState(false);
+
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [showStatusDropdown, setShowStatusDropdown] = useState(false);
@@ -86,7 +87,6 @@ useEffect(() => {
       setLoadingUsers(false);
     }
   };
-
   const selectedStatus = statusOptions.find(opt => opt.value === formData.status);
   const selectedUser = users.find(user => user.id === formData.userId);
   
@@ -97,66 +97,72 @@ useEffect(() => {
   );
 
   const handleSubmit = async () => {
-    // Validasi
-    if (!formData.tanggal || !formData.userId || !formData.status) {
-      alert('Harap isi Tanggal, Nama Karyawan, dan Status');
-      return;
+  // Validasi
+  if (!formData.tanggal || !formData.userId || !formData.status) {
+    alert('Harap isi Tanggal, Nama Karyawan, dan Status');
+    return;
+  }
+
+  if (formData.status === 'Hadir' && !formData.jam_kedatangan) {
+    alert('Jam Kedatangan wajib diisi untuk status Hadir');
+    return;
+  }
+
+  setSubmitting(true);
+
+  try {
+    // Gunakan fetchWithCsrf dari parent
+    const response = await fetchWithCsrf('/kehadiran/manual', {
+      method: 'POST',
+      body: JSON.stringify({
+        tanggal: formData.tanggal,
+        user_id: formData.userId,
+        status: formData.status,
+        jam_kedatangan: formData.jam_kedatangan || null,
+        jam_pulang: formData.jam_pulang || null,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Gagal menyimpan data');
     }
 
-    // Jika status Hadir, wajib ada jam kedatangan
-    if (formData.status === 'Hadir' && !formData.jam_kedatangan) {
-      alert('Jam Kedatangan wajib diisi untuk status Hadir');
-      return;
-    }
-    console.log('Submitting form data:', formData); 
-    try {
-      const response = await fetch('/kehadiran/manual', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-        'X-Requested-With': 'XMLHttpRequest'
-        },
-        body: JSON.stringify({
-          tanggal: formData.tanggal,
-          user_id: formData.userId,
-          status: formData.status,
-          jam_kedatangan: formData.jam_kedatangan || null,
-          jam_pulang: formData.jam_pulang || null,
-        }),
-      });
+    const result = await response.json();
 
-      const result = await response.json();
-
-      if (response.ok) {
-        // Reset form terlebih dahulu
-        setFormData({
-          tanggal: '',
-          userId: '',
-          status: '',
-          jam_kedatangan: '',
-          jam_pulang: ''
-        });
-        setSearchUser('');
-        
-        // Tutup modal
-        onClose();
-        
-        // Panggil onSave setelah modal tertutup (untuk refresh data)
-        if (onSave) {
-          onSave(result.data);
-        }
-        
-        // Toast sukses akan ditangani oleh parent component
-        alert('Data berhasil disimpan!');
-      } else {
-        alert(result.message || 'Gagal menyimpan data');
-      }
-    } catch (error) {
-      console.error('Error saving data:', error);
-      alert('Terjadi kesalahan saat menyimpan data');
+    // Reset form
+    setFormData({
+      tanggal: '',
+      userId: '',
+      status: '',
+      jam_kedatangan: '',
+      jam_pulang: ''
+    });
+    setSearchUser('');
+    
+    alert('Data berhasil disimpan!');
+    
+    // Tutup modal
+    onClose();
+    
+    // Refresh data
+    if (onSave) {
+      onSave(result.data);
     }
-  };
+
+  } catch (error) {
+    console.error('Error saving data:', error);
+    
+    if (error.message.includes('CSRF') || error.message.includes('419')) {
+      alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
+      window.location.reload();
+    } else {
+      alert(error.message || 'Terjadi kesalahan saat menyimpan data');
+    }
+  } finally {
+    setSubmitting(false);
+  }
+};
 
   if (!isOpen) return null;
 

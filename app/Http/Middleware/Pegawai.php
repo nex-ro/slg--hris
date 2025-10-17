@@ -16,6 +16,10 @@ class Pegawai
      */
     public function handle(Request $request, Closure $next): Response
     {
+        if (!Auth::check()) {
+            return redirect('/');
+        }
+
         if (Auth::user()->role != 'pegawai') {
             return redirect('/');
         }

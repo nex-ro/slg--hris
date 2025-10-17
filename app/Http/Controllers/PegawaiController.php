@@ -58,7 +58,6 @@ class PegawaiController extends Controller
             'tanggal_keluar.date' => 'Format tanggal tidak valid',
             'tanggal_keluar.after_or_equal' => 'Tanggal keluar tidak boleh kurang dari hari ini',
             'alasan.required' => 'Alasan keluar harus diisi',
-            'alasan.min' => 'Alasan keluar minimal 10 karakter',
             'alasan.max' => 'Alasan keluar maksimal 1000 karakter',
         ]);
 
