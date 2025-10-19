@@ -21,78 +21,101 @@ class ResignController extends Controller
         ]);
     }
       public function updateStatus(Request $request, $id)
-    {
-        $request->validate([
-            'status' => 'required|in:Diajukan,Diproses,Ditolak,Diterima',
-        ]);
+{
+    $request->validate([
+        'status' => 'required|in:Diajukan,Diproses,Ditolak,Diterima',
+    ]);
 
-        $resign = Resign::with('user')->findOrFail($id);
-        $oldStatus = $resign->status;
-        $newStatus = $request->status;
+    $resign = Resign::with('user')->findOrFail($id);
+    $oldStatus = $resign->status;
+    $newStatus = $request->status;
 
-        $resign->update(['status' => $newStatus]);
-        
-        // Kirim notifikasi ke user jika status berubah
-        if ($oldStatus !== $newStatus) {
-            $statusMessages = [
-                'Diproses' => 'Pengajuan resign Anda sedang diproses oleh HRD.',
-                'Ditolak' => 'Pengajuan resign Anda ditolak. Silakan hubungi HRD untuk informasi lebih lanjut.',
-                'Diterima' => 'Pengajuan resign Anda telah diterima. Tanggal efektif berhenti: ' . date('d F Y', strtotime($resign->tanggal_resign)),
-            ];
-
-            Notification::create([
-                'user_id' => Auth::id(), // Admin/HR yang mengubah
-                'to_uid' => $resign->uid, // User yang resign
-                'type' => 'personal',
-                'title' => "Status Resign Diubah: {$newStatus}",
-                'message' => $statusMessages[$newStatus] ?? "Status resign Anda diubah menjadi: {$newStatus}",
-                'link' => '/pegawai/resign',
+    $resign->update(['status' => $newStatus]);
+    
+    // TAMBAHAN: Update tanggal_keluar di tabel users jika status Diterima
+    if ($newStatus === 'Diterima') {
+        $user = User::find($resign->uid);
+        if ($user) {
+            $user->update([
+                'tanggal_keluar' => $resign->tanggal_keluar,
+                'active' => false 
             ]);
         }
-
-        return redirect()->back()->with('success', 'Status resign berhasil diupdate');
     }
+    
+    // TAMBAHAN: Hapus tanggal_keluar jika status berubah dari Diterima ke status lain
+    if ($oldStatus === 'Diterima' && $newStatus !== 'Diterima') {
+        $user = User::find($resign->uid);
+        if ($user) {
+            $user->update([
+                'tanggal_keluar' => null,
+                'active' => true  
+            ]);
+        }
+    }
+    
+    // Kirim notifikasi ke user jika status berubah
+    if ($oldStatus !== $newStatus) {
+        $statusMessages = [
+            'Diproses' => 'Pengajuan resign Anda sedang diproses oleh HRD.',
+            'Ditolak' => 'Pengajuan resign Anda ditolak. Silakan hubungi HRD untuk informasi lebih lanjut.',
+            'Diterima' => 'Pengajuan resign Anda telah diterima. Tanggal efektif berhenti: ' . date('d F Y', strtotime($resign->tanggal_keluar)),
+        ];
+
+        Notification::create([
+            'user_id' => Auth::id(),
+            'to_uid' => $resign->uid,
+            'type' => 'personal',
+            'title' => "Status Resign Diubah: {$newStatus}",
+            'message' => $statusMessages[$newStatus] ?? "Status resign Anda diubah menjadi: {$newStatus}",
+            'link' => '/pegawai/resign',
+        ]);
+    }
+
+    return back()->with('success', 'Status resign berhasil diupdate');
+}
 
 public function store(Request $request)
 {
-    // Validasi input
     $validated = $request->validate([
-        'tanggal_keluar' => 'required|date|after_or_equal:today',
+        'uid' => 'required|exists:users,id',
+        'tanggal_keluar' => 'required|date',
         'alasan' => 'required|string|min:10|max:1000',
-    ], [
-        'tanggal_keluar.required' => 'Tanggal keluar harus diisi',
-        'tanggal_keluar.date' => 'Format tanggal tidak valid',
-        'tanggal_keluar.after_or_equal' => 'Tanggal keluar tidak boleh kurang dari hari ini',
-        'alasan.required' => 'Alasan keluar harus diisi',
-        'alasan.max' => 'Alasan keluar maksimal 1000 karakter',
+        'status' => 'required|in:Diajukan,Diproses,Ditolak,Diterima',
+        'isDokument' => 'required|boolean',
     ]);
+
     try {
-        // Simpan data resign
-        $resign = Resign::create([
-            'uid' => Auth::id(),
-            'tanggal_keluar' => $validated['tanggal_keluar'],
-            'alasan' => $validated['alasan'],
-            'status' => 'Diajukan', 
-            'dokument' => null,
-            'isDokument' => null,
-        ]);
+        $resign = Resign::create($validated);
+
+        // TAMBAHAN: Update tanggal_keluar di users jika status langsung Diterima
+        if ($validated['status'] === 'Diterima') {
+            $user = User::find($validated['uid']);
+            if ($user) {
+                $user->update([
+                    'tanggal_keluar' => $validated['tanggal_keluar'],
+                    'active' => false 
+                ]);
+            }
+        }
 
         // Kirim notifikasi untuk HRD
-        $userName = Auth::user()->nama ?? Auth::user()->name;
+        $user = User::find($validated['uid']);
+        $userName = $user->name ?? $user->nama;
         
         Notification::create([
-            'user_id' => Auth::id(), // User yang mengajukan resign
-            'to_uid' => null, // Dikosongkan untuk notifikasi ke HRD
+            'user_id' => Auth::id(),
+            'to_uid' => null,
             'title' => 'Pengajuan Resign Baru',
             'message' => "{$userName} telah mengajukan resign dengan tanggal keluar {$validated['tanggal_keluar']}",
-            'link' => '/resign/manage', // Sesuaikan dengan route management resign HRD
+            'link' => '/resign/manage',
             'is_read' => false,
             'type' => 'hrd'
         ]);
 
-        return redirect()->back()->with('success', 'Pengajuan resign berhasil diajukan');
+        return back()->with('success', 'Pengajuan resign berhasil ditambahkan');
     } catch (\Exception $e) {
-        return redirect()->back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
+        return back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
     }
 }
 

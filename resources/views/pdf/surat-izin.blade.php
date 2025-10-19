@@ -10,86 +10,100 @@
             box-sizing: border-box;
         }
         
+        @page {
+            size: A5;
+            margin: 8mm;
+        }
+        
         body {
             font-family: Arial, sans-serif;
-            font-size: 9px;
-            line-height: 1.3;
+            font-size: 12px;
+            line-height: 1.5;
         }
         
         .container {
             width: 100%;
-            padding: 12px;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
         }
         
+        /* Header dengan border */
         .header {
             border: 2px solid #000;
-            padding: 6px;
-            margin-bottom: 12px;
+            margin-bottom: 15px;
         }
         
-        .header-top {
+        .header-row {
             display: table;
             width: 100%;
-            border-bottom: 1px solid #000;
-            padding-bottom: 5px;
+            border-collapse: collapse;
+        }
+        
+        .logo-cell {
+            display: table-cell;
+            width: 90px;
+            text-align: center;
+            vertical-align: middle;
+            border-right: 2px solid #000;
+            padding: 12px 8px;
+        }
+        
+        .logo-box {
+            text-align: center;
+        }
+        
+        .logo-image {
+            max-width: 70px;
+            max-height: 70px;
             margin-bottom: 5px;
         }
         
-        .logo {
+        .logo-text {
+            font-size: 11px;
+            font-weight: bold;
+            letter-spacing: 2px;
+        }
+        
+        .header-content {
             display: table-cell;
-            width: 60px;
             vertical-align: middle;
             text-align: center;
-            padding: 3px;
-            border-right: 1px solid #000;
-        }
-        
-        .logo img {
-            max-width: 50px;
-            max-height: 50px;
-        }
-        
-        .logo-text {
-            font-size: 9px;
-            font-weight: bold;
-            line-height: 1.2;
-        }
-        
-        .company-info {
-            display: table-cell;
-            vertical-align: middle;
-            padding-left: 10px;
+            padding: 10px;
         }
         
         .company-name {
-            font-size: 11px;
+            font-size: 16px;
             font-weight: bold;
-            margin-bottom: 2px;
+            margin-bottom: 10px;
+            letter-spacing: 1px;
         }
         
         .document-title {
-            text-align: center;
-            font-size: 10px;
+            font-size: 15px;
             font-weight: bold;
-            padding: 4px 0;
+            border-top: 2px solid #000;
+            padding-top: 10px;
         }
         
+        /* Form Fields */
         .form-section {
-            margin-bottom: 10px;
+            margin-bottom: 15px;
+            flex-grow: 1;
+            padding: 0 5px;
         }
         
         .form-row {
             display: table;
             width: 100%;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
         }
         
         .form-label {
             display: table-cell;
-            width: 90px;
-            padding: 3px 0;
-            font-weight: bold;
-            font-size: 8px;
+            width: 140px;
+            padding: 4px 0;
+            font-size: 12px;
         }
         
         .form-separator {
@@ -100,15 +114,18 @@
         
         .form-value {
             display: table-cell;
-            padding: 3px 0;
+            padding: 4px 5px;
             border-bottom: 1px solid #000;
-            font-size: 8px;
+            font-size: 12px;
         }
         
+        /* Signature Section */
         .signature-section {
-            margin-top: 15px;
+            margin-top: auto;
             display: table;
             width: 100%;
+            table-layout: fixed;
+            padding-top: 10px;
         }
         
         .signature-box {
@@ -116,89 +133,83 @@
             width: 33.33%;
             text-align: center;
             vertical-align: top;
-            padding: 0 5px;
+            padding: 0 3px;
         }
         
         .signature-title {
             font-weight: bold;
-            margin-bottom: 3px;
-            border-bottom: 1px solid #000;
-            padding-bottom: 2px;
-            font-size: 8px;
+            font-size: 11px;
+            margin-bottom: 8px;
+            text-align: center;
         }
         
         .signature-space {
-            height: 40px;
-            margin: 5px 0;
+            height: 85px;
             display: flex;
             align-items: center;
             justify-content: center;
+            position: relative;
+            margin-bottom: 5px;
         }
         
         .signature-image {
-            max-width: 60px;
-            max-height: 35px;
-            margin: 3px auto;
+            max-width: 105px;
+            max-height: 75px;
+            object-fit: contain;
+        }
+        
+        .signature-line {
+            position: absolute;
+            bottom: 0;
+            left: 10%;
+            right: 10%;
+            border-bottom: 1px solid #000;
         }
         
         .signature-name {
             font-weight: bold;
-            margin-top: 3px;
-            border-top: 1px solid #000;
-            padding-top: 2px;
-            font-size: 7px;
-            line-height: 1.3;
-        }
-        
-        .footer {
-            margin-top: 12px;
+            font-size: 11px;
             text-align: center;
-            font-size: 7px;
+            line-height: 1.4;
+        }
+        
+        .signature-role {
+            font-size: 10px;
             color: #666;
-        }
-        
-        .status-badge {
-            display: inline-block;
-            padding: 2px 5px;
-            border-radius: 2px;
-            font-weight: bold;
-            font-size: 7px;
             margin-top: 2px;
+            text-align: center;
         }
         
-        .status-disetujui {
-            background-color: #d4edda;
-            color: #155724;
-        }
-        
-        .status-ditolak {
-            background-color: #f8d7da;
-            color: #721c24;
-        }
-        
-        .status-diajukan {
-            background-color: #fff3cd;
-            color: #856404;
-        }
-        
+        /* Catatan Box */
         .catatan-box {
-            margin-top: 10px;
-            padding: 5px;
+            margin: 10px 5px;
+            padding: 8px 10px;
             background-color: #fff3cd;
             border: 1px solid #ffc107;
-            border-radius: 3px;
-            font-size: 7px;
+            border-radius: 4px;
+            font-size: 11px;
         }
         
-        small {
-            font-size: 6px;
-        }
-        
-        .no-signature {
-            font-size: 20px;
+        .catatan-title {
             font-weight: bold;
-            color: #666;
+            margin-bottom: 4px;
+        }
+        
+        /* Footer */
+        .footer {
             margin-top: 8px;
+            text-align: right;
+            font-size: 10px;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding: 6px 5px 0;
+        }
+        
+        .rejection-text {
+            color: #d9534f;
+            font-weight: bold;
+            font-size: 14px;
+            margin-top: 20px;
         }
     </style>
 </head>
@@ -206,20 +217,19 @@
     <div class="container">
         <!-- Header -->
         <div class="header">
-            <div class="header-top">
-                <div class="logo">
-                    @if(file_exists(public_path('asset/logo.png')))
-                        <img src="{{ public_path('asset/logo.png') }}" alt="Logo">
-                    @else
+            <div class="header-row">
+                <div class="logo-cell">
+                    <div class="logo-box">
+                        @if(file_exists(public_path('asset/logo.png')))
+                            <img src="{{ public_path('asset/logo.png') }}" alt="Logo" class="logo-image">
+                        @endif
                         <div class="logo-text">S.L.G</div>
-                    @endif
+                    </div>
                 </div>
-                <div class="company-info">
+                <div class="header-content">
                     <div class="company-name">SAWIT LESTARI GROUP</div>
+                    <div class="document-title">SURAT IZIN / KELUAR KANTOR</div>
                 </div>
-            </div>
-            <div class="document-title">
-                SURAT DIN / KELUAR KANTOR
             </div>
         </div>
 
@@ -284,30 +294,33 @@
             </div>
         </div>
 
+        <!-- Catatan jika ada -->
+        @if($perizinan->catatan)
+        <div class="catatan-box">
+            <div class="catatan-title">Catatan:</div>
+            {{ $perizinan->catatan }}
+        </div>
+        @endif
+
         <!-- Signature Section -->
         <div class="signature-section">
             <!-- User Yang Mengajukan -->
             <div class="signature-box">
                 <div class="signature-title">Diminta oleh :</div>
                 <div class="signature-space">
-                    @if($perizinan->status === 'Disetujui')
-                        @if($perizinan->user->ttd && file_exists(public_path('storage/' . $perizinan->user->ttd)))
-                            <img src="{{ public_path('storage/' . $perizinan->user->ttd) }}" 
-                                 alt="TTD User" 
-                                 class="signature-image">
-                        @else
-                            <div class="no-signature">( n )</div>
+                    @if($perizinan->status === 'Disetujui' && $perizinan->user->ttd)
+                        @php
+                            $ttdPath = public_path('storage/ttd/' . basename($perizinan->user->ttd));
+                        @endphp
+                        @if(file_exists($ttdPath))
+                            <img src="{{ $ttdPath }}" alt="TTD" class="signature-image">
                         @endif
-                    @else
-                        <div style="margin-top: 12px; font-style: italic; color: #666; font-size: 7px;">
-                            (Menunggu Persetujuan)
-                        </div>
                     @endif
+                    <div class="signature-line"></div>
                 </div>
                 <div class="signature-name">
-                    {{ $perizinan->user->name }}
-                    <br>
-                    <small>Yang bersangkutan</small>
+                    ( {{ $perizinan->user->name }} )
+                    <div class="signature-role">Yang bersangkutan</div>
                 </div>
             </div>
             
@@ -315,32 +328,21 @@
             <div class="signature-box">
                 <div class="signature-title">Diketahui oleh :</div>
                 <div class="signature-space">
-                    @if($perizinan->status_diketahui === 'Disetujui')
-                        @if($perizinan->diketahuiOleh && $perizinan->diketahuiOleh->ttd && file_exists(public_path('storage/' . $perizinan->diketahuiOleh->ttd)))
-                            <img src="{{ public_path('storage/' . $perizinan->diketahuiOleh->ttd) }}" 
-                                 alt="TTD Head" 
-                                 class="signature-image">
-                        @else
-                            <div class="no-signature">( n )</div>
+                    @if($perizinan->status_diketahui === 'Disetujui' && $perizinan->diketahuiOleh && $perizinan->diketahuiOleh->ttd)
+                        @php
+                            $ttdPath = public_path('storage/ttd/' . basename($perizinan->diketahuiOleh->ttd));
+                        @endphp
+                        @if(file_exists($ttdPath))
+                            <img src="{{ $ttdPath }}" alt="TTD" class="signature-image">
                         @endif
                     @elseif($perizinan->status_diketahui === 'Ditolak')
-                        <div style="color: red; margin-top: 10px; font-weight: bold; font-size: 8px;">DITOLAK</div>
-                    @else
-                        <div style="margin-top: 12px; font-style: italic; color: #666; font-size: 7px;">
-                            (Menunggu)
-                        </div>
+                        <div class="rejection-text">DITOLAK</div>
                     @endif
+                    <div class="signature-line"></div>
                 </div>
                 <div class="signature-name">
-                    {{ $perizinan->diketahuiOleh->name ?? '-' }}
-                    <br>
-                    <small>{{ $perizinan->diketahuiOleh->jabatan ?? 'Atasan' }}</small>
-                    @if($perizinan->status_diketahui)
-                        <br>
-                        <span class="status-badge status-{{ strtolower($perizinan->status_diketahui) }}">
-                            {{ $perizinan->status_diketahui }}
-                        </span>
-                    @endif
+                    ( {{ $perizinan->diketahuiOleh->name ?? '________________' }} )
+                    <div class="signature-role">{{ $perizinan->diketahuiOleh->jabatan ?? 'Atasan' }}</div>
                 </div>
             </div>
             
@@ -348,47 +350,29 @@
             <div class="signature-box">
                 <div class="signature-title">Disetujui oleh :</div>
                 <div class="signature-space">
-                    @if($perizinan->status_disetujui === 'Disetujui')
-                        @if($perizinan->disetujuiOleh && $perizinan->disetujuiOleh->ttd && file_exists(public_path('storage/' . $perizinan->disetujuiOleh->ttd)))
-                            <img src="{{ public_path('storage/' . $perizinan->disetujuiOleh->ttd) }}" 
-                                 alt="TTD HRD" 
-                                 class="signature-image">
-                        @else
-                            <div class="no-signature">( n )</div>
+                    @if($perizinan->status_disetujui === 'Disetujui' && $perizinan->disetujuiOleh && $perizinan->disetujuiOleh->ttd)
+                        @php
+                            $ttdPath = public_path('storage/ttd/' . basename($perizinan->disetujuiOleh->ttd));
+                        @endphp
+                        @if(file_exists($ttdPath))
+                            <img src="{{ $ttdPath }}" alt="TTD" class="signature-image">
                         @endif
                     @elseif($perizinan->status_disetujui === 'Ditolak')
-                        <div style="color: red; margin-top: 10px; font-weight: bold; font-size: 8px;">DITOLAK</div>
-                    @else
-                        <div style="margin-top: 12px; font-style: italic; color: #666; font-size: 7px;">
-                            (Menunggu)
-                        </div>
+                        <div class="rejection-text">DITOLAK</div>
                     @endif
+                    <div class="signature-line"></div>
                 </div>
                 <div class="signature-name">
-                    {{ $perizinan->disetujuiOleh->name ?? '-' }}
-                    <br>
-                    <small>HRD</small>
-                    @if($perizinan->status_disetujui)
-                        <br>
-                        <span class="status-badge status-{{ strtolower($perizinan->status_disetujui) }}">
-                            {{ $perizinan->status_disetujui }}
-                        </span>
-                    @endif
+                    ( {{ $perizinan->disetujuiOleh->name ?? '________________' }} )
+                    <div class="signature-role">HRD</div>
                 </div>
             </div>
         </div>
 
-        @if($perizinan->catatan)
-        <div class="">
-            <strong>Catatan:</strong><br>
-            {{ $perizinan->catatan }}
-        </div>
-        @endif
-
         <!-- Footer -->
         <div class="footer">
-            <p>Dicetak pada: {{ $tanggal_print }}</p>
-            <p>No. {{ str_pad($perizinan->id, 5, '0', STR_PAD_LEFT) }}/SLG/{{ date('Y') }}</p>
+            <div>Dicetak pada: {{ $tanggal_print }}</div>
+            <div>Kota: 08/12/2024/01/2025</div>
         </div>
     </div>
 </body>

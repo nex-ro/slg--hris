@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState ,useEffect} from "react";
 import { useForm, router } from "@inertiajs/react";
 import { FileText, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
+import { usePage } from '@inertiajs/react';
 
 function Izin({ heads, perizinans }) {
   const [activeTab, setActiveTab] = useState('pengajuan');
@@ -9,6 +10,7 @@ function Izin({ heads, perizinans }) {
   const [editingIzin, setEditingIzin] = useState(null);
 const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
 const [printingIzin, setPrintingIzin] = useState(null);
+  const { flash } = usePage().props;
 
   const { data, setData, post, processing, errors, reset } = useForm({
     type_perizinan: 'p1',
@@ -18,6 +20,16 @@ const [printingIzin, setPrintingIzin] = useState(null);
     uid_diketahui: '',
     keperluan: ''
   });
+    useEffect(() => {
+    if (flash?.success) {
+      // Tampilkan toast success (bisa pakai library seperti react-hot-toast)
+      alert(flash.success); // Atau ganti dengan toast library
+    }
+    if (flash?.error) {
+      alert(flash.error);
+    }
+  }, [flash]);
+
   
 
   const handleSubmit = (e) => {
@@ -66,8 +78,8 @@ const [printingIzin, setPrintingIzin] = useState(null);
   setEditData({
     type_perizinan: izin.type_perizinan,
     tanggal: izin.tanggal,
-    jam_keluar: izin.jam_keluar || '',
-    jam_kembali: izin.jam_kembali || '',
+    jam_keluar: (izin.jam_keluar && izin.jam_keluar !== '00:00') ? izin.jam_keluar : '',
+    jam_kembali: (izin.jam_kembali && izin.jam_kembali !== '00:00') ? izin.jam_kembali : '',
     uid_diketahui: izin.uid_diketahui,
     keperluan: izin.keperluan
   });
@@ -87,14 +99,39 @@ const { data: editData, setData: setEditData, put, processing: editProcessing, e
 // Fungsi untuk submit edit
 const handleEditSubmit = (e) => {
   e.preventDefault();
+  
+  // Prepare data - filter out empty time fields
+  const submitData = {
+    type_perizinan: editData.type_perizinan,
+    tanggal: editData.tanggal,
+    uid_diketahui: editData.uid_diketahui,
+    keperluan: editData.keperluan,
+  };
+
+  // Hanya tambahkan jam jika bukan P1 DAN field tidak kosong
+  if (editData.type_perizinan !== 'p1') {
+    if (editData.jam_keluar && editData.jam_keluar.trim() !== '') {
+      submitData.jam_keluar = editData.jam_keluar;
+    }
+    if (editData.jam_kembali && editData.jam_kembali.trim() !== '') {
+      submitData.jam_kembali = editData.jam_kembali;
+    }
+  }
+
+  // Gunakan put dengan data yang sudah difilter
   put(route('izin.update', editingIzin.id), {
+    data: submitData,
+    preserveScroll: true,
     onSuccess: () => {
       setIsEditModalOpen(false);
       setEditingIzin(null);
+      router.reload({ only: ['perizinans'] });
+    },
+    onError: (errors) => {
+      console.error('Error updating:', errors);
     }
   });
 };
-
 // Fungsi untuk membuka modal print
 const handlePrint = (izin) => {
   // Langsung download PDF tanpa modal
@@ -115,11 +152,16 @@ const handlePrintDocument = () => {
     });
   };
 
-  const handleDelete = (id) => {
-    if (confirm('Yakin ingin membatalkan pengajuan ini?')) {
-      router.delete(route('izin.destroy', id));
-    }
-  };
+const handleDelete = (id) => {
+  if (confirm('Yakin ingin membatalkan pengajuan ini?')) {
+    router.delete(route('izin.destroy', id), {
+      onSuccess: () => {
+        // Reload data setelah delete berhasil
+        router.reload({ only: ['perizinans'] });
+      }
+    });
+  }
+};
 
   // Show time fields only for P2 and P3
   const showTimeFields = data.type_perizinan === 'p2' || data.type_perizinan === 'p3';
@@ -149,7 +191,16 @@ const handlePrintDocument = () => {
             </label>
             <select
               value={editData.type_perizinan}
-              onChange={(e) => setEditData('type_perizinan', e.target.value)}
+              onChange={(e) => {
+                const newType = e.target.value;
+                setEditData({
+                  ...editData,
+                  type_perizinan: newType,
+                  // Reset jam jika pindah ke P1
+                  jam_keluar: newType === 'p1' ? '' : editData.jam_keluar,
+                  jam_kembali: newType === 'p1' ? '' : editData.jam_kembali
+                });
+              }}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               required
             >
@@ -234,7 +285,23 @@ const handlePrintDocument = () => {
           </div>
 
           {/* Keperluan */}
-          
+          <div className="mb-6">
+  <label className="block text-sm font-medium text-gray-700 mb-2">
+    Keperluan <span className="text-red-500">*</span>
+  </label>
+  <textarea
+    value={editData.keperluan}
+    onChange={(e) => setEditData('keperluan', e.target.value)}
+    rows="4"
+    placeholder="Jelaskan keperluan izin Anda..."
+    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
+    required
+  />
+  {editErrors.keperluan && (
+    <p className="text-red-500 text-xs mt-1">{editErrors.keperluan}</p>
+  )}
+</div>
+
 
           {/* Buttons */}
           <div className="flex justify-end gap-3">

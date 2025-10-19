@@ -8,6 +8,8 @@ use App\Models\Sakit;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
+use App\Models\Kehadiran;
+use Carbon\Carbon;
 
 class SakitController extends Controller
 {
@@ -111,14 +113,21 @@ public function adminStore(Request $request)
         $buktiPath = $file->storeAs('bukti_sakit', $fileName, 'public');
     }
 
-    Sakit::create([
+    $status = $request->status ?? 'Diproses';
+
+    $sakit = Sakit::create([
         'uid' => $request->uid,
         'tanggal_mulai' => $request->tanggal_mulai,
         'tanggal_selesai' => $request->tanggal_selesai,
         'keterangan' => $request->keterangan,
         'bukti' => $buktiPath,
-        'status' => $request->status ?? 'Diproses',
+        'status' => $status,
     ]);
+
+    // Jika status langsung Disetujui saat dibuat, buat kehadiran
+    if ($status === 'Disetujui') {
+        $this->updateKehadiranSakit($sakit);
+    }
 
     return redirect()->route('sakit.admin')
         ->with('flash', [
@@ -206,23 +215,52 @@ public function adminStore(Request $request)
     /**
      * Update status izin sakit (Admin only)
      */
-    public function updateStatus(Request $request, $id)
-    {
-        $request->validate([
-            'status' => 'required|in:Diproses,Disetujui,Ditolak',
-        ]);
-
-        $sakit = Sakit::findOrFail($id);
-        
-        $sakit->update([
-            'status' => $request->status,
-        ]);
-
-        return redirect()->route('sakit.admin')
-            ->with('flash', [
-                'success' => 'Status izin sakit berhasil diupdate menjadi ' . $request->status
-            ]);
+    private function updateKehadiranSakit($sakit)
+{
+    $tanggalMulai = Carbon::parse($sakit->tanggal_mulai);
+    $tanggalSelesai = Carbon::parse($sakit->tanggal_selesai);
+    
+    // Loop untuk setiap tanggal dalam range izin sakit
+    for ($date = $tanggalMulai; $date->lte($tanggalSelesai); $date->addDay()) {
+        Kehadiran::updateOrCreate(
+            [
+                'uid' => $sakit->uid,
+                'tanggal' => $date->format('Y-m-d'),
+            ],
+            [
+                'status' => 'Sakit',
+                'keterangan' => $sakit->keterangan,
+                'jam_kedatangan' => null,
+                'jam_pulang' => null,
+            ]
+        );
     }
+}
+
+    public function updateStatus(Request $request, $id)
+{
+    $request->validate([
+        'status' => 'required|in:Diproses,Disetujui,Ditolak',
+    ]);
+
+    $sakit = Sakit::findOrFail($id);
+    $oldStatus = $sakit->status;
+    
+    $sakit->update([
+        'status' => $request->status,
+    ]);
+
+    // Jika status berubah menjadi Disetujui, buat/update kehadiran
+    if ($request->status === 'Disetujui' && $oldStatus !== 'Disetujui') {
+        $this->updateKehadiranSakit($sakit);
+    }
+
+    return redirect()->route('sakit.admin')
+        ->with('flash', [
+            'success' => 'Status izin sakit berhasil diupdate menjadi ' . $request->status
+        ]);
+}
+
     /**
  * Download bukti sakit
  */
@@ -285,7 +323,7 @@ public function adminUpdate(Request $request, $id)
         'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
         'keterangan' => 'required|string|max:500',
         'bukti' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
-        'status' => 'nullable|in:Diproses,Disetujui,Ditolak', // TAMBAHAN INI
+        'status' => 'nullable|in:Diproses,Disetujui,Ditolak',
     ], [
         'tanggal_mulai.required' => 'Tanggal mulai harus diisi',
         'tanggal_selesai.required' => 'Tanggal selesai harus diisi',
@@ -293,14 +331,17 @@ public function adminUpdate(Request $request, $id)
         'keterangan.required' => 'Keterangan harus diisi',
         'bukti.mimes' => 'Format file harus PDF, JPG, JPEG, atau PNG',
         'bukti.max' => 'Ukuran file maksimal 2MB',
-        'status.in' => 'Status harus Diproses, Disetujui, atau Ditolak', // TAMBAHAN INI
+        'status.in' => 'Status harus Diproses, Disetujui, atau Ditolak',
     ]);
+
+    $oldStatus = $sakit->status;
+    $newStatus = $request->status ?? 'Diproses';
 
     $updateData = [
         'tanggal_mulai' => $request->tanggal_mulai,
         'tanggal_selesai' => $request->tanggal_selesai,
         'keterangan' => $request->keterangan,
-        'status' => $request->status ?? 'Diproses', // TAMBAHAN INI - default Diproses jika tidak diisi
+        'status' => $newStatus,
     ];
 
     if ($request->hasFile('bukti')) {
@@ -314,6 +355,11 @@ public function adminUpdate(Request $request, $id)
     }
 
     $sakit->update($updateData);
+
+    // Jika status berubah menjadi Disetujui, buat/update kehadiran
+    if ($newStatus === 'Disetujui' && $oldStatus !== 'Disetujui') {
+        $this->updateKehadiranSakit($sakit);
+    }
 
     return redirect()->route('sakit.admin')
         ->with('flash', [

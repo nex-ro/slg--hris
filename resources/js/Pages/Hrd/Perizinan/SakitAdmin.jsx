@@ -369,21 +369,17 @@ const fetchUsers = async () => {
                       <tr key={item.id} className="hover:bg-gray-50 transition-colors">
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-start gap-2">
-                            <User className="w-4 h-4 text-gray-400 mt-0.5" />
                             <div>
                               <div className="text-sm font-medium text-gray-900">
                                 {item.user_name}
                               </div>
                               <div className="flex items-center gap-1 text-xs text-gray-500">
-                                <Mail className="w-3 h-3" />
-                                {item.user_email}
                               </div>
                             </div>
                           </div>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2 text-sm">
-                            <Calendar className="w-4 h-4 text-gray-400" />
                             <div>
                               <div className="text-gray-900 font-medium">
                                 {formatDate(item.tanggal_mulai)}
@@ -633,19 +629,20 @@ const fetchUsers = async () => {
         </div>
 
         <div className="flex gap-3 pt-6 mt-6 border-t">
+          
+          <button
+            onClick={handleCloseModal}
+            disabled={processing}
+            className={`flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            Batal
+          </button>
           <button
             onClick={handleSubmit}
             disabled={processing}
             className={`flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {processing ? '⏳ Memproses...' : (editMode ? '💾 Update Data' : '💾 Simpan Data')} {/* UBAH INI */}
-          </button>
-          <button
-            onClick={handleCloseModal}
-            disabled={processing}
-            className={`flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors font-medium ${processing ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            ✕ Batal
           </button>
         </div>
       </div>

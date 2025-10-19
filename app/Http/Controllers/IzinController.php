@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Models\Kehadiran;
 
 class IzinController extends Controller
 {
@@ -104,6 +105,35 @@ class IzinController extends Controller
     ]);
 }
 
+private function updateKehadiranIzin($perizinan)
+{
+    $tanggal = $perizinan->tanggal;
+    $typePerizinan = $perizinan->type_perizinan;
+    
+    // Tentukan status kehadiran berdasarkan tipe perizinan
+    $statusKehadiran = match($typePerizinan) {
+        'p1' => 'P1',  // Izin Full Day
+        'p2' => 'P2',  // Izin Datang Terlambat
+        'p3' => 'P3',  // Izin Pulang Cepat
+        default => 'Izin'
+    };
+    
+    Kehadiran::updateOrCreate(
+        [
+            'uid' => $perizinan->uid,
+            'tanggal' => $tanggal,
+        ],
+        [
+            'status' => $statusKehadiran,
+            'keterangan' => $perizinan->keperluan,
+            'jam_kedatangan' => $typePerizinan === 'p1' ? null : $perizinan->jam_keluar,
+            'jam_pulang' => $typePerizinan === 'p1' ? null : $perizinan->jam_kembali,
+        ]
+    );
+}
+
+
+
     /**
      * Store a newly created resource in storage.
      */
@@ -116,7 +146,7 @@ class IzinController extends Controller
             'jam_keluar' => 'nullable|date_format:H:i',
             'jam_kembali' => 'nullable|date_format:H:i',
             'uid_diketahui' => 'required|exists:users,id',
-            'keperluan' => 'required|string|min:10|max:1000'
+            'keperluan' => 'required|string|max:1000'
         ], [
             'type_perizinan.required' => 'Tipe perizinan harus dipilih',
             'type_perizinan.in' => 'Tipe perizinan tidak valid',
@@ -231,109 +261,123 @@ class IzinController extends Controller
      * Update the specified resource in storage.
      */
     public function update(Request $request, $id)
-    {
-        try {
-            // Find the perizinan and check ownership
-            $perizinan = Perizinan::where('uid', Auth::id())
-                ->where('id', $id)
-                ->where('status', 'Diajukan') // Only allow update if status is still 'Diajukan'
-                ->firstOrFail();
+{
+    try {
+        // Log untuk debugging
+        \Log::info('Update request data:', $request->all());
+        \Log::info('Update perizinan ID:', ['id' => $id]);
+        
+        $perizinan = Perizinan::where('uid', Auth::id())
+            ->where('id', $id)
+            ->where('status', 'Diajukan')
+            ->firstOrFail();
 
-            // Validate the request
-            $validator = Validator::make($request->all(), [
-                'type_perizinan' => 'required|in:p1,p2,p3',
-                'tanggal' => 'required|date|after_or_equal:today',
-                'jam_keluar' => 'nullable|date_format:H:i',
-                'jam_kembali' => 'nullable|date_format:H:i',
-                'uid_diketahui' => 'required|exists:users,id',
-                'keperluan' => 'required|string|min:10|max:1000'
-            ]);
+        $typePerizinan = $request->type_perizinan;
+        
+        // Build validation rules dynamically
+        $rules = [
+            'type_perizinan' => 'required|in:p1,p2,p3',
+            'tanggal' => 'required|date',
+            'uid_diketahui' => 'required|exists:users,id',
+            'keperluan' => 'required|string|max:1000'
+        ];
 
-            if ($validator->fails()) {
-                return redirect()->back()
-                    ->withErrors($validator)
-                    ->withInput();
-            }
+        // Add time validation only for P2 and P3
+        if (in_array($typePerizinan, ['p2', 'p3'])) {
+            $rules['jam_keluar'] = 'required|date_format:H:i';
+            $rules['jam_kembali'] = 'required|date_format:H:i';
+        }
 
-            $typePerizinan = $request->type_perizinan;
-            $jamKeluar = $request->jam_keluar;
-            $jamKembali = $request->jam_kembali;
+        $validator = Validator::make($request->all(), $rules);
 
-            // For P1 (Full Day), set jam to 00:00
-            if ($typePerizinan === 'p1') {
-                $jamKeluar = '00:00';
-                $jamKembali = '00:00';
-            } else {
-                // For P2 and P3, jam is required
-                if (!$jamKeluar || !$jamKembali) {
-                    return redirect()->back()
-                        ->withErrors(['jam_keluar' => 'Jam keluar dan jam kembali harus diisi'])
-                        ->withInput();
-                }
-
-                if ($jamKeluar >= $jamKembali) {
-                    return redirect()->back()
-                        ->withErrors(['jam_kembali' => 'Jam kembali harus lebih dari jam keluar'])
-                        ->withInput();
-                }
-            }
-
-            // Update the perizinan
-            $perizinan->update([
-                'uid_diketahui' => $request->uid_diketahui,
-                'type_perizinan' => $request->type_perizinan,
-                'tanggal' => $request->tanggal,
-                'jam_keluar' => $jamKeluar,
-                'jam_kembali' => $jamKembali,
-                'keperluan' => $request->keperluan,
-            ]);
-
-            return redirect()->back()->with('success', 'Pengajuan izin berhasil diperbarui!');
-        } catch (\Exception $e) {
+        if ($validator->fails()) {
+            \Log::warning('Validation failed:', $validator->errors()->toArray());
             return redirect()->back()
-                ->withErrors(['error' => 'Gagal memperbarui pengajuan izin'])
+                ->withErrors($validator)
                 ->withInput();
         }
-    }
 
+        // Set time based on type
+        if ($typePerizinan === 'p1') {
+            $jamKeluar = '00:00';
+            $jamKembali = '00:00';
+        } else {
+            $jamKeluar = $request->jam_keluar;
+            $jamKembali = $request->jam_kembali;
+            
+            // Additional validation for time
+            if ($jamKeluar >= $jamKembali) {
+                return redirect()->back()
+                    ->withErrors(['jam_kembali' => 'Jam kembali harus lebih dari jam keluar'])
+                    ->withInput();
+            }
+        }
+
+        // Update perizinan
+        $perizinan->update([
+            'uid_diketahui' => $request->uid_diketahui,
+            'type_perizinan' => $request->type_perizinan,
+            'tanggal' => $request->tanggal,
+            'jam_keluar' => $jamKeluar,
+            'jam_kembali' => $jamKembali,
+            'keperluan' => $request->keperluan,
+        ]);
+
+        \Log::info('Perizinan updated successfully:', ['id' => $id]);
+
+        return redirect()->route('pegawai.izin')
+            ->with('success', 'Pengajuan izin berhasil diperbarui!');
+            
+    } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+        \Log::error('Perizinan not found:', [
+            'id' => $id,
+            'user_id' => Auth::id(),
+            'error' => $e->getMessage()
+        ]);
+        
+        return redirect()->back()
+            ->withErrors(['error' => 'Pengajuan tidak ditemukan atau tidak dapat diubah. Pastikan status masih "Diajukan"'])
+            ->withInput();
+            
+    } catch (\Exception $e) {
+        \Log::error('Error updating perizinan:', [
+            'id' => $id,
+            'user_id' => Auth::id(),
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        
+        return redirect()->back()
+            ->withErrors(['error' => 'Gagal memperbarui pengajuan izin: ' . $e->getMessage()])
+            ->withInput();
+    }
+}
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy($id)
+  public function destroy($id)
 {
     try {
         $perizinan = Perizinan::findOrFail($id);
 
-        // Check authorization
         if (Auth::user()->role === 'hrd' || Auth::user()->role === 'admin') {
-            // HRD can delete any perizinan
             $perizinan->delete();
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Data perizinan berhasil dihapus!'
-            ]);
+            return redirect()->route('')
+                ->with('success', 'Data perizinan berhasil dihapus!');
         } else {
-            // User can only delete their own 'Diajukan' perizinan
             if ($perizinan->uid !== Auth::id() || $perizinan->status !== 'Diajukan') {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Gagal membatalkan pengajuan izin. Pastikan status masih "Diajukan"'
-                ], 403);
+                return redirect()->back()
+                    ->with('error', 'Gagal membatalkan pengajuan izin. Pastikan status masih "Diajukan"');
             }
             
             $perizinan->delete();
-            
-            return response()->json([
-                'success' => true,
-                'message' => 'Pengajuan izin berhasil dibatalkan!'
-            ]);
+            return redirect()->route('pegawai.izin')
+                ->with('success', 'Pengajuan izin berhasil dibatalkan!');
         }
     } catch (\Exception $e) {
-        return response()->json([
-            'success' => false,
-            'message' => 'Gagal menghapus data perizinan: ' . $e->getMessage()
-        ], 500);
+        \Log::error('Error deleting perizinan: ' . $e->getMessage());
+        return redirect()->back()
+            ->with('error', 'Gagal menghapus data perizinan');
     }
 }
 
@@ -347,6 +391,7 @@ public function approve(Request $request, $id)
     try {
         $perizinan = Perizinan::with(['user', 'diketahuiOleh', 'disetujuiOleh'])->findOrFail($id);
         $currentUser = Auth::user();
+        $oldStatus = $perizinan->status;
 
         // Check authorization berdasarkan role
         if ($currentUser->role === 'hrd') {
@@ -382,8 +427,13 @@ public function approve(Request $request, $id)
 
         $perizinan->refresh();
         $this->updateOverallStatus($perizinan);
+        
+        // TAMBAHAN: Jika status berubah menjadi Disetujui, buat/update kehadiran
+        $perizinan->refresh();
+        if ($perizinan->status === 'Disetujui' && $oldStatus !== 'Disetujui') {
+            $this->updateKehadiranIzin($perizinan);
+        }
 
-        // PERBAIKAN: Return back dengan flash message untuk Inertia
         return back()->with('success', "Perizinan berhasil disetujui!");
         
     } catch (\Exception $e) {
@@ -392,11 +442,13 @@ public function approve(Request $request, $id)
     }
 }
 
+
+
 public function generatePdf($id)
 {
     try {
         $perizinan = Perizinan::with([
-            'user:id,name,email,jabatan,divisi',
+            'user:id,name,email,jabatan,divisi,ttd,tmk',
             'diketahuiOleh:id,name,email,jabatan,ttd',
             'disetujuiOleh:id,name,email,jabatan,ttd'
         ])->findOrFail($id);
@@ -416,15 +468,15 @@ public function generatePdf($id)
 
         // Generate PDF
         $pdf = Pdf::loadView('pdf.surat-izin', $data)
-            ->setPaper('a4', 'portrait');
+            ->setPaper('a5', 'portrait');
 
         // Download PDF
-        $filename = 'Surat_Izin_' . $perizinan->user->name . '_' . date('Ymd') . '.pdf';
+        $filename = 'Surat_Izin_' . str_replace(' ', '_', $perizinan->user->name) . '_' . date('Ymd') . '.pdf';
         return $pdf->download($filename);
 
     } catch (\Exception $e) {
         \Log::error('Error generating PDF: ' . $e->getMessage());
-        return redirect()->back()->with('error', 'Gagal generate PDF');
+        return back()->with('error', 'Gagal generate PDF');
     }
 }
 
@@ -493,6 +545,7 @@ private function updateOverallStatus($perizinan)
     try {
         $statusDiketahui = $perizinan->status_diketahui;
         $statusDisetujui = $perizinan->status_disetujui;
+        $oldStatus = $perizinan->status;
 
         // Jika salah satu ditolak, maka status keseluruhan = Ditolak
         if ($statusDiketahui === 'Ditolak' || $statusDisetujui === 'Ditolak') {
@@ -501,6 +554,11 @@ private function updateOverallStatus($perizinan)
         // Jika keduanya disetujui, maka status keseluruhan = Disetujui
         elseif ($statusDiketahui === 'Disetujui' && $statusDisetujui === 'Disetujui') {
             $perizinan->status = 'Disetujui';
+            
+            // TAMBAHAN: Auto create kehadiran ketika fully approved
+            if ($oldStatus !== 'Disetujui') {
+                $this->updateKehadiranIzin($perizinan);
+            }
         }
         // Jika masih ada yang null atau belum diproses, tetap Diajukan
         else {
@@ -562,7 +620,7 @@ private function updateOverallStatus($perizinan)
         'jam_keluar' => 'nullable|date_format:H:i',
         'jam_kembali' => 'nullable|date_format:H:i',
         'uid_diketahui' => 'required|exists:users,id',
-        'keperluan' => 'required|string|min:10|max:1000'
+        'keperluan' => 'required|string|max:1000'
     ]);
 
     if ($validator->fails()) {
