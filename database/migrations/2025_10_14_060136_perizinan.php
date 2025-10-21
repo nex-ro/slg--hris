@@ -21,7 +21,6 @@ return new class extends Migration
             $table->enum('status', ['Diajukan', 'Diproses','Disetujui', 'Ditolak'])->default('Diajukan');
             $table->enum('status_diketahui', ['Disetujui', 'Ditolak'])->nullable();
             $table->enum('status_disetujui', ['Disetujui', 'Ditolak'])->nullable();
-
             $table->text('catatan')->nullable();
             $table->timestamps();
         });

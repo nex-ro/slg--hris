@@ -20,7 +20,10 @@ const LayoutTemplate = ({ children }) => {
   const dropdownRef = useRef(null);
   
   const currentPath = usePage().url;
-  const userRole = auth?.user?.role; 
+  const userRole = auth?.user?.role;
+  const userId = auth?.user?.id;
+  const userDivisi = auth?.user?.divisi;
+    
 
   const toggleNotification = () => {
     setNotificationOpen(!notificationOpen);
@@ -136,7 +139,7 @@ const LayoutTemplate = ({ children }) => {
   };
 
   const getMenuItems = () => {
-    const hrdAtasanMenu = [
+    const hrdMenu = [
       { icon: LayoutDashboard, label: 'Dashboard', href: '/HRD/dashboard' },
       { icon: Users, label: 'Pegawai', href: '/pegawai',
         subItems: [
@@ -154,49 +157,59 @@ const LayoutTemplate = ({ children }) => {
         ]
       },
       {
-    icon: FileText,
-    label: 'Perizinan',
-    href: '/perizinan',
-    subItems: [
-      {
-        icon: Thermometer,
-        label: 'Sakit',
-        href: '/perizinan/sakit',
+        icon: FileText,
+        label: 'Perizinan',
+        href: '/perizinan',
+        subItems: [
+          { icon: Thermometer, label: 'Sakit', href: '/perizinan/sakit' },
+          { icon: CalendarClock, label: 'Keluar Kantor', href: '/perizinan/keluar-kantor' },
+          // { icon: MapPin, label: 'Dinas Luar', href: '/perizinan/dinas-luar' },
+        ],
       },
-      {
-        icon: CalendarClock,
-        label: 'Keluar Kantor',
-        href: '/perizinan/keluar-kantor',
+      // { icon: BarChart3, label: 'Laporan', href: '/reports/index' },
+    ];
+
+    const headMenu = [
+      { icon: LayoutDashboard, label: 'Dashboard', href: '/HEAD/dashboard' },
+      { icon: Users, label: 'Pegawai', href: '/pegawai',
+        subItems: [
+          { icon: List, label: 'Daftar Pegawai', href: '/pegawai/list' },
+          { icon: LogOutIcon, label: 'Resign', href: '/pegawai/resign' },
+        ]
       },
+      { icon: Calendar, label: 'List Absensi', href: userDivisi ? `/absensi/list/${userDivisi.toLowerCase().replace(/\s+/g, '-')}` : '/absensi/list'},
       {
-        icon: MapPin,
-        label: 'Dinas Luar',
-        href: '/perizinan/dinas-luar',
+        icon: FileText,
+        label: 'Perizinan',
+        href: '/perizinan',
+        subItems: [
+          { icon: Thermometer, label: 'Sakit', href: '/perizinan/sakit' },
+          { icon: CalendarClock, label: 'Keluar Kantor', href: '/perizinan/keluar-kantor' },
+          // { icon: MapPin, label: 'Dinas Luar', href: '/perizinan/dinas-luar' },
+        ],
       },
-    ],
-  },
       // { icon: BarChart3, label: 'Laporan', href: '/reports/index' },
     ];
 
     const pegawaiMenu = [
       { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
-      { icon: Calendar, label: 'Absensi Saya', href: '/pegawai/absensi',
-        subItems: [
-          { icon: ClipboardCheck, label: 'Absen Hari Ini', href: '/pegawai/absensi/checkin' },
-          { icon: Clock, label: 'Riwayat Absensi', href: '/pegawai/absensi/history' },
-          { icon: XCircle, label: 'Pengajuan Izin', href: '/pegawai/absensi/izin' },
-        ]
-      },
+      { icon: Calendar,label: 'Absen Saya', href: '/pegawai/absensi/checkin'},
       { icon: FileText, label: 'Dokumen', href: '/dokumen' },
       { icon: Thermometer, label: 'Sakit', href: '/pegawai/sakit' },
       { icon: CalendarClock, label: 'Perizinan', href: '/pegawai/izin' },
-
     ];
 
+    // Return menu based on user role
     if (userRole === 'pegawai' || userRole === 'karyawan' || userRole === 'employee') {
       return pegawaiMenu;
+    } else if (userRole === 'hrd') {
+      return hrdMenu;
+    } else if (userRole === 'atasan' || userRole === 'head') {
+      return headMenu;
     }
-    return hrdAtasanMenu;
+  
+    // Default fallback to HRD menu
+    return hrdMenu;
   };
 
   const menuItems = getMenuItems();
@@ -252,14 +265,14 @@ const LayoutTemplate = ({ children }) => {
   const roleBadge = () => {
     const roleColors = {
       'hrd': 'from-purple-500 to-purple-600',
-      'atasan': 'from-blue-500 to-blue-600',
+      'head': 'from-blue-500 to-blue-600',
       'admin': 'from-red-500 to-red-600',
       'pegawai': 'from-green-500 to-green-600',
       'karyawan': 'from-green-500 to-green-600',
       'employee': 'from-green-500 to-green-600',
     };
     const roleLabels = {
-      'hrd': 'HRD', 'atasan': 'Atasan', 'admin': 'Admin',
+      'hrd': 'HRD', 'head': 'Head', 'admin': 'Admin', 
       'pegawai': 'Pegawai', 'karyawan': 'Pegawai', 'employee': 'Pegawai',
     };
     const color = roleColors[userRole?.toLowerCase()] || 'from-gray-500 to-gray-600';
@@ -551,8 +564,9 @@ const LayoutTemplate = ({ children }) => {
           </div>
         </header>
 
-
         <div className="flex-1 overflow-y-auto">
+          
+          
           <main className="p-4 sm:p-6 space-y-6">
             {children || (
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center">
@@ -565,9 +579,9 @@ const LayoutTemplate = ({ children }) => {
             )}
           </main>
         </div>
-
       </div>
     </div>
   );
 };
+
 export default LayoutTemplate;

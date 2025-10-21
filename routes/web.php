@@ -17,6 +17,8 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\SakitController;
 use App\Http\Controllers\IzinController;
 
+
+
 Route::get('/tes', function () {
     return Inertia::render('tes', []);
 });
@@ -145,7 +147,10 @@ Route::middleware('hrd')->group(function () {
 
 });
 Route::middleware('head')->group(function () {
-    Route::get('/HEAD/dashboard', [UserController::class, 'head'])->middleware(['auth', 'verified'])->name('head.dashboard');
+    Route::get('/HEAD/dashboard', [HrdController::class, 'index'])->middleware(['auth', 'verified'])->name('head.dashboard');
+    Route::get('/absensi/list/{divisi}', [AbsensiController::class, 'absensiHead'])->name('absensi.head');
+Route::get('/kehadiran/divisi', [HrdController::class, 'getByDateAndDivisi']);
+
 });
 
 Route::middleware('auth')->group(function () {
@@ -163,3 +168,6 @@ Route::get('/izin/{id}/pdf', [IzinController::class, 'generatePdf'])->name('izin
 });
 
 require __DIR__.'/auth.php';
+Route::fallback(function () {
+    return Inertia::render('NotFound');
+});

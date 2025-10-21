@@ -14,24 +14,19 @@ class NotificationController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        $userRole = $user->role; // Asumsikan kolom role ada di tabel users
-        
+        $userRole = $user->role; 
         $query = Notification::where(function($q) use ($user, $userRole) {
-            // Notifikasi yang ditujukan untuk user ini (to_uid)
             $q->where('to_uid', $user->id);
             
-            // Atau notifikasi broadcast (to_uid null) berdasarkan type dan role
             $q->orWhere(function($subQ) use ($userRole) {
                 $subQ->whereNull('to_uid')
                      ->where(function($typeQ) use ($userRole) {
-                         $typeQ->where('type', 'all'); // Semua user dapat notifikasi type 'all'
-                         
+                         $typeQ->where('type', 'all'); 
                          if (in_array($userRole, ['hrd', 'head'])) {
-                             $typeQ->orWhere('type', 'hrd'); // HRD dan Head dapat notifikasi type 'hrd'
+                             $typeQ->orWhere('type', 'hrd'); 
                          }
-                         
                          if ($userRole === 'head') {
-                             $typeQ->orWhere('type', 'atasan'); // Hanya Head dapat notifikasi type 'atasan'
+                             $typeQ->orWhere('type', 'atasan'); 
                          }
                      });
             });

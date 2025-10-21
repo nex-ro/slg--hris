@@ -1,6 +1,6 @@
 import { useState ,useEffect} from "react";
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
-import { router, usePage } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { Calendar, FileText,Plus, CheckCircle, XCircle, Clock, User, Mail, Check, X as XIcon, Edit2, Trash2, Upload, Eye } from "lucide-react";
 
 function SakitAdmin() {
@@ -269,6 +269,8 @@ const fetchUsers = async () => {
 
   return (
     <LayoutTemplate>
+      <Head title="Sakit" />
+      
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto">
           {/* Flash Message */}

@@ -73,7 +73,7 @@ class PegawaiController extends Controller
             // Kirim notifikasi ke semua HRD
             $this->sendNotificationToHRD(
                 'Pengajuan Resign Baru',
-                Auth::user()->nama . ' telah mengajukan resign dengan tanggal keluar ' . date('d M Y', strtotime($validated['tanggal_keluar'])),
+                Auth::user()->name . ' telah mengajukan resign dengan tanggal keluar ' . date('d M Y', strtotime($validated['tanggal_keluar'])),
                 '/hrd/resign/' . $resign->id
             );
 

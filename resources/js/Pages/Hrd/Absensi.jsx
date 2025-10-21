@@ -20,21 +20,18 @@ function Absensi() {
   const [holidays, setHolidays] = useState([]);
   const [openStatusDropdown, setOpenStatusDropdown] = useState(null);
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  // Pagination states
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
   const [showKeteranganModal, setShowKeteranganModal] = useState(false);
-const [selectedKehadiran, setSelectedKehadiran] = useState(null);
-const [keteranganText, setKeteranganText] = useState('');
-
+  const [selectedKehadiran, setSelectedKehadiran] = useState(null);
+  const [keteranganText, setKeteranganText] = useState('');
 
   // Fungsi untuk mengecek apakah tanggal adalah weekend (Sabtu/Minggu)
   const isWeekend = (date) => {
     const day = date.getDay();
-    return day === 0 || day === 6; // 0 = Minggu, 6 = Sabtu
+    return day === 0 || day === 6; 
   };
 
-  // Fungsi untuk mengecek apakah tanggal adalah hari libur
   const isHoliday = (date) => {
     const dateString = formatDateForAPI(date);
     return holidays.some(holiday => holiday.date === dateString);

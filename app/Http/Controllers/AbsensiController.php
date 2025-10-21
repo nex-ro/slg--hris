@@ -23,10 +23,22 @@ use Barryvdh\DomPDF\Facade\Pdf;
 
 class AbsensiController extends Controller
 {
-    public function absensi()
+    public function absensiHead($divisi)
+    {
+            $divisiName = str_replace('-', ' ', $divisi);
+    $divisiName = ucwords($divisiName);
+    
+
+        return Inertia::render('Atasan/Absensi', [
+         'divisi' => $divisiName
+
+        ]);
+    }
+        public function absensi()
     {
         return Inertia::render('Hrd/Absensi', []);
     }
+
 public function saveAbsensi(Request $request)
 {
     try {

@@ -636,6 +636,110 @@ private function getYearlyTableData($year, $tower, $divisi)
         ], 500); 
     } 
 }
+
+// Function baru khusus untuk filter divisi
+public function getByDateAndDivisi(Request $request): JsonResponse 
+{ 
+    try { 
+        $request->validate([ 
+            'tanggal' => 'required|date_format:Y-m-d',
+            'divisi' => 'required|string'
+        ]); 
+     
+        $tanggal = $request->query('tanggal');
+        $divisi = $request->query('divisi');
+ 
+        // Cek apakah hari Sabtu atau Minggu 
+        $carbonDate = Carbon::parse($tanggal); 
+        $isSaturdayOrSunday = $carbonDate->isSaturday() || $carbonDate->isSunday(); 
+ 
+        // Cek apakah libur nasional 
+        $isNationalHoliday = Holiday::isHoliday($tanggal); 
+ 
+        // Tentukan apakah hari libur 
+        $isHoliday = $isSaturdayOrSunday || $isNationalHoliday; 
+         
+        // Ambil users yang aktif dengan filter divisi, TMK dan tanggal keluar
+        $users = User::where('active', true) 
+            ->where('role', '!=', 'eksekutif')
+            ->where('divisi', $divisi) // Filter berdasarkan divisi
+            ->where(function ($query) use ($tanggal) {
+                $query->where('tmk', '<=', $tanggal)
+                      ->orWhereNull('tmk');
+            })
+            ->where(function ($query) use ($tanggal) {
+                $query->where('tanggal_keluar', '>=', $tanggal)
+                      ->orWhereNull('tanggal_keluar');
+            })
+            ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk', 'tanggal_keluar') 
+            ->orderBy('tower', 'asc') 
+            ->orderBy('name', 'asc') 
+            ->get(); 
+ 
+             
+        $kehadiran = Kehadiran::where('tanggal', $tanggal)->get()->keyBy('uid'); 
+     
+        // Format response data 
+        $formattedData = $users->map(function ($user) use ($kehadiran, $tanggal, $isHoliday) { 
+            $attendance = $kehadiran->get($user->id); 
+ 
+            if ($isHoliday) { 
+                $status = 'Libur Kerja'; 
+                $jamKedatangan = '00:00'; 
+                $jamPulang = '00:00'; 
+                $keterangan = null;
+            } elseif ($attendance) { 
+                $status = $attendance->status; 
+                $jamKedatangan = $attendance->jam_kedatangan  
+                    ? Carbon::parse($attendance->jam_kedatangan)->format('H:i')  
+                    : null; 
+                $jamPulang = $attendance->jam_pulang  
+                    ? Carbon::parse($attendance->jam_pulang)->format('H:i')  
+                    : null; 
+                $keterangan = $attendance->keterangan ?? null;
+            } else { 
+                $status = 'N/A'; 
+                $jamKedatangan = null; 
+                $jamPulang = null; 
+                $keterangan = null;
+            } 
+ 
+            return [ 
+                'id' => $attendance->id ?? null, 
+                'tanggal' => $tanggal, 
+                'tower' => $user->tower ?? 'Tanpa Tower', 
+                'status' => $status, 
+                'jam_kedatangan' => $jamKedatangan, 
+                'jam_pulang' => $jamPulang, 
+                'keterangan' => $keterangan,
+                'user' => [ 
+                    'id' => $user->id, 
+                    'name' => $user->name,   
+                    'divisi' => $user->divisi, 
+                    'jabatan' => $user->jabatan, 
+                    'tmk' => $user->tmk, 
+                    'tanggal_keluar' => $user->tanggal_keluar,
+                    'tower' => $user->tower ?? 'Tanpa Tower', 
+                ] 
+            ]; 
+        }); 
+     
+        return response()->json($formattedData, 200); 
+     
+    } catch (\Illuminate\Validation\ValidationException $e) { 
+        return response()->json([ 
+            'error' => 'Validasi gagal', 
+            'message' => 'Format tanggal harus Y-m-d (contoh: 2024-01-15) dan divisi wajib diisi', 
+            'details' => $e->errors() 
+        ], 422); 
+     
+    } catch (\Exception $e) { 
+        return response()->json([ 
+            'error' => 'Terjadi kesalahan', 
+            'message' => $e->getMessage() 
+        ], 500); 
+    } 
+}
     public function getByMonth(Request $request): JsonResponse
 {
     try {

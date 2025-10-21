@@ -7,7 +7,6 @@ function Dashboard() {
     <div className="">
         <p>user</p>
     </div>
-
    </DashboardLayouts>
 
   );

@@ -581,7 +581,7 @@ const fetchData = async (page = 1) => {
                       <option value="pegawai">Pegawai</option>
                       <option value="hrd">HRD</option>
                       <option value="head">Head</option>
-                      <option value="head">Eksekutif</option>
+                      <option value="eksekutif">Eksekutif</option>
                     </select>
                   </div>
 

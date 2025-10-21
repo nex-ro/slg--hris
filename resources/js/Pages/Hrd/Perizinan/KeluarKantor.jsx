@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
-import {Plus, Calendar, Clock, User, FileText, Filter,CheckCircle ,XCircle , Search, Check, X, Edit, Trash2, Eye, RefreshCw } from 'lucide-react';
+import {Plus, Calendar, Clock, User, FileText, Filter, CheckCircle, XCircle, Search, Check, X, Edit, Trash2, Eye, RefreshCw, Printer } from 'lucide-react';
 import LayoutTemplate from '@/Layouts/LayoutTemplate';
-import { usePage, router } from '@inertiajs/react'; // Tambahkan router
+import { usePage, router, Head } from '@inertiajs/react'; // Tambahkan router
 
 function KeluarKantor() {
   const [perizinans, setPerizinans] = useState([]);
@@ -17,8 +17,7 @@ function KeluarKantor() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [users, setUsers] = useState([]);
   const [heads, setHeads] = useState([]);
-
-    const { auth } = usePage().props;
+  const { auth } = usePage().props;
   const currentUser = auth?.user || auth; 
   
 
@@ -65,6 +64,21 @@ const isAuthorizedHRD = (item) => {
          item.status_disetujui === null;
 };
 
+const handlePrint = async (id) => {
+  try {
+    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+    
+    if (!csrfToken) {
+      throw new Error('CSRF token tidak ditemukan');
+    }
+
+    window.open(`/izin/${id}/pdf`, '_blank');
+    
+  } catch (error) {
+    console.error('Error printing perizinan:', error);
+    alert('Gagal generate PDF: ' + error.message);
+  }
+};
 // Helper function untuk cek apakah bisa menampilkan tombol aksi
 const canShowActionButtons = (item) => {
   return isAuthorizedHead(item) || isAuthorizedHRD(item);
@@ -173,7 +187,40 @@ const validateForm = () => {
   return Object.keys(errors).length === 0;
 };
 
-// Submit form
+// Tambahkan helper function untuk fresh CSRF token
+const fetchFreshCsrfToken = async () => {
+  try {
+    const response = await fetch(window.location.href, {
+      method: 'GET',
+      credentials: 'same-origin'
+    });
+    
+    if (response.ok) {
+      const html = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const newToken = doc.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (newToken) {
+        const metaTag = document.querySelector('meta[name="csrf-token"]');
+        if (metaTag) {
+          metaTag.setAttribute('content', newToken);
+        }
+        return newToken;
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching fresh CSRF token:', error);
+  }
+  return null;
+};
+
+// Ubah getCsrfToken menjadi arrow function biasa
+const getCsrfToken = () => {
+  return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+};
+
+// Ganti handleSubmit dengan ini:
 const handleSubmit = async (e) => {
   e.preventDefault();
   
@@ -182,6 +229,7 @@ const handleSubmit = async (e) => {
   }
   
   setLoading(true);
+  
   try {
     const submitData = { ...formData };
     
@@ -190,41 +238,84 @@ const handleSubmit = async (e) => {
       submitData.jam_kembali = '00:00';
     }
     
-    // PERBAIKAN: Ambil CSRF token dengan benar
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-    
-    if (!csrfToken) {
-      throw new Error('CSRF token tidak ditemukan');
-    }
+    let csrfToken = getCsrfToken();
     
     const response = await fetch('/hrd/perizinan/store', {
       method: 'POST',
       headers: {
-        'Accept': 'application/json',
         'Content-Type': 'application/json',
         'X-CSRF-TOKEN': csrfToken,
-        'X-Requested-With': 'XMLHttpRequest' // Tambahkan ini
+        'X-Requested-With': 'XMLHttpRequest',
+        'Accept': 'application/json'
       },
-      credentials: 'include',
+      credentials: 'same-origin',
       body: JSON.stringify(submitData)
     });
 
-    const result = await response.json();
-
-    if (!response.ok) {
-      if (result.errors) {
-        setFormErrors(result.errors);
+    // Handle CSRF token mismatch (419)
+    if (response.status === 419) {
+      const newToken = await fetchFreshCsrfToken();
+      
+      if (!newToken) {
+        throw new Error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.');
       }
-      throw new Error(result.message || 'Gagal menambahkan perizinan');
+
+      // Retry dengan token baru
+      const retryResponse = await fetch('/hrd/perizinan/store', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-CSRF-TOKEN': newToken,
+          'X-Requested-With': 'XMLHttpRequest',
+          'Accept': 'application/json'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify(submitData)
+      });
+
+      if (!retryResponse.ok) {
+        const errorData = await retryResponse.json();
+        if (errorData.errors) {
+          setFormErrors(errorData.errors);
+        }
+        throw new Error(errorData.message || `HTTP error! status: ${retryResponse.status}`);
+      }
+
+      const result = await retryResponse.json();
+      
+      if (result.success) {
+        alert('Perizinan berhasil ditambahkan!');
+        setShowAddModal(false);
+        resetForm();
+        fetchPerizinans();
+      }
+      return;
     }
 
-    alert('Perizinan berhasil ditambahkan!');
-    setShowAddModal(false);
-    resetForm();
-    fetchPerizinans();
+    if (!response.ok) {
+      const errorData = await response.json();
+      if (errorData.errors) {
+        setFormErrors(errorData.errors);
+      }
+      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
+    }
+
+    const result = await response.json();
+
+    if (result.success) {
+      alert('Perizinan berhasil ditambahkan!');
+      setShowAddModal(false);
+      resetForm();
+      fetchPerizinans();
+    }
   } catch (error) {
     console.error('Error adding perizinan:', error);
-    alert('Gagal menambahkan perizinan: ' + error.message);
+    if (error.message.includes('419') || error.message.includes('CSRF')) {
+      alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
+      window.location.reload();
+    } else {
+      alert('Gagal menambahkan perizinan: ' + error.message);
+    }
   } finally {
     setLoading(false);
   }
@@ -345,22 +436,7 @@ const handleSubmit = async (e) => {
     setShowRejectModal(true);
   };
 
- // Helper function untuk mendapatkan CSRF token
-const getCsrfToken = () => {
-  // Coba dari meta tag
-  let token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-  
-  // Jika tidak ada, coba dari cookie
-  if (!token) {
-    const cookies = document.cookie.split(';');
-    const csrfCookie = cookies.find(cookie => cookie.trim().startsWith('XSRF-TOKEN='));
-    if (csrfCookie) {
-      token = decodeURIComponent(csrfCookie.split('=')[1]);
-    }
-  }
-  
-  return token;
-};
+
 
 // Ganti confirmApproval
 const confirmApproval = () => {
@@ -373,7 +449,6 @@ const confirmApproval = () => {
       const message = isAuthorizedHead(selectedPerizinan) 
         ? 'Perizinan berhasil diketahui!' 
         : 'Perizinan berhasil disetujui!';
-      
       alert(message);
       setShowApprovalModal(false);
       setSelectedPerizinan(null);
@@ -447,6 +522,7 @@ const confirmReject = () => {
 
   return (
     <LayoutTemplate>
+        <Head title="Perizinan Keluar Kantor" />
         <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
@@ -726,6 +802,14 @@ const confirmReject = () => {
                             >
                               <Eye className="w-4 h-4" />
                             </button>
+                                <button
+                                  onClick={() => handlePrint(item.id)}
+                                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                                  title="Print PDF"
+                                >
+                                  <Printer className="w-4 h-4" />
+                                </button>
+
                             <button
                               onClick={() => handleDelete(item.id)}
                               className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
