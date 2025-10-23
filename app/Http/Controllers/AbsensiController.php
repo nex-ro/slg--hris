@@ -27,12 +27,16 @@ class AbsensiController extends Controller
     {
             $divisiName = str_replace('-', ' ', $divisi);
     $divisiName = ucwords($divisiName);
-    
-
         return Inertia::render('Atasan/Absensi', [
          'divisi' => $divisiName
 
         ]);
+    }
+    
+
+    public function absensiUser()
+    {
+        return Inertia::render('User/Absensi', []);
     }
         public function absensi()
     {

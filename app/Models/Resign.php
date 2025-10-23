@@ -13,7 +13,7 @@ class Resign extends Model
         'tanggal_keluar',
         'alasan',
         'status',
-        'active'
+        'active', 
         'dokument',
         'isDokument',
     ];

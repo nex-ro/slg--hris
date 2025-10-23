@@ -34,6 +34,27 @@ const [loadingUsers, setLoadingUsers] = useState(false);
   }
 }, [showModal, editMode]);
 
+useEffect(() => {
+  const interval = setInterval(() => {
+    router.reload({ only: ['sakits'] });
+  }, 5000);
+  return () => clearInterval(interval);
+}, []);
+
+
+useEffect(() => {
+  const handleSuccess = () => {
+    router.reload({ only: ['sakits'] });
+  };
+
+  window.addEventListener('sakit-updated', handleSuccess);
+  
+  return () => {
+    window.removeEventListener('sakit-updated', handleSuccess);
+  };
+}, []);
+
+
 const fetchUsers = async () => {
   setLoadingUsers(true);
   try {
@@ -137,6 +158,8 @@ const fetchUsers = async () => {
       onSuccess: () => {
         handleCloseModal();
         setProcessing(false);
+          router.reload({ only: ['sakits'], preserveScroll: true });
+
       },
       onError: (errors) => {
         console.error(errors);
@@ -151,6 +174,8 @@ const fetchUsers = async () => {
       onSuccess: () => {
         handleCloseModal();
         setProcessing(false);
+          router.reload({ only: ['sakits'], preserveScroll: true });
+
       },
       onError: (errors) => {
         console.error(errors);
@@ -192,6 +217,8 @@ const fetchUsers = async () => {
         {
           onSuccess: () => {
             setProcessing(false);
+              router.reload({ only: ['sakits'], preserveScroll: true });
+
           },
           onError: (errors) => {
             console.error(errors);
@@ -208,6 +235,8 @@ const fetchUsers = async () => {
       router.delete(`/admin/sakit/${id}`, {
         onSuccess: () => {
           alert("Data berhasil dihapus!");
+            router.reload({ only: ['sakits'], preserveScroll: true });
+
         },
         onError: (errors) => {
           console.error(errors);

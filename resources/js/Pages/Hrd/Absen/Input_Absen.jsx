@@ -115,11 +115,18 @@ function Input_Absen() {
               setGroupedData({});
               setLoading(false);
             } else {
-              const grouped = {};
-              const seenEntries = new Set();
-              let duplicateCount = 0;
-              
-              normalizedData.forEach(row => {
+              const sortedData = [...normalizedData].sort((a, b) => {
+                const dateTimeA = a["Date And Time"] || "";
+                const dateTimeB = b["Date And Time"] || "";
+                return dateTimeA.localeCompare(dateTimeB);
+              });
+
+            const grouped = {};
+            const seenEntries = new Set();
+            let duplicateCount = 0;
+
+            sortedData.forEach(row => {  // pakai sortedData, bukan normalizedData
+
                 const dateTime = row["Date And Time"] || "";
                 const [dateOnly, timeOnly] = dateTime.split(' ');
                 const personnelId = row["Personnel ID"] || "";

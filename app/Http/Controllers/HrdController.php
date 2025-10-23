@@ -636,6 +636,109 @@ private function getYearlyTableData($year, $tower, $divisi)
         ], 500); 
     } 
 }
+// Tambahkan di KehadiranController atau AbsensiController
+public function getByUser(Request $request): JsonResponse 
+{ 
+    try { 
+        $request->validate([ 
+            'uid' => 'required|exists:users,id',
+            'tanggal' => 'required|date_format:Y-m-d' 
+        ]); 
+     
+        $uid = $request->query('uid'); 
+        $tanggal = $request->query('tanggal'); 
+ 
+        $carbonDate = Carbon::parse($tanggal); 
+         
+        // Ambil data kehadiran user untuk bulan yang dipilih
+        $kehadiran = Kehadiran::where('uid', $uid)
+            ->whereYear('tanggal', $carbonDate->year)
+            ->whereMonth('tanggal', $carbonDate->month)
+            ->orderBy('tanggal', 'desc')
+            ->get(); 
+     
+        // Ambil TMK dan tanggal_keluar user untuk filter
+        $user = User::find($uid);
+        $userTMK = $user->tmk ? Carbon::parse($user->tmk) : null;
+        $userTanggalKeluar = $user->tanggal_keluar ? Carbon::parse($user->tanggal_keluar) : null;
+        
+        // Generate semua tanggal dalam bulan yang dipilih
+        $startDate = $carbonDate->copy()->startOfMonth();
+        $endDate = $carbonDate->copy()->endOfMonth();
+        $allDates = [];
+        
+        for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
+            // Skip jika tanggal lebih kecil dari TMK
+            if ($userTMK && $date->lt($userTMK)) {
+                continue;
+            }
+            
+            // Skip jika tanggal lebih besar dari tanggal_keluar
+            if ($userTanggalKeluar && $date->gt($userTanggalKeluar)) {
+                continue;
+            }
+            
+            $dateString = $date->format('Y-m-d');
+            $allDates[$dateString] = $date->copy();
+        }
+        
+        // Buat map dari data kehadiran yang ada
+        $kehadiranMap = $kehadiran->keyBy('tanggal');
+        
+        // Format response data untuk semua tanggal
+        $formattedData = collect($allDates)->map(function ($date, $dateString) use ($kehadiranMap) {
+            $attendance = $kehadiranMap->get($dateString);
+            
+            // Cek apakah hari Sabtu atau Minggu
+            $isSaturdayOrSunday = $date->isSaturday() || $date->isSunday();
+            
+            // Cek apakah libur nasional
+            $isNationalHoliday = Holiday::isHoliday($dateString);
+            
+            // Tentukan apakah hari libur
+            $isHoliday = $isSaturdayOrSunday || $isNationalHoliday;
+            
+            // Tentukan status berdasarkan kondisi
+            if ($isHoliday) {
+                $status = 'Libur Kerja';
+                $jamKedatangan = '00:00';
+                $jamPulang = '00:00';
+                $keterangan = null;
+            } elseif ($attendance) {
+                $status = $attendance->status;
+                $jamKedatangan = $attendance->jam_kedatangan  
+                    ? Carbon::parse($attendance->jam_kedatangan)->format('H:i')  
+                    : null;
+                $jamPulang = $attendance->jam_pulang  
+                    ? Carbon::parse($attendance->jam_pulang)->format('H:i')  
+                    : null;
+                $keterangan = $attendance->keterangan ?? null;
+            } else {
+                $status = 'N/A';
+                $jamKedatangan = null;
+                $jamPulang = null;
+                $keterangan = null;
+            }
+            
+            return [ 
+                'id' => $attendance->id ?? null, 
+                'tanggal' => $dateString, 
+                'status' => $status, 
+                'jam_kedatangan' => $jamKedatangan, 
+                'jam_pulang' => $jamPulang, 
+                'keterangan' => $keterangan,
+            ]; 
+        })->values(); // Convert collection ke array dengan index numerik
+     
+        return response()->json($formattedData, 200); 
+     
+    } catch (\Exception $e) { 
+        return response()->json([ 
+            'error' => 'Terjadi kesalahan', 
+            'message' => $e->getMessage() 
+        ], 500); 
+    } 
+}
 
 // Function baru khusus untuk filter divisi
 public function getByDateAndDivisi(Request $request): JsonResponse 

@@ -193,7 +193,7 @@ const DashboardLayouts = ({ children }) => {
 
     const pegawaiMenu = [
       { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
-      { icon: Calendar,label: 'Absen Saya', href: '/pegawai/absensi/checkin'},
+      { icon: Calendar,label: 'Absen Saya', href: `/pegawai/absensi/${userId}` },
       { icon: FileText, label: 'Dokumen', href: '/dokumen' },
       { icon: Thermometer, label: 'Sakit', href: '/pegawai/sakit' },
       { icon: CalendarClock, label: 'Perizinan', href: '/pegawai/izin' },

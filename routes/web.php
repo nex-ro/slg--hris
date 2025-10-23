@@ -60,6 +60,7 @@ Route::middleware('pegawai')->group(function () {
         'resign' => $resign
     ]); 
     });
+    Route::get('/pegawai/absensi/{id}', [AbsensiController::class, 'absensiUser'])->name('absensi');
     Route::put('/izin/{id}', [IzinController::class, 'update'])->name('izin.update');
     Route::get('/pegawai/sakit', [SakitController::class, 'index'])->middleware(['auth', 'verified'])->name('sakit.index');
     Route::post('/sakit', [SakitController::class, 'store'])->name('sakit.store');
@@ -163,7 +164,8 @@ Route::middleware('auth')->group(function () {
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
     Route::get('/api/userss', [IzinController::class, 'getUsers']);
     Route::get('/api/heads', [IzinController::class, 'getHeads']);
-Route::get('/izin/{id}/pdf', [IzinController::class, 'generatePdf'])->name('izin.pdf');
+    Route::get('/izin/{id}/pdf', [IzinController::class, 'generatePdf'])->name('izin.pdf');
+    Route::get('/api/kehadiran/by-user', [HrdController::class, 'getByUser']);
 
 });
 
