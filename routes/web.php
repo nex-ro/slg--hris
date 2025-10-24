@@ -16,6 +16,7 @@ use App\Models\Resign;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\SakitController;
 use App\Http\Controllers\IzinController;
+use App\Http\Controllers\CutiController;
 
 
 
@@ -76,6 +77,21 @@ Route::middleware('pegawai')->group(function () {
     Route::get('/dokumen', [PegawaiController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
     Route::post('/dokumen/resign', [PegawaiController::class, 'store'])->name('pegawai.resign.store');
     Route::put('/dokumen/resign/{id}', [PegawaiController::class, 'update'])->name('pegawai.resign.update');
+
+    Route::get('/pegawai/cuti', [CutiController::class, 'index'])->middleware(['auth', 'verified'])->name('pegawai.izin');
+    Route::put('/user/jatah-cuti/{id}', [CutiController::class, 'update'])->name('jatah-cuti.update');
+    Route::get('/user/jatah-cuti/{id}', [CutiController::class, 'show'])->name('jatah-cuti.show');
+    Route::post('/user/jatah-cuti', [CutiController::class, 'store'])->name('jatah-cuti.store');
+    Route::delete('/user/jatah-cuti/{id}', [CutiController::class, 'destroy'])->name('jatah-cuti.destroy');
+
+        Route::get('/hrd/cuti', [CutiController::class, 'Admin'])->name('hrd.cuti.index');
+
+            Route::get('/cuti', [CutiController::class, 'index'])->name('cuti.index');
+    Route::get('/cuti/create', [CutiController::class, 'create'])->name('cuti.create');
+    Route::post('/cuti/store', [CutiController::class, 'storePengajuan'])->name('cuti.store');
+    Route::get('/cuti/rekan-kerja', [CutiController::class, 'getRekanKerja'])->name('cuti.rekan-kerja');
+
+    Route::get('/cuti/approvers', [CutiController::class, 'getApprovers'])->name('cuti.approvers'); // Route baru
 
 });
 
@@ -145,6 +161,12 @@ Route::middleware('hrd')->group(function () {
     // Delete perizinan
     Route::delete('/perizinan/{id}', [IzinController::class, 'destroy']);
 
+    Route::get('/perizinan/cuti', [CutiController::class, 'Admin'])->middleware(['auth', 'verified'])->name('perizinan.keluar');
+    Route::get('/cuti', [CutiController::class, 'index'])->name('hrd.cuti.index');
+    Route::post('/cuti', [CutiController::class, 'store'])->name('hrd.cuti.store');
+    Route::put('/cuti/{id}', [CutiController::class, 'update'])->name('hrd.cuti.update');
+    Route::delete('/cuti/{id}', [CutiController::class, 'destroy'])->name('hrd.cuti.destroy');
+    Route::post('/cuti/calculate', [CutiController::class, 'calculateCuti'])->name('hrd.cuti.calculate');
 
 });
 Route::middleware('head')->group(function () {

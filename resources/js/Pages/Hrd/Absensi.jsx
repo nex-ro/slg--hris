@@ -47,6 +47,40 @@ function Absensi() {
   useEffect(() => {
     fetchHolidays(currentMonth.getFullYear());
   }, [currentMonth]);
+  useEffect(() => {
+  const interval = setInterval(() => {
+    fetchKehadiranData(selectedDate);
+  }, 30000); // 30 detik
+
+  return () => clearInterval(interval);
+}, [selectedDate]);
+// Auto-refresh hanya ketika tab browser aktif
+useEffect(() => {
+  let interval;
+  
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') {
+      fetchKehadiranData(selectedDate);
+      interval = setInterval(() => {
+        fetchKehadiranData(selectedDate);
+      }, 30000);
+    } else {
+      clearInterval(interval);
+    }
+  };
+
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  
+  // Start interval immediately
+  interval = setInterval(() => {
+    fetchKehadiranData(selectedDate);
+  }, 30000);
+
+  return () => {
+    clearInterval(interval);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+  };
+}, [selectedDate]);
 
   const fetchHolidays = async (year) => {
   try {
@@ -1104,6 +1138,30 @@ const getStatusBadge = (item, idx) => {
                           {tower}
                         </button>
                       ))}
+                      <button
+  onClick={() => fetchKehadiranData(selectedDate)}
+  disabled={loading}
+  className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+    loading 
+      ? 'bg-gray-400 cursor-not-allowed' 
+      : 'bg-gray-600 hover:bg-gray-700'
+  } text-white`}
+>
+  <svg 
+    className={`w-5 h-5 ${loading ? 'animate-spin' : ''}`} 
+    fill="none" 
+    stroke="currentColor" 
+    viewBox="0 0 24 24"
+  >
+    <path 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      strokeWidth={2} 
+      d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" 
+    />
+  </svg>
+  {loading ? 'Refreshing...' : 'Refresh'}
+</button>
                     </div>
                     <div className="flex items-center gap-2 mt-3">
                       <Users className="w-4 h-4 text-indigo-100" />
@@ -1138,6 +1196,7 @@ const getStatusBadge = (item, idx) => {
                         <UserPlus className="h-5 w-5" />
                         Tambah Manual
                       </button>
+
                     </div>
                   </div>
 

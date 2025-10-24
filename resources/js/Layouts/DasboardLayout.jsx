@@ -3,7 +3,9 @@ import { Link, usePage } from '@inertiajs/react';
 import { 
   Search, User, Settings, Bell, LayoutDashboard, Users, Calendar, LogOut, LogIn,
   Menu, X, Home, ChevronRight, ChevronDown, Activity, BarChart3, FileText,
-  List, ClipboardCheck, XCircle, FolderOpen, Calendar1, LogOutIcon, Clock,Thermometer,CalendarClock,MapPin
+  List, ClipboardCheck, XCircle, FolderOpen, Calendar1, LogOutIcon, Clock,Thermometer,CalendarClock,MapPin,
+  Umbrella,
+  UmbrellaIcon
 } from 'lucide-react';
 
 const DashboardLayouts = ({ children }) => {
@@ -163,7 +165,7 @@ const DashboardLayouts = ({ children }) => {
         subItems: [
           { icon: Thermometer, label: 'Sakit', href: '/perizinan/sakit' },
           { icon: CalendarClock, label: 'Keluar Kantor', href: '/perizinan/keluar-kantor' },
-          // { icon: MapPin, label: 'Dinas Luar', href: '/perizinan/dinas-luar' },
+          { icon: UmbrellaIcon, label: 'Izin Cuti', href: '/perizinan/cuti'},
         ],
       },
       // { icon: BarChart3, label: 'Laporan', href: '/reports/index' },
@@ -196,7 +198,8 @@ const DashboardLayouts = ({ children }) => {
       { icon: Calendar,label: 'Absen Saya', href: `/pegawai/absensi/${userId}` },
       { icon: FileText, label: 'Dokumen', href: '/dokumen' },
       { icon: Thermometer, label: 'Sakit', href: '/pegawai/sakit' },
-      { icon: CalendarClock, label: 'Perizinan', href: '/pegawai/izin' },
+      { icon: CalendarClock, label: 'Izin Keluar Kantor', href: '/pegawai/izin' },
+      { icon: UmbrellaIcon, label: 'Izin Cuti', href: '/pegawai/cuti'},
     ];
 
     // Return menu based on user role
