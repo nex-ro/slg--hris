@@ -168,6 +168,8 @@ Route::middleware('hrd')->group(function () {
     Route::delete('/cuti/{id}', [CutiController::class, 'destroy'])->name('hrd.cuti.destroy');
     Route::post('/cuti/calculate', [CutiController::class, 'calculateCuti'])->name('hrd.cuti.calculate');
 
+    Route::post('/hrd/cuti/approval', [CutiController::class, 'approval'])->name('hrd.cuti.approval');
+
 });
 Route::middleware('head')->group(function () {
     Route::get('/HEAD/dashboard', [HrdController::class, 'index'])->middleware(['auth', 'verified'])->name('head.dashboard');
@@ -188,6 +190,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/heads', [IzinController::class, 'getHeads']);
     Route::get('/izin/{id}/pdf', [IzinController::class, 'generatePdf'])->name('izin.pdf');
     Route::get('/api/kehadiran/by-user', [HrdController::class, 'getByUser']);
+    Route::get('/cuti/download-pdf/{id}', [CutiController::class, 'downloadPdf'])->name('cuti.download-pdf');
 
 });
 

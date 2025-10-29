@@ -401,44 +401,46 @@ private function getNamaHari($tanggal)
     
     return $hariIndo[$hariEnglish] ?? $hariEnglish;
 }
-    public function printKatering(Request $request)
-    {
-        $tanggal = $request->tanggal;
-        $tower = $request->tower;
-        $kehadiran = $request->kehadiran;
-        // Validasi data
-        if (empty($kehadiran) || empty($tower) || empty($tanggal)) {
-            return response()->json([
-                'error' => 'Data tidak lengkap'
-            ], 400);
-        }
-
-        try {
-            // Generate nama file
-            $fileName = "Katering_" . date('Y-m-d', strtotime($tanggal)) . ".xlsx";
-            
-            // Export Excel
-            return Excel::download(
-                new KateringExport($kehadiran, $tower, $tanggal), 
-                $fileName
-            );
-            
-        } catch (\Exception $e) {
-            \Log::error('Error generating katering report: ' . $e->getMessage());
-            
-            return response()->json([
-                'error' => 'Gagal membuat laporan katering',
-                'message' => $e->getMessage()
-            ], 500);
-        }
+public function printKatering(Request $request)
+{
+    $tanggal = $request->tanggal;
+    $tower = $request->tower;
+    $kehadiran = $request->kehadiran;
+    $tidakMakan = $request->yang_makan ?? []; 
+    Log::info('Tidak Makan IDs: ' . implode(',', $tidakMakan));
+    // Validasi data
+    if (empty($kehadiran) || empty($tower) || empty($tanggal)) {
+        return response()->json([
+            'error' => 'Data tidak lengkap'
+        ], 400);
     }
 
-    // Di Controller
+    try {
+        // Generate nama file
+        $fileName = "Katering_" . date('Y-m-d', strtotime($tanggal)) . ".xlsx";
+        
+        // Export Excel dengan filter tidak makan
+        return Excel::download(
+            new KateringExport($kehadiran, $tower, $tanggal, $tidakMakan), // KIRIM tidak_makan
+            $fileName
+        );
+        
+    } catch (\Exception $e) {
+        \Log::error('Error generating katering report: ' . $e->getMessage());
+        
+        return response()->json([
+            'error' => 'Gagal membuat laporan katering',
+            'message' => $e->getMessage()
+        ], 500);
+    }
+}
+
 public function printKateringPDF(Request $request)
 {
     $tanggal = $request->tanggal;
     $tower = $request->tower;
     $kehadiran = $request->kehadiran;
+    $tidakMakan = $request->yang_makan ?? []; 
     
     // Validasi data
     if (empty($kehadiran) || empty($tanggal)) {
@@ -448,13 +450,20 @@ public function printKateringPDF(Request $request)
     }
 
     try {
-        // Filter data hadir
-        $hadirCollection = collect($kehadiran)->filter(function($user) {
+        // Filter data hadir DAN bukan yang tidak makan
+        $hadirCollection = collect($kehadiran)->filter(function($user) use ($tidakMakan) {
             $status = strtolower(trim($user['status'] ?? ''));
-            return in_array($status, [
+            $userId = $user['user']['id'] ?? $user['uid'] ?? null;
+            
+            // Cek apakah statusnya hadir dan BUKAN termasuk yang tidak makan
+            $isHadir = in_array($status, [
                 'ontime', 'on time', 'hadir', 'terlambat',
                 'late', 'telat', 'fp-tr', 'FP-TR','c2','p2'
             ]);
+            
+            $isTidakMakan = in_array($userId, $tidakMakan);
+            
+            return $isHadir && !$isTidakMakan; // HANYA yang hadir DAN tidak masuk list tidak makan
         });
 
         // Group semua data by tower
@@ -485,20 +494,31 @@ public function printKateringPDF(Request $request)
         // Data Eiffel
         $eifelSakit = $getByStatus($eifelAll, ['sakit']);
         $eifelCuti = $getByStatus($eifelAll, ['c1', 'c3', 'cuti']);
-        $eifelWFH = $getByStatus($eifelAll, ['wfh']); // TAMBAHKAN INI
+        $eifelWFH = $getByStatus($eifelAll, ['wfh']);
         $eifelDinasLuar = $getByStatus($eifelAll, ['dinas_luar', 'dinas luar','dl']);
         $eifelKeluar = $getByStatus($eifelAll, ['p1','p3', 'keluar_kantor', 'keluar kantor']);
+
+        // TAMBAHAN: Data Tidak Makan Eiffel
+        $eifelTidakMakan = $eifelAll->filter(function($user) use ($tidakMakan) {
+            $userId = $user['user']['id'] ?? null;
+            return $userId && in_array($userId, $tidakMakan);
+        });
 
         // Data Liberty
         $libertySakit = $getByStatus($libertyAll, ['sakit']);
         $libertyCuti = $getByStatus($libertyAll, ['c1', 'c2', 'c3', 'cuti']);
-        $libertyWFH = $getByStatus($libertyAll, ['wfh']); // TAMBAHKAN INI
+        $libertyWFH = $getByStatus($libertyAll, ['wfh']);
         $libertyDinasLuar = $getByStatus($libertyAll, ['dinas_luar', 'dinas luar','dl']);
         $libertyKeluar = $getByStatus($libertyAll, ['p1', 'p2', 'p3', 'keluar_kantor', 'keluar kantor']);
+
+        // TAMBAHAN: Data Tidak Makan Liberty
+        $libertyTidakMakan = $libertyAll->filter(function($user) use ($tidakMakan) {
+            $userId = $user['user']['id'] ?? null;
+            return $userId && in_array($userId, $tidakMakan);
+        });
         // Hitung total
         $eifelTotal = $eifelAll->count();
         $libertyTotal = $libertyAll->count();
-        
         
         $wfhCount = $eifelWFH->count();
         $wfhCountL = $libertyWFH->count();
@@ -507,13 +527,31 @@ public function printKateringPDF(Request $request)
         $cutiCount = $eifelCuti->count();
         $dinasCount = $eifelDinasLuar->count();
         $keluarCount = $eifelKeluar->count();
-        $eifelHadirTotal = $eifelAll->count() - ($sakitCount + $cutiCount + $dinasCount + $keluarCount + $wfhCount);
         
+        // TAMBAHAN: Hitung yang tidak makan per tower
+        $tidakMakanEifel = collect($tidakMakan)->filter(function($userId) use ($eifelAll) {
+            return $eifelAll->contains(function($user) use ($userId) {
+                return ($user['user']['id'] ?? $user['uid'] ?? null) == $userId;
+            });
+        })->count();
+        
+        $tidakMakanCountEiffel = $eifelTidakMakan->count();
+        $eifelHadirTotal = $eifelAll->count() - ($sakitCount + $cutiCount + $dinasCount + $keluarCount + $wfhCount + $tidakMakanCountEiffel);
+
         $sakitCountL = $libertySakit->count();
         $cutiCountL = $libertyCuti->count();
         $dinasCountL = $libertyDinasLuar->count();
         $keluarCountL = $libertyKeluar->count();
-        $libertyHadirTotal = $libertyAll->count() - ($sakitCountL + $cutiCountL + $dinasCountL + $keluarCountL + $wfhCountL);
+        
+        // TAMBAHAN: Hitung yang tidak makan per tower
+        $tidakMakanLiberty = collect($tidakMakan)->filter(function($userId) use ($libertyAll) {
+            return $libertyAll->contains(function($user) use ($userId) {
+                return ($user['user']['id'] ?? $user['uid'] ?? null) == $userId;
+            });
+        })->count();
+        
+        $tidakMakanCountLiberty = $libertyTidakMakan->count();
+        $libertyHadirTotal = $libertyAll->count() - ($sakitCountL + $cutiCountL + $dinasCountL + $keluarCountL + $wfhCountL + $tidakMakanCountLiberty);
 
         // Hitung akumulasi
         $totalLantai19 = $eifelHadirTotal;
@@ -538,8 +576,6 @@ public function printKateringPDF(Request $request)
         $tahun = $tanggalObj->format('Y');
         $tanggalFormatted = $hari . ' ' . $bulan . ' ' . $tahun;
 
-
-        // Data untuk view
         $data = [
             'tanggal' => $tanggalFormatted,
             'eifelHadir' => $eifelHadir,
@@ -550,10 +586,12 @@ public function printKateringPDF(Request $request)
             'eifelCuti' => $eifelCuti,
             'eifelDinasLuar' => $eifelDinasLuar,
             'eifelKeluar' => $eifelKeluar,
+            'eifelTidakMakan' => $eifelTidakMakan, 
             'libertySakit' => $libertySakit,
             'libertyCuti' => $libertyCuti,
             'libertyDinasLuar' => $libertyDinasLuar,
             'libertyKeluar' => $libertyKeluar,
+            'libertyTidakMakan' => $libertyTidakMakan,
             'eifelHadirTotal' => $eifelHadirTotal,
             'libertyHadirTotal' => $libertyHadirTotal,
             'totalLantai19' => $totalLantai19,
@@ -568,10 +606,10 @@ public function printKateringPDF(Request $request)
             'cutiCountL' => $cutiCountL,
             'dinasCountL' => $dinasCountL,
             'keluarCountL' => $keluarCountL,
-            'eifelWFH' => $eifelWFH, // TAMBAHKAN INI
-            'libertyWFH' => $libertyWFH, // TAMBAHKAN INI
-            'wfhCount' => $wfhCount, // TAMBAHKAN INI
-            'wfhCountL' => $wfhCountL, // TAMBAHKAN INI
+            'eifelWFH' => $eifelWFH,
+            'libertyWFH' => $libertyWFH,
+            'wfhCount' => $wfhCount,
+            'wfhCountL' => $wfhCountL,
         ];
 
         // Load view untuk PDF

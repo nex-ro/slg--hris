@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Eye, Plus, Clock, AlertCircle, FileText, User, X, Save, CheckCircle } from 'lucide-react';
+import { Calendar, Eye, Plus, Clock, AlertCircle, FileText,Download, User, X, Save, CheckCircle } from 'lucide-react';
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
 import { router } from '@inertiajs/react';
 
@@ -18,9 +18,10 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
     alasan: '',
     id_penerima_tugas: '',
     tugas: '',
-        disetujui_oleh: '',
-    diketahui_oleh: '',
-    diterima: ''
+    diketahui_atasan: '',
+  diketahui_hrd: '',
+  disetujui: ''
+
 
     
   });
@@ -63,9 +64,10 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
       alasan: '',
       id_penerima_tugas: '',
       tugas: '',
-      disetujui_oleh: '',
-      diketahui_oleh: '',
-      diterima: ''
+          diketahui_atasan: '',
+    diketahui_hrd: '',
+    disetujui: ''
+
     });
     setErrors({});
     setShowFormModal(true);
@@ -81,9 +83,9 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
       alasan: '',
       id_penerima_tugas: '',
       tugas: '',
-      disetujui_oleh: '',
-      diketahui_oleh: '',
-      diterima: ''
+    diketahui_atasan: '',
+    diketahui_hrd: '',
+    disetujui: ''
     });
     setErrors({});
   };
@@ -136,7 +138,15 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+      if (!formData.diketahui_atasan && !formData.diketahui_hrd && !formData.disetujui) {
+    setErrors({
+      error: 'Minimal pilih satu jalur persetujuan (Atasan, HRD, atau Pimpinan)'
+    });
+    return;
+  }
+
     setProcessing(true);
+    
     
     router.post('/cuti/store', formData, {
       onSuccess: () => {
@@ -150,18 +160,29 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
     });
   };
 
-  const getStatusBadge = (status) => {
+    const getStatusBadge = (status) => {
     const statusConfig = {
-      'pending': { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Menunggu' },
+      'diproses': { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Menunggu' },
       'disetujui': { bg: 'bg-green-100', text: 'text-green-800', label: 'Disetujui' },
       'ditolak': { bg: 'bg-red-100', text: 'text-red-800', label: 'Ditolak' }
     };
-    const config = statusConfig[status] || statusConfig['pending'];
+    const config = statusConfig[status] || statusConfig['diproses'];
     return (
       <span className={`px-3 py-1 rounded-full text-xs font-semibold ${config.bg} ${config.text}`}>
         {config.label}
       </span>
     );
+  };
+
+  const getApprovalStatus = (approverUser, approvalStatus) => {
+    if (!approverUser || approverUser === null) {
+      return 'diproses';
+    }
+    if (!approvalStatus || approvalStatus === null) {
+      return 'diproses';
+    }
+
+    return approvalStatus;
   };
 
   const formatDate = (date) => {
@@ -176,60 +197,88 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
   return (
     <LayoutTemplate>
       <div className="p-6 max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-2">Cuti Saya</h1>
-          <p className="text-gray-600">Kelola pengajuan cuti Anda</p>
-        </div>
 
-        {/* Jatah Cuti Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          {/* Jatah Cuti Cards */}
-<div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-  {jatahCuti.map((jatah) => (
-    <div 
-      key={jatah.id} 
-      className={`rounded-lg p-6 text-white shadow-lg ${
-        jatah.is_current 
-          ? 'bg-gradient-to-br from-blue-500 to-blue-600' 
-          : 'bg-gradient-to-br from-purple-500 to-purple-600'
-      }`}
-    >
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h3 className="text-lg font-semibold">{jatah.label}</h3>
-          <p className="text-xs opacity-90 mt-1">{jatah.periode_range}</p>
-        </div>
-        <Calendar className="w-8 h-8 opacity-80" />
+<div className="mb-8">
+  {jatahCuti.length > 0 && jatahCuti[0] && (
+    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="px-6 py-4 bg-blue-600 text-white">
+        <h2 className="text-xl font-semibold">Informasi Jatah Cuti</h2>
       </div>
-      
-      {jatah.is_borrowable && (
-        <div className="mb-3 bg-white/20 rounded-lg p-2">
-          <p className="text-xs font-medium">
-            💡 Dapat dipinjam untuk kebutuhan mendadak
-          </p>
-        </div>
-      )}
-      
-      <div className="space-y-2">
-        <div className="flex justify-between">
-          <span className="opacity-90">Total Jatah:</span>
-          <span className="font-bold">{jatah.jumlah_cuti} hari</span>
-        </div>
-        <div className="flex justify-between">
-          <span className="opacity-90">Terpakai:</span>
-          <span className="font-bold">{jatah.cuti_dipakai} hari</span>
-        </div>
-        <div className="flex justify-between text-lg border-t border-white/20 pt-2">
-          <span>Sisa:</span>
-          <span className="font-bold">{jatah.sisa_cuti} hari</span>
-        </div>
+      <div className="p-6">
+        <table className="w-full">
+          <tbody className="divide-y divide-gray-200">
+            <tr>
+              <td className="py-2 text-sm text-gray-700 w-1/3">Tahun ke</td>
+              <td className="py-2 text-sm text-gray-900 font-medium">: {jatahCuti[0].tahun_ke || '1'}</td>
+            </tr>
+           <tr>
+            <td className="py-2 text-sm text-gray-700">TMK</td>
+            <td className="py-2 text-sm text-gray-900 font-medium">
+              : {jatahCuti[0].tmk ? new Date(jatahCuti[0].tmk).toLocaleDateString('id-ID', { 
+                  day: '2-digit', 
+                  month: '2-digit', 
+                  year: 'numeric' 
+                }) : '-'}
+              {jatahCuti[0].tmk && (
+                <span className="text-gray-600 ml-2">
+                  ({(() => {
+                    const years = jatahCuti[0].masa_kerja_tahun || 0;
+                    const months = jatahCuti[0].masa_kerja_bulan || 0;
+                    const days = Math.round(jatahCuti[0].masa_kerja_hari || 0); // ✅ dibulatkan
+                  
+                    let result = [];
+                  
+                    if (years > 0) result.push(`${years} tahun`);
+                    if (months > 0) result.push(`${months} bulan`);
+                    if (days > 0 || result.length === 0) result.push(`${days} hari`);
+                  
+                    return result.join(' ');
+                  })()})
+                </span>
+              )}
+            </td>
+          </tr>
+
+            <tr>
+              <td className="py-2 text-sm text-gray-700">Hak cuti sebenarnya</td>
+              <td className="py-2 text-sm text-gray-900 font-medium">
+                : {jatahCuti[0].jumlah_cuti} hari
+                {/* <button className="ml-3 text-blue-600 hover:text-blue-800 text-xs underline">
+                  Klik untuk setting hak cuti
+                </button> */}
+              </td>
+            </tr>
+            <tr>
+              <td className="py-2 text-sm text-gray-700">Dipinjam utk tahun ke {Math.max(jatahCuti[0].tahun_ke - 1, 0)}</td>
+              <td className="py-2 text-sm text-gray-900 font-medium">: {jatahCuti[0].pinjam_tahun_0 || '0'} hari</td>
+            </tr>
+            <tr>
+              <td className="py-2 text-sm text-gray-700">Dapat dipinjam cuti tahun ke {jatahCuti[0].tahun_ke +1}</td>
+              <td className="py-2 text-sm text-gray-900 font-medium">
+                : {jatahCuti[1].sisa_cuti || '0'} hari
+                {/* <button className="ml-3 text-blue-600 hover:text-blue-800 text-xs underline">
+                  Klik untuk pinjam cuti tahun ke 2
+                </button> */}
+              </td>
+            </tr>
+            <tr>
+              <td className="py-2 text-sm text-gray-700">Cuti bersama</td>
+              <td className="py-2 text-sm text-gray-900 font-medium">: {jatahCuti[0].cuti_bersama || '0'} hari</td>
+            </tr>
+            <tr>
+              <td className="py-2 text-sm text-gray-700">Telah terpakai</td>
+              <td className="py-2 text-sm text-gray-900 font-medium">: {jatahCuti[0].cuti_dipakai || '0'} hari</td>
+            </tr>
+            <tr className="bg-blue-50">
+              <td className="py-2 text-sm font-semibold text-gray-900">Sisa cuti</td>
+              <td className="py-2 text-sm font-bold text-blue-600">: {jatahCuti[0].sisa_cuti} hari</td>
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
-  ))}
+  )}
 </div>
-        </div>
-
         {/* Riwayat Pengajuan */}
         <div className="bg-white rounded-lg shadow-md overflow-hidden">
           <div className="px-6 py-4 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
@@ -280,20 +329,32 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
                         {cuti.alasan}
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        {getStatusBadge(cuti.status)}
+                        {getStatusBadge(cuti.status_final)}
                       </td>
+                      
                       <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <button
-                          onClick={() => {
-                            setSelectedCuti(cuti);
-                            setShowModal(true);
-                          }}
-                          className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                          title="Lihat Detail"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
-                      </td>
+  <div className="flex items-center justify-center gap-2">
+    <button
+      onClick={() => {
+        setSelectedCuti(cuti);
+        setShowModal(true);
+      }}
+      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+      title="Lihat Detail"
+    >
+      <Eye className="w-4 h-4" />
+    </button>
+    <button
+      onClick={() => {
+        window.open(`/cuti/download-pdf/${cuti.id}`, '_blank');
+      }}
+      className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+      title="Download PDF"
+    >
+      <Download className="w-4 h-4" />
+    </button>
+  </div>
+</td>
                     </tr>
                   ))
                 ) : (
@@ -472,80 +533,80 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
                     <CheckCircle className="w-4 h-4 text-blue-600" />
-                    Alur Persetujuan
+                    Alur Persetujuan <span className="text-red-500 text-xs">(Minimal pilih 1)</span>
                   </h4>
-
                   <div className="space-y-3">
-                    {/* Diperiksa Oleh */}
+                    {/* Diketahui Atasan */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Diperiksa Oleh (Supervisor/Manager)
+                        Diketahui Atasan (Supervisor/Manager)
                       </label>
                       <select
-                        name="disetujui_oleh"
-                        value={formData.disetujui_oleh}
+                        name="diketahui_atasan"
+                        value={formData.diketahui_atasan}
                         onChange={handleInputChange}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
-                        <option value="">Pilih Pemeriksa</option>
+                        <option value="">Pilih Atasan</option>
                         {approvers.map((approver) => (
                           <option key={approver.id} value={approver.id}>
                             {approver.name} {approver.jabatan ? `- ${approver.jabatan}` : ''}
                           </option>
                         ))}
                       </select>
-                      {errors.disetujui_oleh && (
-                        <p className="text-red-500 text-sm mt-1">{errors.disetujui_oleh}</p>
+                      {errors.diketahui_atasan && (
+                        <p className="text-red-500 text-sm mt-1">{errors.diketahui_atasan}</p>
                       )}
                     </div>
                     
-                    {/* Diketahui Oleh */}
+                    {/* Diketahui HRD */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Diketahui Oleh (HRD/Manager)
+                        Diketahui HRD
                       </label>
                       <select
-                        name="diketahui_oleh"
-                        value={formData.diketahui_oleh}
+                        name="diketahui_hrd"
+                        value={formData.diketahui_hrd}
                         onChange={handleInputChange}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
-                        <option value="">Pilih Yang Mengetahui</option>
+                        <option value="">Pilih HRD</option>
                         {approvers.map((approver) => (
                           <option key={approver.id} value={approver.id}>
                             {approver.name} {approver.jabatan ? `- ${approver.jabatan}` : ''}
                           </option>
                         ))}
                       </select>
-                      {errors.diketahui_oleh && (
-                        <p className="text-red-500 text-sm mt-1">{errors.diketahui_oleh}</p>
+                      {errors.diketahui_hrd && (
+                        <p className="text-red-500 text-sm mt-1">{errors.diketahui_hrd}</p>
                       )}
                     </div>
                     
-                    {/* Diterima */}
+                    {/* Disetujui */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Diterima (Direktur/Pimpinan)
+                        Disetujui (Direktur/Pimpinan)
                       </label>
                       <select
-                        name="diterima"
-                        value={formData.diterima}
+                        name="disetujui"
+                        value={formData.disetujui}
                         onChange={handleInputChange}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
-                        <option value="">Pilih Penerima</option>
+                        <option value="">Pilih Pimpinan</option>
                         {approvers.map((approver) => (
                           <option key={approver.id} value={approver.id}>
                             {approver.name} {approver.jabatan ? `- ${approver.jabatan}` : ''}
                           </option>
                         ))}
                       </select>
-                      {errors.diterima && (
-                        <p className="text-red-500 text-sm mt-1">{errors.diterima}</p>
+                      {errors.disetujui && (
+                        <p className="text-red-500 text-sm mt-1">{errors.disetujui}</p>
                       )}
                     </div>
                   </div>
                 </div>
+
 
 
                 {/* Delegasi Tugas */}
@@ -592,99 +653,7 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
                   )}
                 </div>
                 
-{/* Approval Flow Status - PERBAIKAN */}
-{selectedCuti && (selectedCuti.disetujui_oleh_user || selectedCuti.diketahui_oleh_user || selectedCuti.diterima_oleh_user) && (
-  <div className="border-t pt-4">
-    <h4 className="text-sm font-semibold text-gray-700 mb-3">Status Persetujuan</h4>
-    
-    {/* Diperiksa Oleh */}
-    {selectedCuti.disetujui_oleh_user && (
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <CheckCircle className="w-4 h-4 text-blue-600" />
-              <span className="text-sm font-medium text-gray-900">Diperiksa Oleh</span>
-            </div>
-            <p className="text-sm text-gray-700 ml-6">
-              {selectedCuti.disetujui_oleh_user.name} {selectedCuti.disetujui_oleh_user.jabatan && `- ${selectedCuti.disetujui_oleh_user.jabatan}`}
-            </p>
-          </div>
-          {selectedCuti.status_disetujui_oleh && (
-            <span className={`px-2 py-1 rounded text-xs font-semibold ${
-              selectedCuti.status_disetujui_oleh === 'disetujui' 
-                ? 'bg-green-100 text-green-800' 
-                : selectedCuti.status_disetujui_oleh === 'ditolak'
-                ? 'bg-red-100 text-red-800'
-                : 'bg-yellow-100 text-yellow-800'
-            }`}>
-              {selectedCuti.status_disetujui_oleh === 'disetujui' ? 'Disetujui' : 
-               selectedCuti.status_disetujui_oleh === 'ditolak' ? 'Ditolak' : 'Menunggu'}
-            </span>
-          )}
-        </div>
-      </div>
-    )}
-
-    {/* Diketahui Oleh */}
-    {selectedCuti.diketahui_oleh_user && (
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 mb-2">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <CheckCircle className="w-4 h-4 text-blue-600" />
-              <span className="text-sm font-medium text-gray-900">Diketahui Oleh</span>
-            </div>
-            <p className="text-sm text-gray-700 ml-6">
-              {selectedCuti.diketahui_oleh_user.name} {selectedCuti.diketahui_oleh_user.jabatan && `- ${selectedCuti.diketahui_oleh_user.jabatan}`}
-            </p>
-          </div>
-          {selectedCuti.status_diketahui_oleh && (
-            <span className={`px-2 py-1 rounded text-xs font-semibold ${
-              selectedCuti.status_diketahui_oleh === 'disetujui' 
-                ? 'bg-green-100 text-green-800' 
-                : selectedCuti.status_diketahui_oleh === 'ditolak'
-                ? 'bg-red-100 text-red-800'
-                : 'bg-yellow-100 text-yellow-800'
-            }`}>
-              {selectedCuti.status_diketahui_oleh === 'disetujui' ? 'Disetujui' : 
-               selectedCuti.status_diketahui_oleh === 'ditolak' ? 'Ditolak' : 'Menunggu'}
-            </span>
-          )}
-        </div>
-      </div>
-    )}
-
-    {/* Diterima */}
-    {selectedCuti.diterima_oleh_user && (
-      <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
-        <div className="flex items-center justify-between">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <CheckCircle className="w-4 h-4 text-blue-600" />
-              <span className="text-sm font-medium text-gray-900">Diterima</span>
-            </div>
-            <p className="text-sm text-gray-700 ml-6">
-              {selectedCuti.diterima_oleh_user.name} {selectedCuti.diterima_oleh_user.jabatan && `- ${selectedCuti.diterima_oleh_user.jabatan}`}
-            </p>
-          </div>
-          {selectedCuti.status_diterima && (
-            <span className={`px-2 py-1 rounded text-xs font-semibold ${
-              selectedCuti.status_diterima === 'disetujui' 
-                ? 'bg-green-100 text-green-800' 
-                : selectedCuti.status_diterima === 'ditolak'
-                ? 'bg-red-100 text-red-800'
-                : 'bg-yellow-100 text-yellow-800'
-            }`}>
-              {selectedCuti.status_diterima === 'disetujui' ? 'Disetujui' : 
-               selectedCuti.status_diterima === 'ditolak' ? 'Ditolak' : 'Menunggu'}
-            </span>
-          )}
-        </div>
-      </div>
-    )}
-  </div>
-)}
+             
                 {/* Error Global */}
                 {errors.error && (
                   <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-2">
@@ -716,6 +685,22 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
             </div>
         )}
 
+{jatahCuti[0].is_periode_0 && (
+  <div className="mt-4 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+    <div className="flex items-start gap-3">
+      <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5" />
+      <div>
+        <p className="text-sm font-semibold text-yellow-900">
+          Masa Percobaan - Belum Mendapat Jatah Cuti
+        </p>
+        <p className="text-sm text-yellow-700 mt-1">
+          Anda masih dalam periode percobaan. Jatah cuti 12 hari akan aktif setelah Anda bekerja selama 1 tahun penuh.
+        </p>
+      </div>
+    </div>
+  </div>
+)}
+
         {/* Modal Detail */}
         {showModal && selectedCuti && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -735,7 +720,7 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
                   <div className="flex items-center justify-between">
                     <div>
                       <label className="text-sm font-medium text-gray-600">Status</label>
-                      <div className="mt-1">{getStatusBadge(selectedCuti.status)}</div>
+                      <div className="mt-1">{getStatusBadge(selectedCuti.status_final)}</div>
                     </div>
                     <div className="text-right">
                       <label className="text-sm font-medium text-gray-600">Durasi</label>
@@ -803,25 +788,78 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
                   </div>
                 )}
 
+                {/* Status Approval */}
+                <div className="border-t pt-4">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-3">Status Persetujuan</h4>
+                  <div className="space-y-3">
+                    {/* Atasan - Selalu tampil */}
+                    <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Diketahui Atasan</p>
+                        <p className="text-xs text-gray-600">
+                          {selectedCuti.diketahui_atasan_user?.name || 'Belum Ditentukan'}
+                        </p>
+                      </div>
+                      {getStatusBadge(getApprovalStatus(
+                        selectedCuti.diketahui_atasan_user, 
+                        selectedCuti.status_diketahui_atasan
+                      ))}
+                    </div>
+                    
+                    {/* HRD - Selalu tampil */}
+                    <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Diketahui HRD</p>
+                        <p className="text-xs text-gray-600">
+                          {selectedCuti.diketahui_hrd_user?.name || 'Belum Ditentukan'}
+                        </p>
+                      </div>
+                      {getStatusBadge(getApprovalStatus(
+                        selectedCuti.diketahui_hrd_user, 
+                        selectedCuti.status_diketahui_hrd
+                      ))}
+                    </div>
+                    
+                    {/* Pimpinan - Selalu tampil */}
+                    <div className="flex items-center justify-between bg-gray-50 p-3 rounded-lg">
+                      <div>
+                        <p className="text-sm font-medium text-gray-700">Disetujui Pimpinan</p>
+                        <p className="text-xs text-gray-600">
+                          {selectedCuti.disetujui_user?.name || 'Belum Ditentukan'}
+                        </p>
+                      </div>
+                      {getStatusBadge(getApprovalStatus(
+                        selectedCuti.disetujui_user, 
+                        selectedCuti.status_disetujui
+                      ))}
+                    </div>
+                  </div>
+                </div>
                 {selectedCuti.catatan && (
                   <div className="border-t pt-4">
-                    <label className="text-sm font-medium text-gray-600">Catatan dari HRD</label>
+                    <label className="text-sm font-medium text-gray-600">Catatan dari Atasan</label>
                     <p className="text-gray-900 mt-1 bg-yellow-50 p-3 rounded border border-yellow-200">
                       {selectedCuti.catatan}
                     </p>
                   </div>
                 )}
 
-                {selectedCuti.disetujui_oleh && (
-                  <div className="border-t pt-4">
-                    <label className="text-sm font-medium text-gray-600">
-                      {selectedCuti.status === 'disetujui' ? 'Disetujui Oleh' : 'Ditolak Oleh'}
-                    </label>
-                    <p className="text-gray-900">{selectedCuti.disetujui_oleh}</p>
-                  </div>
-                )}
+              {(selectedCuti.status_diketahui_atasan === 'diproses' || 
+  selectedCuti.status_diketahui_hrd === 'diproses' || 
+  selectedCuti.status_disetujui === 'diproses') && (
+  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-2">
+    <Clock className="w-5 h-5 text-yellow-600 mt-0.5" />
+    <div>
+      <p className="text-sm font-medium text-yellow-900">Menunggu Persetujuan</p>
+      <p className="text-sm text-yellow-700">
+        Pengajuan cuti Anda sedang dalam proses review. 
+        Silakan cek status approval di atas untuk melihat progress.
+      </p>
+    </div>
+  </div>
+)}
 
-                {selectedCuti.status === 'pending' && (
+                {selectedCuti.status_final === 'diproses' && (
                   <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-2">
                     <Clock className="w-5 h-5 text-yellow-600 mt-0.5" />
                     <div>
@@ -831,7 +869,17 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
                   </div>
                 )}
               </div>
+                            <div className="p-6 border-t border-gray-200">
+                <button
+                  onClick={() => setShowModal(false)}
+                  className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                >
+                  Tutup
+                </button>
+              </div>
+
             </div>
+            
           </div>
         )}
       </div>

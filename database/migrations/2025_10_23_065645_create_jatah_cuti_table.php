@@ -13,12 +13,13 @@ return new class extends Migration
             $table->unsignedBigInteger('uid');
             $table->integer('tahun_ke')->nullable();
             $table->year('tahun');
-            $table->integer('jumlah_cuti')->default(12);
-            $table->integer('cuti_dipakai')->default(0);
-            $table->integer('sisa_cuti')->default(12);
+            $table->decimal('jumlah_cuti', 5, 2)->default(12.00); 
+            $table->decimal('cuti_dipakai', 5, 2)->default(0.00);
+            $table->decimal('sisa_cuti', 5, 2)->default(12.00);
+            $table->decimal('pinjam_tahun_prev', 5, 2)->default(0.00);
+            $table->decimal('pinjam_tahun_next', 5, 2)->default(0.00);
             $table->string('keterangan')->nullable();
             $table->timestamps();
-
             $table->foreign('uid')->references('id')->on('users')->onDelete('cascade');
         });
 
@@ -28,25 +29,40 @@ return new class extends Migration
             $table->unsignedBigInteger('jatah_cuti_id')->nullable();
             $table->date('tanggal_mulai');
             $table->date('tanggal_selesai');
-            $table->integer('jumlah_hari');
+            $table->decimal('jumlah_hari', 5, 2);
+            $table->boolean('cuti_setengah_hari')->default(false);
             $table->string('alasan')->nullable();
-            $table->enum('status', ['diproses', 'disetujui', 'ditolak'])->default('diproses');
-            $table->unsignedBigInteger('disetujui_oleh')->nullable();
-            $table->unsignedBigInteger('diketahui_oleh')->nullable();
-            $table->boolean('diterima')->default(false);
             $table->date('tanggal_pengajuan')->nullable();
+            
+            // User ID untuk approval
+            $table->unsignedBigInteger('diketahui_atasan')->nullable();
+            $table->unsignedBigInteger('diketahui_hrd')->nullable();
+            $table->unsignedBigInteger('disetujui')->nullable();
+            
+            // Status untuk setiap approval
+            $table->enum('status_diketahui_atasan', ['diproses', 'disetujui', 'ditolak'])->nullable();
+            $table->enum('status_diketahui_hrd', ['diproses', 'disetujui', 'ditolak'])->nullable();
+            $table->enum('status_disetujui', ['diproses', 'disetujui', 'ditolak'])->nullable();
+            $table->enum('status_final', ['diproses', 'disetujui', 'ditolak'])->default('diproses');
+
+            $table->unsignedBigInteger('id_penerima_tugas')->nullable();
+            $table->text('tugas')->nullable();
+            $table->text('catatan')->nullable();
+            
             $table->timestamps();
-            $table->enum('status_disetujui_oleh', ['diproses', 'disetujui', 'ditolak'])->default('diproses');
-            $table->enum('status_diketahui_oleh', ['diproses', 'disetujui', 'ditolak'])->default('diproses');
-            $table->enum('status_diterima', ['diproses', 'disetujui', 'ditolak'])->default('diproses');
+
             $table->foreign('uid')->references('id')->on('users')->onDelete('cascade');
             $table->foreign('jatah_cuti_id')->references('id')->on('jatah_cuti')->onDelete('set null');
+            $table->foreign('diketahui_atasan')->references('id')->on('users')->onDelete('set null');
+            $table->foreign('diketahui_hrd')->references('id')->on('users')->onDelete('set null');
+            $table->foreign('disetujui')->references('id')->on('users')->onDelete('set null');
+            $table->foreign('id_penerima_tugas')->references('id')->on('users')->onDelete('set null');
         });
     }
 
     public function down(): void
     {
         Schema::dropIfExists('pemakaian_cuti');
-        Schema::dropIfExists('jatah_cuti');
+        Schema::dropIfExists('jatah_cuti'); 
     }
 };

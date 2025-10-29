@@ -18,20 +18,32 @@ class KateringExport implements FromCollection, WithHeadings, WithStyles, WithCo
     protected $kehadiran;
     protected $tower;
     protected $tanggal;
+    protected $tidakMakan;
 
-    public function __construct($kehadiran, $tower, $tanggal)
+    public function __construct($kehadiran, $tower, $tanggal, $tidakMakan = [])
     {
         $this->kehadiran = $kehadiran;
         $this->tower = $tower;
         $this->tanggal = $tanggal;
+        $this->tidakMakan = is_array($tidakMakan) ? array_map('intval', $tidakMakan) : [];
+        
+        // Debug log untuk melihat struktur data
+        \Log::info('TidakMakan IDs:', $this->tidakMakan);
+        if (!empty($kehadiran)) {
+            \Log::info('Sample Kehadiran Structure:', [
+                'first_item' => $kehadiran[0] ?? 'empty'
+            ]);
+        }
     }
 
     public function collection()
     {
         $data = [];
+        
+        // Filter kehadiran: hadir DAN tidak ada di daftar tidakMakan
         $hadirCollection = collect($this->kehadiran)->filter(function($user) {
             $status = strtolower(trim($user['status'] ?? ''));
-            return in_array($status, [
+            $isHadir = in_array($status, [
                 'ontime', 
                 'on time', 
                 'hadir', 
@@ -43,7 +55,30 @@ class KateringExport implements FromCollection, WithHeadings, WithStyles, WithCo
                 'c2',
                 'p2',
             ]);
+            
+            // User ID ada di $user['user']['id'] berdasarkan struktur log
+            $userId = isset($user['user']['id']) ? intval($user['user']['id']) : null;
+            
+            if ($userId === null) {
+                return $isHadir; // Jika tidak ada user ID, tetap masukkan jika hadir
+            }
+            
+            // Hanya masukkan jika hadir DAN tidak ada di daftar tidakMakan
+            $tidakMakanList = $this->tidakMakan;
+            $notInTidakMakan = !in_array($userId, $tidakMakanList, true);
+            
+            // Debug log
+            if ($isHadir && !$notInTidakMakan) {
+                \Log::info('Excluded from Hadir (TidakMakan):', [
+                    'user_id' => $userId,
+                    'name' => $user['user']['name'] ?? 'unknown'
+                ]);
+            }
+            
+            return $isHadir && $notInTidakMakan;
         });
+        
+        \Log::info('Hadir Collection Count:', ['count' => $hadirCollection->count()]);
 
         // Group semua data by tower
         $allGrouped = collect($this->kehadiran)->groupBy('tower')->sortKeys();
@@ -65,12 +100,42 @@ class KateringExport implements FromCollection, WithHeadings, WithStyles, WithCo
             });
         };
 
+        // Fungsi untuk mendapatkan data tidak makan berdasarkan tower
+        $getTidakMakan = function($collection) {
+            $result = $collection->filter(function($user) {
+                // User ID ada di $user['user']['id']
+                $userId = isset($user['user']['id']) ? intval($user['user']['id']) : null;
+                
+                if ($userId === null) {
+                    return false;
+                }
+                
+                $tidakMakanList = $this->tidakMakan;
+                $isInList = in_array($userId, $tidakMakanList, true);
+                
+                // Debug log untuk setiap user yang cocok
+                if ($isInList) {
+                    \Log::info('Found TidakMakan User:', [
+                        'user_id' => $userId,
+                        'name' => $user['user']['name'] ?? 'unknown',
+                        'tower' => $user['tower'] ?? 'unknown'
+                    ]);
+                }
+                
+                return $isInList;
+            });
+            
+            \Log::info('TidakMakan Filter Result Count:', ['count' => $result->count()]);
+            return $result;
+        };
+
         // Data Eifel
         $eifelSakit = $getByStatus($eifelAll, ['sakit']);
         $eifelCuti = $getByStatus($eifelAll, ['c1','c3', 'cuti']);
         $eifelWFH = $getByStatus($eifelAll, ['wfh']);
         $eifelDinasLuar = $getByStatus($eifelAll, ['dinas_luar', 'dinas luar','dl']);
         $eifelKeluar = $getByStatus($eifelAll, ['p1', 'p3', 'keluar_kantor', 'keluar kantor']);
+        $eifelTidakMakan = $getTidakMakan($eifelAll);
 
         // Data Liberty
         $libertySakit = $getByStatus($libertyAll, ['sakit']);
@@ -78,12 +143,13 @@ class KateringExport implements FromCollection, WithHeadings, WithStyles, WithCo
         $libertyWFH = $getByStatus($libertyAll, ['wfh']);
         $libertyDinasLuar = $getByStatus($libertyAll, ['dinas_luar', 'dinas luar','dl']);
         $libertyKeluar = $getByStatus($libertyAll, ['p1', 'p3', 'keluar_kantor', 'keluar kantor']);
+        $libertyTidakMakan = $getTidakMakan($libertyAll);
 
         // Total keseluruhan
         $eifelTotal = $eifelAll->count();
         $libertyTotal = $libertyAll->count();
 
-        // Total hadir
+        // Total hadir (yang makan katering)
         $eifelHadirTotal = $eifelHadir->count();
         $libertyHadirTotal = $libertyHadir->count();
 
@@ -198,7 +264,21 @@ class KateringExport implements FromCollection, WithHeadings, WithStyles, WithCo
             $eifelKeterangan[] = ['Keluar kantor', "0", ''];
         }
 
-        $eifelHadirTotals = $eifelAll->count() - ($sakitCount + $cutiCount + $wfhCount + $dinasCount + $keluarCount);
+        // Tidak Makan
+        $tidakMakanCount = $eifelTidakMakan->count();
+        $tidakMakanArray = $eifelTidakMakan->values()->all();
+        if ($tidakMakanCount > 0) {
+            $nama = $tidakMakanArray[0]['user']['name'] ?? $tidakMakanArray[0]['nama'] ?? $tidakMakanArray[0]['name'] ?? '';
+            $eifelKeterangan[] = ['Tidak Makan', $tidakMakanCount, $nama];
+            for ($i = 1; $i < $tidakMakanCount; $i++) {
+                $nama = $tidakMakanArray[$i]['user']['name'] ?? $tidakMakanArray[$i]['nama'] ?? $tidakMakanArray[$i]['name'] ?? '';
+                $eifelKeterangan[] = ['', '', $nama];
+            }
+        } else {
+            $eifelKeterangan[] = ['Tidak Makan', "0", ''];
+        }
+
+        $eifelHadirTotals = $eifelAll->count() - ($sakitCount + $cutiCount + $wfhCount + $dinasCount + $keluarCount + $tidakMakanCount);
         $eifelKeterangan[] = ['', '', ''];
         if($eifelHadirTotals > 0){
             $eifelKeterangan[] = ['Total', $eifelHadirTotals, ''];
@@ -283,7 +363,21 @@ class KateringExport implements FromCollection, WithHeadings, WithStyles, WithCo
             $libertyKeterangan[] = ['Keluar kantor', "0", ''];
         }
 
-        $libertyHadirTotals = $libertyAll->count() - ($sakitCountL + $cutiCountL + $wfhCountL + $dinasCountL + $keluarCountL);
+        // Tidak Makan
+        $tidakMakanCountL = $libertyTidakMakan->count();
+        $tidakMakanArrayL = $libertyTidakMakan->values()->all();
+        if ($tidakMakanCountL > 0) {
+            $nama = $tidakMakanArrayL[0]['user']['name'] ?? $tidakMakanArrayL[0]['nama'] ?? $tidakMakanArrayL[0]['name'] ?? '';
+            $libertyKeterangan[] = ['Tidak Makan', $tidakMakanCountL, $nama];
+            for ($i = 1; $i < $tidakMakanCountL; $i++) {
+                $nama = $tidakMakanArrayL[$i]['user']['name'] ?? $tidakMakanArrayL[$i]['nama'] ?? $tidakMakanArrayL[$i]['name'] ?? '';
+                $libertyKeterangan[] = ['', '', $nama];
+            }
+        } else {
+            $libertyKeterangan[] = ['Tidak Makan', "0", ''];
+        }
+
+        $libertyHadirTotals = $libertyAll->count() - ($sakitCountL + $cutiCountL + $wfhCountL + $dinasCountL + $keluarCountL + $tidakMakanCountL);
         $libertyKeterangan[] = ['', '', ''];
         if($libertyHadirTotals > 0){
             $libertyKeterangan[] = ['Total', $libertyHadirTotals, ''];
@@ -291,10 +385,10 @@ class KateringExport implements FromCollection, WithHeadings, WithStyles, WithCo
             $libertyKeterangan[] = ['Total', '0', ''];
         }
 
-        // Hitung total untuk akumulasi
-        $totalLantai19 = $eifelHadirTotals;
-        $totalLantai1 = $libertyHadirTotals;
-        $totalMarein = 0; // Sesuaikan jika ada data Marein
+        // Hitung total untuk akumulasi (yang makan katering)
+        $totalLantai19 = $eifelHadirTotal;
+        $totalLantai1 = $libertyHadirTotal;
+        $totalMarein = 0;
         $totalAkumulasi = $totalLantai19 + $totalLantai1 + $totalMarein;
 
         // Tambahkan tabel akumulasi

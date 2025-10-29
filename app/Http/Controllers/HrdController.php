@@ -729,9 +729,8 @@ public function getByUser(Request $request): JsonResponse
                 'keterangan' => $keterangan,
             ]; 
         })->values(); // Convert collection ke array dengan index numerik
-     
+
         return response()->json($formattedData, 200); 
-     
     } catch (\Exception $e) { 
         return response()->json([ 
             'error' => 'Terjadi kesalahan', 

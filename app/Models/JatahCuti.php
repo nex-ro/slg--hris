@@ -18,8 +18,11 @@ class JatahCuti extends Model
         'jumlah_cuti',
         'cuti_dipakai',
         'sisa_cuti',
+        'pinjam_tahun_prev',
+        'pinjam_tahun_next',
         'keterangan',
     ];
+    
     public function user()
     {
         return $this->belongsTo(User::class, 'uid');

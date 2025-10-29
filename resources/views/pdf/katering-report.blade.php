@@ -183,17 +183,18 @@
                     <td class="center">{{ $eifelTotal }}</td>
                     <td>Orang</td>
                 </tr>
+                
+                <!-- Sakit -->
                 <tr>
                     <td>Sakit</td>
-                    <td class="center">{{ $eifelSakit->count() }}</td>
+                    <td class="center">{{ $sakitCount }}</td>
                     <td>
-                        @foreach($eifelSakit as $item)
-                            {{ $item['user']['name'] ?? $item['nama'] ?? $item['name'] ?? '' }}
-                            @if(!$loop->last), @endif
-                        @endforeach
+                        @if($sakitCount > 0)
+                            {{ $eifelSakit->first()['user']['name'] ?? $eifelSakit->first()['nama'] ?? $eifelSakit->first()['name'] ?? '' }}
+                        @endif
                     </td>
                 </tr>
-                @if($eifelSakit->count() > 1)
+                @if($sakitCount > 1)
                     @foreach($eifelSakit->skip(1) as $item)
                         <tr>
                             <td></td>
@@ -202,16 +203,18 @@
                         </tr>
                     @endforeach
                 @endif
+                
+                <!-- Cuti -->
                 <tr>
                     <td>Cuti</td>
-                    <td class="center">{{ $eifelCuti->count() }}</td>
+                    <td class="center">{{ $cutiCount }}</td>
                     <td>
-                        @if($eifelCuti->count() > 0)
+                        @if($cutiCount > 0)
                             {{ $eifelCuti->first()['user']['name'] ?? $eifelCuti->first()['nama'] ?? $eifelCuti->first()['name'] ?? '' }}
                         @endif
                     </td>
                 </tr>
-                @if($eifelCuti->count() > 1)
+                @if($cutiCount > 1)
                     @foreach($eifelCuti->skip(1) as $item)
                         <tr>
                             <td></td>
@@ -220,52 +223,18 @@
                         </tr>
                     @endforeach
                 @endif
-                <tr>
-                    <td>Dinas Luar</td>
-                    <td class="center">{{ $eifelDinasLuar->count() }}</td>
-                    <td>
-                        @if($eifelDinasLuar->count() > 0)
-                            {{ $eifelDinasLuar->first()['user']['name'] ?? $eifelDinasLuar->first()['nama'] ?? $eifelDinasLuar->first()['name'] ?? '' }}
-                        @endif
-                    </td>
-                </tr>
-                @if($eifelDinasLuar->count() > 1)
-                    @foreach($eifelDinasLuar->skip(1) as $item)
-                        <tr>
-                            <td></td>
-                            <td></td>
-                            <td>{{ $item['user']['name'] ?? $item['nama'] ?? $item['name'] ?? '' }}</td>
-                        </tr>
-                    @endforeach
-                @endif
-                <tr>
-                    <td>Keluar kantor</td>
-                    <td class="center">{{ $eifelKeluar->count() }}</td>
-                    <td>
-                        @if($eifelKeluar->count() > 0)
-                            {{ $eifelKeluar->first()['user']['name'] ?? $eifelKeluar->first()['nama'] ?? $eifelKeluar->first()['name'] ?? '' }}
-                        @endif
-                    </td>
-                </tr>
-                @if($eifelKeluar->count() > 1)
-                    @foreach($eifelKeluar->skip(1) as $item)
-                        <tr>
-                            <td></td>
-                            <td></td>
-                            <td>{{ $item['user']['name'] ?? $item['nama'] ?? $item['name'] ?? '' }}</td>
-                        </tr>
-                    @endforeach
-                @endif
+                
+                <!-- WFH -->
                 <tr>
                     <td>WFH</td>
-                    <td class="center">{{ $eifelWFH->count() }}</td>
+                    <td class="center">{{ $wfhCount }}</td>
                     <td>
-                        @if($eifelWFH->count() > 0)
+                        @if($wfhCount > 0)
                             {{ $eifelWFH->first()['user']['name'] ?? $eifelWFH->first()['nama'] ?? $eifelWFH->first()['name'] ?? '' }}
                         @endif
                     </td>
                 </tr>
-                @if($eifelWFH->count() > 1)
+                @if($wfhCount > 1)
                     @foreach($eifelWFH->skip(1) as $item)
                         <tr>
                             <td></td>
@@ -274,6 +243,67 @@
                         </tr>
                     @endforeach
                 @endif
+                
+                <!-- Dinas Luar -->
+                <tr>
+                    <td>Dinas Luar</td>
+                    <td class="center">{{ $dinasCount }}</td>
+                    <td>
+                        @if($dinasCount > 0)
+                            {{ $eifelDinasLuar->first()['user']['name'] ?? $eifelDinasLuar->first()['nama'] ?? $eifelDinasLuar->first()['name'] ?? '' }}
+                        @endif
+                    </td>
+                </tr>
+                @if($dinasCount > 1)
+                    @foreach($eifelDinasLuar->skip(1) as $item)
+                        <tr>
+                            <td></td>
+                            <td></td>
+                            <td>{{ $item['user']['name'] ?? $item['nama'] ?? $item['name'] ?? '' }}</td>
+                        </tr>
+                    @endforeach
+                @endif
+                
+                <!-- Keluar kantor -->
+                <tr>
+                    <td>Keluar kantor</td>
+                    <td class="center">{{ $keluarCount }}</td>
+                    <td>
+                        @if($keluarCount > 0)
+                            {{ $eifelKeluar->first()['user']['name'] ?? $eifelKeluar->first()['nama'] ?? $eifelKeluar->first()['name'] ?? '' }}
+                        @endif
+                    </td>
+                </tr>
+                @if($keluarCount > 1)
+                    @foreach($eifelKeluar->skip(1) as $item)
+                        <tr>
+                            <td></td>
+                            <td></td>
+                            <td>{{ $item['user']['name'] ?? $item['nama'] ?? $item['name'] ?? '' }}</td>
+                        </tr>
+                    @endforeach
+                @endif
+                
+                <!-- Tidak Makan -->
+                <tr>
+                    <td>Tidak Makan</td>
+                    <td class="center">{{ $eifelTidakMakan->count() }}</td>
+                    <td>
+                        @if($eifelTidakMakan->count() > 0)
+                            {{ $eifelTidakMakan->first()['user']['name'] ?? $eifelTidakMakan->first()['nama'] ?? $eifelTidakMakan->first()['name'] ?? '' }}
+                        @endif
+                    </td>
+                </tr>
+                @if($eifelTidakMakan->count() > 1)
+                    @foreach($eifelTidakMakan->skip(1) as $item)
+                        <tr>
+                            <td></td>
+                            <td></td>
+                            <td>{{ $item['user']['name'] ?? $item['nama'] ?? $item['name'] ?? '' }}</td>
+                        </tr>
+                    @endforeach
+                @endif
+                
                 <tr class="border-top">
                     <td colspan="3" class="no-border">&nbsp;</td>
                 </tr>
@@ -301,16 +331,18 @@
                     <td class="center">{{ $libertyTotal }}</td>
                     <td>Orang</td>
                 </tr>
+                
+                <!-- Sakit -->
                 <tr>
                     <td>Sakit</td>
-                    <td class="center">{{ $libertySakit->count() }}</td>
+                    <td class="center">{{ $sakitCountL }}</td>
                     <td>
-                        @if($libertySakit->count() > 0)
+                        @if($sakitCountL > 0)
                             {{ $libertySakit->first()['user']['name'] ?? $libertySakit->first()['nama'] ?? $libertySakit->first()['name'] ?? '' }}
                         @endif
                     </td>
                 </tr>
-                @if($libertySakit->count() > 1)
+                @if($sakitCountL > 1)
                     @foreach($libertySakit->skip(1) as $item)
                         <tr>
                             <td></td>
@@ -319,16 +351,18 @@
                         </tr>
                     @endforeach
                 @endif
+                
+                <!-- Cuti -->
                 <tr>
                     <td>Cuti</td>
-                    <td class="center">{{ $libertyCuti->count() }}</td>
+                    <td class="center">{{ $cutiCountL }}</td>
                     <td>
-                        @if($libertyCuti->count() > 0)
+                        @if($cutiCountL > 0)
                             {{ $libertyCuti->first()['user']['name'] ?? $libertyCuti->first()['nama'] ?? $libertyCuti->first()['name'] ?? '' }}
                         @endif
                     </td>
                 </tr>
-                @if($libertyCuti->count() > 1)
+                @if($cutiCountL > 1)
                     @foreach($libertyCuti->skip(1) as $item)
                         <tr>
                             <td></td>
@@ -337,53 +371,18 @@
                         </tr>
                     @endforeach
                 @endif
-                <tr>
-                    <td>Dinas Luar</td>
-                    <td class="center">{{ $libertyDinasLuar->count() }}</td>
-                    <td>
-                        @if($libertyDinasLuar->count() > 0)
-                            {{ $libertyDinasLuar->first()['user']['name'] ?? $libertyDinasLuar->first()['nama'] ?? $libertyDinasLuar->first()['name'] ?? '' }}
-                        @endif
-                    </td>
-                </tr>
-                @if($libertyDinasLuar->count() > 1)
-                    @foreach($libertyDinasLuar->skip(1) as $item)
-                        <tr>
-                            <td></td>
-                            <td></td>
-                            <td>{{ $item['user']['name'] ?? $item['nama'] ?? $item['name'] ?? '' }}</td>
-                        </tr>
-                    @endforeach
-                @endif
-                <tr>
-                    <td>Keluar kantor</td>
-                    <td class="center">{{ $libertyKeluar->count() }}</td>
-                    <td>
-                        @if($libertyKeluar->count() > 0)
-                            {{ $libertyKeluar->first()['user']['name'] ?? $libertyKeluar->first()['nama'] ?? $libertyKeluar->first()['name'] ?? '' }}
-                        @endif
-                    </td>
-                </tr>
-                @if($libertyKeluar->count() > 1)
-                    @foreach($libertyKeluar->skip(1) as $item)
-                        <tr>
-                            <td></td>
-                            <td></td>
-                            <td>{{ $item['user']['name'] ?? $item['nama'] ?? $item['name'] ?? '' }}</td>
-                        </tr>
-                    @endforeach
-                @endif
-                {{-- Untuk Liberty - Setelah bagian Cuti --}}
+                
+                <!-- WFH -->
                 <tr>
                     <td>WFH</td>
-                    <td class="center">{{ $libertyWFH->count() }}</td>
+                    <td class="center">{{ $wfhCountL }}</td>
                     <td>
-                        @if($libertyWFH->count() > 0)
+                        @if($wfhCountL > 0)
                             {{ $libertyWFH->first()['user']['name'] ?? $libertyWFH->first()['nama'] ?? $libertyWFH->first()['name'] ?? '' }}
                         @endif
                     </td>
                 </tr>
-                @if($libertyWFH->count() > 1)
+                @if($wfhCountL > 1)
                     @foreach($libertyWFH->skip(1) as $item)
                         <tr>
                             <td></td>
@@ -392,6 +391,67 @@
                         </tr>
                     @endforeach
                 @endif
+                
+                <!-- Dinas Luar -->
+                <tr>
+                    <td>Dinas Luar</td>
+                    <td class="center">{{ $dinasCountL }}</td>
+                    <td>
+                        @if($dinasCountL > 0)
+                            {{ $libertyDinasLuar->first()['user']['name'] ?? $libertyDinasLuar->first()['nama'] ?? $libertyDinasLuar->first()['name'] ?? '' }}
+                        @endif
+                    </td>
+                </tr>
+                @if($dinasCountL > 1)
+                    @foreach($libertyDinasLuar->skip(1) as $item)
+                        <tr>
+                            <td></td>
+                            <td></td>
+                            <td>{{ $item['user']['name'] ?? $item['nama'] ?? $item['name'] ?? '' }}</td>
+                        </tr>
+                    @endforeach
+                @endif
+                
+                <!-- Keluar kantor -->
+                <tr>
+                    <td>Keluar kantor</td>
+                    <td class="center">{{ $keluarCountL }}</td>
+                    <td>
+                        @if($keluarCountL > 0)
+                            {{ $libertyKeluar->first()['user']['name'] ?? $libertyKeluar->first()['nama'] ?? $libertyKeluar->first()['name'] ?? '' }}
+                        @endif
+                    </td>
+                </tr>
+                @if($keluarCountL > 1)
+                    @foreach($libertyKeluar->skip(1) as $item)
+                        <tr>
+                            <td></td>
+                            <td></td>
+                            <td>{{ $item['user']['name'] ?? $item['nama'] ?? $item['name'] ?? '' }}</td>
+                        </tr>
+                    @endforeach
+                @endif
+                
+                <!-- Tidak Makan -->
+                <tr>
+                    <td>Tidak Makan</td>
+                    <td class="center">{{ $libertyTidakMakan->count() }}</td>
+                    <td>
+                        @if($libertyTidakMakan->count() > 0)
+                            {{ $libertyTidakMakan->first()['user']['name'] ?? $libertyTidakMakan->first()['nama'] ?? $libertyTidakMakan->first()['name'] ?? '' }}
+                        @endif
+                    </td>
+                </tr>
+                @if($libertyTidakMakan->count() > 1)
+                    @foreach($libertyTidakMakan->skip(1) as $item)
+                        <tr>
+                            <td></td>
+                            <td></td>
+                            <td>{{ $item['user']['name'] ?? $item['nama'] ?? $item['name'] ?? '' }}</td>
+                        </tr>
+                    @endforeach
+                @endif
+                
                 <tr class="border-top">
                     <td colspan="3" class="no-border">&nbsp;</td>
                 </tr>

@@ -308,12 +308,14 @@
             <div class="signature-box">
                 <div class="signature-title">Diminta oleh :</div>
                 <div class="signature-space">
-                    @if($perizinan->status === 'Disetujui' && $perizinan->user->ttd)
+                    @if($perizinan->status === 'Disetujui')
                         @php
-                            $ttdPath = public_path('storage/ttd/' . basename($perizinan->user->ttd));
+                            $userTtdPath = $perizinan->user->ttd ? public_path('storage/ttd/' . basename($perizinan->user->ttd)) : null;
                         @endphp
-                        @if(file_exists($ttdPath))
-                            <img src="{{ $ttdPath }}" alt="TTD" class="signature-image">
+                        @if($userTtdPath && file_exists($userTtdPath))
+                            <img src="{{ $userTtdPath }}" alt="TTD" class="signature-image">
+                        @else
+                            <img src="{{ public_path('asset/acc.png') }}" alt="Disetujui" class="signature-image">
                         @endif
                     @endif
                     <div class="signature-line"></div>
@@ -328,15 +330,19 @@
             <div class="signature-box">
                 <div class="signature-title">Diketahui oleh :</div>
                 <div class="signature-space">
-                    @if($perizinan->status_diketahui === 'Disetujui' && $perizinan->diketahuiOleh && $perizinan->diketahuiOleh->ttd)
+                    @if($perizinan->status_diketahui === 'Disetujui')
                         @php
-                            $ttdPath = public_path('storage/ttd/' . basename($perizinan->diketahuiOleh->ttd));
+                            $diketahuiTtdPath = ($perizinan->diketahuiOleh && $perizinan->diketahuiOleh->ttd) 
+                                ? public_path('storage/ttd/' . basename($perizinan->diketahuiOleh->ttd)) 
+                                : null;
                         @endphp
-                        @if(file_exists($ttdPath))
-                            <img src="{{ $ttdPath }}" alt="TTD" class="signature-image">
+                        @if($diketahuiTtdPath && file_exists($diketahuiTtdPath))
+                            <img src="{{ $diketahuiTtdPath }}" alt="TTD" class="signature-image">
+                        @else
+                            <img src="{{ public_path('asset/acc.png') }}" alt="Disetujui" class="signature-image">
                         @endif
                     @elseif($perizinan->status_diketahui === 'Ditolak')
-                        <div class="rejection-text">DITOLAK</div>
+                        <img src="{{ public_path('asset/rejected.png') }}" alt="Ditolak" class="signature-image">
                     @endif
                     <div class="signature-line"></div>
                 </div>
@@ -350,15 +356,19 @@
             <div class="signature-box">
                 <div class="signature-title">Disetujui oleh :</div>
                 <div class="signature-space">
-                    @if($perizinan->status_disetujui === 'Disetujui' && $perizinan->disetujuiOleh && $perizinan->disetujuiOleh->ttd)
+                    @if($perizinan->status_disetujui === 'Disetujui')
                         @php
-                            $ttdPath = public_path('storage/ttd/' . basename($perizinan->disetujuiOleh->ttd));
+                            $disetujuiTtdPath = ($perizinan->disetujuiOleh && $perizinan->disetujuiOleh->ttd) 
+                                ? public_path('storage/ttd/' . basename($perizinan->disetujuiOleh->ttd)) 
+                                : null;
                         @endphp
-                        @if(file_exists($ttdPath))
-                            <img src="{{ $ttdPath }}" alt="TTD" class="signature-image">
+                        @if($disetujuiTtdPath && file_exists($disetujuiTtdPath))
+                            <img src="{{ $disetujuiTtdPath }}" alt="TTD" class="signature-image">
+                        @else
+                            <img src="{{ public_path('asset/acc.png') }}" alt="Disetujui" class="signature-image">
                         @endif
                     @elseif($perizinan->status_disetujui === 'Ditolak')
-                        <div class="rejection-text">DITOLAK</div>
+                        <img src="{{ public_path('asset/rejected.png') }}" alt="Ditolak" class="signature-image">
                     @endif
                     <div class="signature-line"></div>
                 </div>

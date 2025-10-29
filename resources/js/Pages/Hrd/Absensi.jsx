@@ -26,6 +26,55 @@ function Absensi() {
   const [selectedKehadiran, setSelectedKehadiran] = useState(null);
   const [keteranganText, setKeteranganText] = useState('');
 
+  const [showYangMakanModal, setShowYangMakanModal] = useState(false); // ubah nama
+  const [selectedYangMakan, setSelectedYangMakan] = useState([]); // ubah nama
+  const [tempSelectedYangMakan, setTempSelectedYangMakan] = useState([]); // ubah nama
+  const [searchYangMakan, setSearchYangMakan] = useState(''); // ubah nama
+  const [exportFormat, setExportFormat] = useState(null);
+
+  const getAllKaryawanHadir = () => {
+  return rawKehadiranData.filter(item => {
+    const status = (item.status || '').toLowerCase().trim();
+    return ['ontime', 'on time', 'hadir', 'terlambat', 'late', 'telat', 'fp-tr', 'c2', 'p2'].includes(status);
+  });
+};
+
+const toggleSelectYangMakan = (userId) => {
+  setTempSelectedYangMakan(prev => {
+    if (prev.includes(userId)) {
+      return prev.filter(id => id !== userId);
+    } else {
+      return [...prev, userId];
+    }
+  });
+};
+
+
+const handleConfirmYangMakan = () => {
+  setSelectedYangMakan(tempSelectedYangMakan);
+  setShowYangMakanModal(false);
+  
+  // Dapatkan semua karyawan yang hadir
+  const karyawanHadir = getAllKaryawanHadir();
+  const allUserIds = karyawanHadir.map(k => k.user?.id || k.uid).filter(id => id);
+  
+  // Hitung yang TIDAK dipilih (tidak makan)
+  const yangTidakMakan = allUserIds.filter(id => !tempSelectedYangMakan.includes(id));
+  
+  // Lanjutkan export dengan mengirim yang TIDAK MAKAN
+  if (exportFormat === 'excel') {
+    handlePrintKateringFormatFinal('excel', yangTidakMakan);
+  } else if (exportFormat === 'pdf') {
+    handlePrintKateringFormatFinal('pdf', yangTidakMakan);
+  }
+  
+  // Reset
+  setSearchYangMakan('');
+  setExportFormat(null);
+};
+
+
+
   // Fungsi untuk mengecek apakah tanggal adalah weekend (Sabtu/Minggu)
   const isWeekend = (date) => {
     const day = date.getDay();
@@ -351,76 +400,253 @@ const handleStatusChange = async (kehadiranId, newStatus, userData = null, tangg
   };
 
   const handlePrintKateringFormat = async (format) => {
-    try {
-      setShowKateringModal(false);
-      let csrfToken = getCsrfToken();
+  setShowKateringModal(false);
+  setExportFormat(format);
+  
+  // Ambil semua karyawan yang hadir
+  const karyawanHadir = getAllKaryawanHadir();
+  
+  if (karyawanHadir.length === 0) {
+    alert('Tidak ada karyawan yang hadir untuk dicetak');
+    return;
+  }
+  
+  const allUserIds = karyawanHadir.map(k => k.user?.id || k.uid).filter(id => id);
+  setTempSelectedYangMakan(allUserIds);
+  setShowYangMakanModal(true);
+};
+
+
+const handlePrintKateringFormatFinal = async (format, yangMakanIds) => {
+  try {
+    let csrfToken = getCsrfToken();
+    
+    const endpoint = format === 'pdf' ? '/print-katering-pdf' : '/print-katering';
+    const fileExtension = format === 'pdf' ? 'pdf' : 'xlsx';
+    console.log(yangMakanIds)
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        tanggal: formatDateForAPI(selectedDate),
+        tower: activeTower,
+        kehadiran: rawKehadiranData,
+        yang_makan: yangMakanIds // KIRIM DATA YANG MAKAN (bukan tidak_makan)
+      })
+    });
+
+    if (response.status === 419) {
+      const newToken = await fetchFreshCsrfToken();
       
-      const endpoint = format === 'pdf' ? '/print-katering-pdf' : '/print-katering';
-      const fileExtension = format === 'pdf' ? 'pdf' : 'xlsx';
-      
-      const response = await fetch(endpoint, {
+      if (!newToken) {
+        throw new Error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.');
+      }
+
+      const retryResponse = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
+          'X-CSRF-TOKEN': newToken,
           'X-Requested-With': 'XMLHttpRequest'
         },
         credentials: 'same-origin',
         body: JSON.stringify({
           tanggal: formatDateForAPI(selectedDate),
           tower: activeTower,
-          kehadiran: rawKehadiranData
+          kehadiran: rawKehadiranData,
+          yang_makan: yangMakanIds
         })
       });
 
-      if (response.status === 419) {
-        const newToken = await fetchFreshCsrfToken();
-        
-        if (!newToken) {
-          throw new Error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.');
-        }
-
-        const retryResponse = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': newToken,
-            'X-Requested-With': 'XMLHttpRequest'
-          },
-          credentials: 'same-origin',
-          body: JSON.stringify({
-            tanggal: formatDateForAPI(selectedDate),
-            tower: activeTower,
-            kehadiran: rawKehadiranData
-          })
-        });
-
-        if (!retryResponse.ok) {
-          throw new Error(`HTTP error! status: ${retryResponse.status}`);
-        }
-
-        const blob = await retryResponse.blob();
-        downloadFile(blob, `Katering_${formatDateForAPI(selectedDate)}.${fileExtension}`);
-        return;
+      if (!retryResponse.ok) {
+        throw new Error(`HTTP error! status: ${retryResponse.status}`);
       }
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const blob = await response.blob();
+      const blob = await retryResponse.blob();
       downloadFile(blob, `Katering_${formatDateForAPI(selectedDate)}.${fileExtension}`);
-      
-    } catch (error) {
-      console.error('Error print katering:', error);
-      if (error.message.includes('419') || error.message.includes('CSRF')) {
-        alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
-        window.location.reload();
-      } else {
-        alert(`Error: ${error.message}`);
-      }
+      return;
     }
-  };
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    downloadFile(blob, `Katering_${formatDateForAPI(selectedDate)}.${fileExtension}`);
+    
+  } catch (error) {
+    console.error('Error print katering:', error);
+    if (error.message.includes('419') || error.message.includes('CSRF')) {
+      alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
+      window.location.reload();
+    } else {
+      alert(`Error: ${error.message}`);
+    }
+  }
+};
+
+// UBAH MODAL COMPONENT (UI berubah: checked = makan, unchecked = tidak makan)
+const ModalYangMakan = () => {
+  const karyawanHadir = getAllKaryawanHadir();
+  const filteredKaryawan = karyawanHadir.filter(item => {
+    const nama = (item.user?.name || item.nama || '').toLowerCase();
+    const search = searchYangMakan.toLowerCase();
+    return nama.includes(search);
+  });
+
+  const totalYangMakan = tempSelectedYangMakan.length;
+  const totalTidakMakan = karyawanHadir.length - totalYangMakan;
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col overflow-hidden">
+        <div className="bg-gradient-to-r from-green-600 to-green-500 px-6 py-4 flex-shrink-0">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-lg">
+                <Users className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-white">Daftar Karyawan Yang Makan</h3>
+                <p className="text-green-100 text-sm mt-1">
+                  <span className="font-bold">{totalYangMakan}</span> makan • 
+                  <span className="font-bold ml-1">{totalTidakMakan}</span> tidak makan • 
+                  <span className="ml-1">dari {karyawanHadir.length} karyawan</span>
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                setShowYangMakanModal(false);
+                setSearchYangMakan('');
+                setExportFormat(null);
+              }}
+              className="text-white hover:bg-white/20 p-1 rounded-lg transition"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 border-b border-gray-200 flex-shrink-0">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Cari nama karyawan..."
+              value={searchYangMakan}
+              onChange={(e) => setSearchYangMakan(e.target.value)}
+              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+            />
+          </div>
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => setTempSelectedYangMakan(karyawanHadir.map(k => k.user?.id || k.uid))}
+              className="flex-1 px-3 py-2 bg-green-100 text-green-700 rounded-lg hover:bg-green-200 transition text-sm font-medium"
+            >
+              ✓ Semua Makan
+            </button>
+            <button
+              onClick={() => setTempSelectedYangMakan([])}
+              className="flex-1 px-3 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition text-sm font-medium"
+            >
+              ✗ Semua Tidak Makan
+            </button>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-4">
+          {filteredKaryawan.length === 0 ? (
+            <div className="text-center py-8 text-gray-500">
+              <AlertCircle className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p className="font-medium">Tidak ada karyawan ditemukan</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-2">
+              {filteredKaryawan.map((item, idx) => {
+                const userId = item.user?.id || item.uid;
+                const isMakan = tempSelectedYangMakan.includes(userId);
+                
+                return (
+                  <button
+                    key={`${userId}-${idx}`}
+                    onClick={() => toggleSelectYangMakan(userId)}
+                    className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${
+                      isMakan
+                        ? 'border-green-500 bg-green-50'
+                        : 'border-red-300 bg-red-50'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 rounded border-2 flex items-center justify-center flex-shrink-0 ${
+                      isMakan
+                        ? 'bg-green-500 border-green-500'
+                        : 'bg-white border-red-400'
+                    }`}>
+                      {isMakan && (
+                        <CheckCircle className="w-4 h-4 text-white" />
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 flex-1">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0 ${
+                        isMakan ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                      }`}>
+                        {(item.user?.name || item.nama || 'U').charAt(0).toUpperCase()}
+                      </div>
+                      <div className="text-left flex-1">
+                        <h4 className="font-semibold text-gray-800">
+                          {item.user?.name || item.nama || 'Nama Tidak Tersedia'}
+                        </h4>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-gray-500">
+                            {item.tower || 'Tower'} • ID: {userId || '-'}
+                          </p>
+                          <span className={`text-xs font-bold px-2 py-0.5 rounded ${
+                            isMakan 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-red-100 text-red-700'
+                          }`}>
+                            {isMakan ? 'MAKAN' : 'TIDAK MAKAN'}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex gap-3 flex-shrink-0">
+          <button
+            onClick={() => {
+              setShowYangMakanModal(false);
+              setSearchYangMakan('');
+              setExportFormat(null);
+            }}
+            className="flex-1 px-4 py-2.5 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition font-medium"
+          >
+            Batal
+          </button>
+          <button
+            onClick={handleConfirmYangMakan}
+            className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition font-medium flex items-center justify-center gap-2"
+          >
+            <CheckCircle className="w-5 h-5" />
+            Konfirmasi & Export ({totalYangMakan} porsi)
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 
   const downloadFile = (blob, filename) => {
     const url = window.URL.createObjectURL(blob);
@@ -637,7 +863,6 @@ const handleStatusChange = async (kehadiranId, newStatus, userData = null, tangg
 const getStatusBadge = (item, idx) => {
   const status = item.status;
   const kehadiranId = item.id;
-  console.log(item)
   
   const statusInfo = statusOptions.find(s => s.value === status) || {
     label: status || 'Unknown',
@@ -774,7 +999,6 @@ const getStatusBadge = (item, idx) => {
 
   const activeStatusOption = statusOptions.find(s => s.value === statusFilter) || statusOptions[0];
 
-  console.log(paginatedKehadiran)
   const handleManualSave = () => {
     fetchKehadiranData(selectedDate);
   };
@@ -865,7 +1089,7 @@ const getStatusBadge = (item, idx) => {
   </div>
 )}
 
-      
+      {showYangMakanModal && <ModalYangMakan/>}
       {showAbsensiModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full mx-4 overflow-hidden">

@@ -19,20 +19,19 @@ class PemakaianCuti extends Model
         'cuti_setengah_hari',
         'jumlah_hari',
         'alasan',
-        'status',
-        'disetujui_oleh',
-        'diketahui_oleh',
-        'diterima',
-        'status_disetujui_oleh',
-        'status_diketahui_oleh',
-        'status_diterima',
+        'diketahui_atasan',
+        'diketahui_hrd',
+        'disetujui',
+        'status_diketahui_atasan',
+        'status_diketahui_hrd',
+        'status_disetujui',
+        'status_final',
         'tanggal_pengajuan',
         'catatan',
         'id_penerima_tugas',
         'tugas'
     ];
 
-    // Tambahkan casting untuk tanggal
     protected $casts = [
         'tanggal_mulai' => 'date',
         'tanggal_selesai' => 'date',
@@ -44,29 +43,59 @@ class PemakaianCuti extends Model
     {
         return $this->belongsTo(User::class, 'uid');
     }
+    public function updateStatusFinal()
+{
+    // Cek apakah ada yang ditolak
+    if ($this->status_diketahui_atasan === 'ditolak' || 
+        $this->status_diketahui_hrd === 'ditolak' || 
+        $this->status_disetujui === 'ditolak') {
+        $this->status_final = 'ditolak';
+        return 'ditolak';
+    }
+    
+    // Cek apakah semua yang diperlukan sudah disetujui
+    $allApproved = true;
+    
+    if ($this->diketahui_atasan && $this->status_diketahui_atasan !== 'disetujui') {
+        $allApproved = false;
+    }
+    if ($this->diketahui_hrd && $this->status_diketahui_hrd !== 'disetujui') {
+        $allApproved = false;
+    }
+    if ($this->disetujui && $this->status_disetujui !== 'disetujui') {
+        $allApproved = false;
+    }
+    
+    if ($allApproved) {
+        $this->status_final = 'disetujui';
+        return 'disetujui';
+    }
+    
+    $this->status_final = 'diproses';
+    return 'diproses';
+}
+
 
     public function jatahCuti()
     {
         return $this->belongsTo(JatahCuti::class, 'jatah_cuti_id');
     }
-// Di class PemakaianCuti, tambahkan method relasi berikut:
 
-public function disetujuiOlehUser()
-{
-    return $this->belongsTo(User::class, 'disetujui_oleh', 'id');
-}
+    public function diketahuiAtasanUser()
+    {
+        return $this->belongsTo(User::class, 'diketahui_atasan', 'id');
+    }
 
-public function diketahuiOlehUser()
-{
-    return $this->belongsTo(User::class, 'diketahui_oleh', 'id');
-}
+    public function diketahuiHrdUser()
+    {
+        return $this->belongsTo(User::class, 'diketahui_hrd', 'id');
+    }
 
-public function diterimaOlehUser()
-{
-    return $this->belongsTo(User::class, 'diterima', 'id');
-}
+    public function disetujuiUser()
+    {
+        return $this->belongsTo(User::class, 'disetujui', 'id');
+    }
 
-    // Relasi untuk penerima tugas
     public function penerimaTugas()
     {
         return $this->belongsTo(User::class, 'id_penerima_tugas');
