@@ -232,10 +232,7 @@
             <td>TMK (Tanggal Masuk Kerja)</td>
             <td>: {{ $user->tmk ? \Carbon\Carbon::parse($user->tmk)->format('d F Y') : '-' }}</td>
         </tr>
-        <tr>
-            <td>Alamat Selama Cuti</td>
-            <td>: {{ $user->keterangan ?? '-' }}</td>
-        </tr>
+        
     </table>
 
     @if($pemakaianCuti->id_penerima_tugas)

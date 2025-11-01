@@ -161,8 +161,8 @@ Route::middleware('hrd')->group(function () {
     // Delete perizinan
     Route::delete('/perizinan/{id}', [IzinController::class, 'destroy']);
 
-    Route::get('/perizinan/cuti', [CutiController::class, 'Admin'])->middleware(['auth', 'verified'])->name('perizinan.keluar');
-    Route::get('/cuti', [CutiController::class, 'index'])->name('hrd.cuti.index');
+    Route::get('/perizinan/cuti', [CutiController::class, 'Admin'])->middleware(['auth', 'verified'])->name('perizinan.cuti');
+    Route::get('/cuti', [CutiController::class, 'index'])->name('cuti.index');
     Route::post('/cuti', [CutiController::class, 'store'])->name('hrd.cuti.store');
     Route::put('/cuti/{id}', [CutiController::class, 'update'])->name('hrd.cuti.update');
     Route::delete('/cuti/{id}', [CutiController::class, 'destroy'])->name('hrd.cuti.destroy');
@@ -191,7 +191,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/izin/{id}/pdf', [IzinController::class, 'generatePdf'])->name('izin.pdf');
     Route::get('/api/kehadiran/by-user', [HrdController::class, 'getByUser']);
     Route::get('/cuti/download-pdf/{id}', [CutiController::class, 'downloadPdf'])->name('cuti.download-pdf');
-
 });
 
 require __DIR__.'/auth.php';

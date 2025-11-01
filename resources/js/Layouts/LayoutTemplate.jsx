@@ -187,6 +187,8 @@ const LayoutTemplate = ({ children }) => {
         subItems: [
           { icon: Thermometer, label: 'Sakit', href: '/perizinan/sakit' },
           { icon: CalendarClock, label: 'Keluar Kantor', href: '/perizinan/keluar-kantor' },
+          { icon: UmbrellaIcon, label: 'Izin Cuti', href: '/perizinan/cuti'},
+          
           // { icon: MapPin, label: 'Dinas Luar', href: '/perizinan/dinas-luar' },
         ],
       },
@@ -286,7 +288,7 @@ const LayoutTemplate = ({ children }) => {
   const badge = roleBadge();
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-gray-50 flex relative">
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}

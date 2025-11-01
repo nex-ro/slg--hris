@@ -1,21 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import DashboardLayouts from "@/Layouts/DasboardLayout";
-import { Calendar, Clock, Users, FileText, TrendingUp, AlertCircle } from 'lucide-react';
+import { Calendar, Clock, Users, FileText, TrendingUp, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
 
-function Dashboard({ auth, jatahCuti, kehadiranBulanIni, statistik }) {
-  // Sample data - akan diganti dengan props dari backend
-  const [stats, setStats] = useState({
-    totalCuti: jatahCuti?.jumlah_cuti || 12,
+function Dashboard({ auth, jatahCuti, statistik, pengajuanMenunggu, bulanTahun }) {
+  const [stats] = useState({
+    totalCuti: jatahCuti?.jumlah_cuti || 0,
     cutiTerpakai: jatahCuti?.cuti_dipakai || 0,
-    sisaCuti: jatahCuti?.sisa_cuti || 12,
-    kehadiranBulanIni: statistik?.hadir || 0,
-    izinBulanIni: statistik?.izin || 0,
+    sisaCuti: jatahCuti?.sisa_cuti || 0,
+    kehadiranBulanIni: statistik?.total_hadir || 0,
+    terlambat: statistik?.terlambat || 0,
+    izinBulanIni: statistik?.total_izin || 0,
     sakitBulanIni: statistik?.sakit || 0,
-    alpaBulanIni: statistik?.alpa || 0
+    alpaBulanIni: statistik?.alpa || 0,
+    cutiFullBulanIni: statistik?.cuti_full || 0,
+    cutiHalfBulanIni: statistik?.cuti_half || 0,
+    dinasLuar: statistik?.dinas_luar || 0,
+    wfh: statistik?.wfh || 0,
   });
-
-  const currentDate = new Date();
-  const monthName = currentDate.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
 
   // Hitung persentase cuti
   const cutiPercentage = stats.totalCuti > 0 
@@ -31,6 +32,27 @@ function Dashboard({ auth, jatahCuti, kehadiranBulanIni, statistik }) {
   return (
     <DashboardLayouts>
       <div className="p-6">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
+          <p className="text-gray-600">Selamat datang, {auth?.user?.name || 'Pengguna'}</p>
+        </div>
+
+        {/* Pengajuan Menunggu Approval */}
+        {(pengajuanMenunggu?.cuti > 0 || pengajuanMenunggu?.izin > 0 || pengajuanMenunggu?.sakit > 0) && (
+          <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
+            <div className="flex items-start">
+              <Clock className="w-5 h-5 text-yellow-600 mt-0.5 mr-3" />
+              <div className="flex-1">
+                <h3 className="text-sm font-medium text-yellow-800">Pengajuan Menunggu Persetujuan</h3>
+                <div className="mt-2 text-sm text-yellow-700 space-x-4">
+                  {pengajuanMenunggu.cuti > 0 && <span>Cuti: {pengajuanMenunggu.cuti}</span>}
+                  {pengajuanMenunggu.izin > 0 && <span>Izin: {pengajuanMenunggu.izin}</span>}
+                  {pengajuanMenunggu.sakit > 0 && <span>Sakit: {pengajuanMenunggu.sakit}</span>}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
@@ -69,7 +91,7 @@ function Dashboard({ auth, jatahCuti, kehadiranBulanIni, statistik }) {
                 <p className="text-xs text-gray-500 mt-1">hari bulan ini</p>
               </div>
               <div className="bg-green-100 p-3 rounded-full">
-                <Clock className="w-6 h-6 text-green-500" />
+                <CheckCircle className="w-6 h-6 text-green-500" />
               </div>
             </div>
             <div className="mt-4">
@@ -90,7 +112,7 @@ function Dashboard({ auth, jatahCuti, kehadiranBulanIni, statistik }) {
           <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-gray-600 text-sm font-medium">Izin</p>
+                <p className="text-gray-600 text-sm font-medium">Izin & Sakit</p>
                 <p className="text-3xl font-bold text-gray-800 mt-2">{stats.izinBulanIni}</p>
                 <p className="text-xs text-gray-500 mt-1">hari bulan ini</p>
               </div>
@@ -100,7 +122,7 @@ function Dashboard({ auth, jatahCuti, kehadiranBulanIni, statistik }) {
             </div>
             <div className="mt-4 flex items-center text-xs text-gray-600">
               <TrendingUp className="w-4 h-4 mr-1" />
-              <span>Termasuk sakit: {stats.sakitBulanIni} hari</span>
+              <span>Sakit: {stats.sakitBulanIni} hari</span>
             </div>
           </div>
 
@@ -113,7 +135,7 @@ function Dashboard({ auth, jatahCuti, kehadiranBulanIni, statistik }) {
                 <p className="text-xs text-gray-500 mt-1">hari bulan ini</p>
               </div>
               <div className="bg-red-100 p-3 rounded-full">
-                <AlertCircle className="w-6 h-6 text-red-500" />
+                <XCircle className="w-6 h-6 text-red-500" />
               </div>
             </div>
             {stats.alpaBulanIni > 0 && (
@@ -130,45 +152,98 @@ function Dashboard({ auth, jatahCuti, kehadiranBulanIni, statistik }) {
           {/* Ringkasan Kehadiran */}
           <div className="lg:col-span-2 bg-white rounded-lg shadow-md p-6">
             <h2 className="text-xl font-semibold text-gray-800 mb-4">
-              Ringkasan Kehadiran - {monthName}
+              Ringkasan Kehadiran - {bulanTahun}
             </h2>
             
-            <div className="space-y-4">
-              {/* Hadir */}
+            <div className="space-y-3">
+              {/* Hadir Tepat Waktu */}
               <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
                 <div className="flex items-center">
-                  <div className="w-3 h-3 bg-green-500 rounded-full mr-3"></div>
-                  <span className="font-medium text-gray-700">Hadir</span>
+                  <div className="w-3 h-3 bg-green-600 rounded-full mr-3"></div>
+                  <span className="font-medium text-gray-700">Hadir Tepat Waktu</span>
                 </div>
-                <span className="text-2xl font-bold text-green-600">{stats.kehadiranBulanIni}</span>
+                <span className="text-2xl font-bold text-green-600">{stats.kehadiranBulanIni - stats.terlambat}</span>
               </div>
 
-              {/* Izin */}
-              <div className="flex items-center justify-between p-4 bg-yellow-50 rounded-lg">
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-yellow-500 rounded-full mr-3"></div>
-                  <span className="font-medium text-gray-700">Izin</span>
+              {/* Terlambat */}
+              {stats.terlambat > 0 && (
+                <div className="flex items-center justify-between p-4 bg-orange-50 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-orange-600 rounded-full mr-3"></div>
+                    <span className="font-medium text-gray-700">Terlambat</span>
+                  </div>
+                  <span className="text-2xl font-bold text-orange-600">{stats.terlambat}</span>
                 </div>
-                <span className="text-2xl font-bold text-yellow-600">{stats.izinBulanIni}</span>
-              </div>
+              )}
+
+              {/* Cuti */}
+              {(stats.cutiFullBulanIni > 0 || stats.cutiHalfBulanIni > 0) && (
+                <div className="flex items-center justify-between p-4 bg-emerald-50 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-emerald-500 rounded-full mr-3"></div>
+                    <span className="font-medium text-gray-700">Cuti</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl font-bold text-emerald-600">{stats.cutiFullBulanIni + stats.cutiHalfBulanIni}</span>
+                    <p className="text-xs text-gray-500">Full: {stats.cutiFullBulanIni} | Half: {stats.cutiHalfBulanIni}</p>
+                  </div>
+                </div>
+              )}
 
               {/* Sakit */}
-              <div className="flex items-center justify-between p-4 bg-orange-50 rounded-lg">
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-orange-500 rounded-full mr-3"></div>
-                  <span className="font-medium text-gray-700">Sakit</span>
+              {stats.sakitBulanIni > 0 && (
+                <div className="flex items-center justify-between p-4 bg-blue-50 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-blue-600 rounded-full mr-3"></div>
+                    <span className="font-medium text-gray-700">Sakit</span>
+                  </div>
+                  <span className="text-2xl font-bold text-blue-600">{stats.sakitBulanIni}</span>
                 </div>
-                <span className="text-2xl font-bold text-orange-600">{stats.sakitBulanIni}</span>
-              </div>
+              )}
+
+              {/* Izin */}
+              {(stats.izinBulanIni - stats.sakitBulanIni) > 0 && (
+                <div className="flex items-center justify-between p-4 bg-sky-50 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-sky-500 rounded-full mr-3"></div>
+                    <span className="font-medium text-gray-700">Izin</span>
+                  </div>
+                  <span className="text-2xl font-bold text-sky-600">{stats.izinBulanIni - stats.sakitBulanIni}</span>
+                </div>
+              )}
+
+              {/* Dinas Luar */}
+              {stats.dinasLuar > 0 && (
+                <div className="flex items-center justify-between p-4 bg-purple-50 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-purple-500 rounded-full mr-3"></div>
+                    <span className="font-medium text-gray-700">Dinas Luar</span>
+                  </div>
+                  <span className="text-2xl font-bold text-purple-600">{stats.dinasLuar}</span>
+                </div>
+              )}
+
+              {/* WFH */}
+              {stats.wfh > 0 && (
+                <div className="flex items-center justify-between p-4 bg-amber-50 rounded-lg">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-amber-500 rounded-full mr-3"></div>
+                    <span className="font-medium text-gray-700">Work From Home</span>
+                  </div>
+                  <span className="text-2xl font-bold text-amber-600">{stats.wfh}</span>
+                </div>
+              )}
 
               {/* Alpa */}
-              <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg">
-                <div className="flex items-center">
-                  <div className="w-3 h-3 bg-red-500 rounded-full mr-3"></div>
-                  <span className="font-medium text-gray-700">Alpa</span>
+              {stats.alpaBulanIni > 0 && (
+                <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-200">
+                  <div className="flex items-center">
+                    <div className="w-3 h-3 bg-red-500 rounded-full mr-3"></div>
+                    <span className="font-medium text-gray-700">Alpa</span>
+                  </div>
+                  <span className="text-2xl font-bold text-red-600">{stats.alpaBulanIni}</span>
                 </div>
-                <span className="text-2xl font-bold text-red-600">{stats.alpaBulanIni}</span>
-              </div>
+              )}
             </div>
           </div>
 
@@ -197,8 +272,19 @@ function Dashboard({ auth, jatahCuti, kehadiranBulanIni, statistik }) {
 
               {jatahCuti?.pinjam_tahun_prev > 0 && (
                 <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                  <p className="text-xs text-orange-600 font-medium">
-                    Pinjam dari tahun sebelumnya: {jatahCuti.pinjam_tahun_prev} hari
+                  <div className="flex items-start">
+                    <AlertCircle className="w-4 h-4 text-orange-600 mr-2 mt-0.5" />
+                    <p className="text-xs text-orange-700 font-medium">
+                      Pinjam dari tahun sebelumnya: {jatahCuti.pinjam_tahun_prev} hari
+                    </p>
+                  </div>
+                </div>
+              )}
+
+              {jatahCuti?.keterangan && (
+                <div className="p-3 bg-gray-50 rounded-lg">
+                  <p className="text-xs text-gray-600">
+                    <span className="font-medium">Keterangan:</span> {jatahCuti.keterangan}
                   </p>
                 </div>
               )}
@@ -222,8 +308,8 @@ function Dashboard({ auth, jatahCuti, kehadiranBulanIni, statistik }) {
             </button>
             <button className="bg-white bg-opacity-20 hover:bg-opacity-30 transition-all duration-200 rounded-lg p-4 text-left">
               <FileText className="w-6 h-6 mb-2" />
-              <p className="font-medium">Laporan</p>
-              <p className="text-sm opacity-90">Download laporan</p>
+              <p className="font-medium">Ajukan Izin</p>
+              <p className="text-sm opacity-90">Buat pengajuan izin</p>
             </button>
           </div>
         </div>

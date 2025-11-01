@@ -187,6 +187,8 @@ const DashboardLayouts = ({ children }) => {
         subItems: [
           { icon: Thermometer, label: 'Sakit', href: '/perizinan/sakit' },
           { icon: CalendarClock, label: 'Keluar Kantor', href: '/perizinan/keluar-kantor' },
+          { icon: UmbrellaIcon, label: 'Izin Cuti', href: '/perizinan/cuti'},
+
           // { icon: MapPin, label: 'Dinas Luar', href: '/perizinan/dinas-luar' },
         ],
       },

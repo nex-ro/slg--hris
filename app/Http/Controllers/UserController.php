@@ -8,7 +8,12 @@ use App\Models\User;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Holiday;
-
+use App\Models\JatahCuti;
+use App\Models\Kehadiran;
+use Carbon\Carbon;
+use App\Models\Perizinan;
+use App\Models\Sakit;
+use Illuminate\Support\Facades\DB;
 
 class UserController extends Controller
 {
@@ -211,10 +216,121 @@ class UserController extends Controller
 
         return redirect()->back()->with('success', 'Pegawai berhasil dihapus');
     }
-    public function index()
+        public function index()
     {
-        return Inertia::render('User/Dashboard', []);
+        $userId = auth()->id();
+        $currentYear = date('Y');
+        $currentMonth = date('m');
+        $currentDate = Carbon::now();
+
+        // Ambil jatah cuti tahun ini
+        $jatahCuti = JatahCuti::where('uid', $userId)
+            ->where('tahun', $currentYear)
+            ->first();
+
+        // Ambil data kehadiran bulan ini
+        $kehadiranBulanIni = Kehadiran::where('uid', $userId)
+            ->whereYear('tanggal', $currentYear)
+            ->whereMonth('tanggal', $currentMonth)
+            ->get();
+
+        // Hitung statistik kehadiran
+        $statistik = [
+            'hadir' => 0,
+            'terlambat' => 0,
+            'sakit' => 0,
+            'cuti_full' => 0,
+            'cuti_half' => 0,
+            'izin_full' => 0,
+            'izin_half' => 0,
+            'izin_keluar' => 0,
+            'dinas_luar' => 0,
+            'wfh' => 0,
+            'fp_tidak_terekam' => 0,
+            'libur' => 0,
+            'alpa' => 0,
+            'na' => 0,
+        ];
+
+        foreach ($kehadiranBulanIni as $kehadiran) {
+            switch ($kehadiran->status) {
+                case 'On Time':
+                    $statistik['hadir']++;
+                    break;
+                case 'Terlambat':
+                    $statistik['terlambat']++;
+                    break;
+                case 'Sakit':
+                    $statistik['sakit']++;
+                    break;
+                case 'C1':
+                    $statistik['cuti_full']++;
+                    break;
+                case 'C2':
+                    $statistik['cuti_half']++;
+                    break;
+                case 'P1':
+                    $statistik['izin_full']++;
+                    break;
+                case 'P2':
+                    $statistik['izin_half']++;
+                    break;
+                case 'P3':
+                    $statistik['izin_keluar']++;
+                    break;
+                case 'DL':
+                    $statistik['dinas_luar']++;
+                    break;
+                case 'WFH':
+                    $statistik['wfh']++;
+                    break;
+                case 'FP-TR':
+                    $statistik['fp_tidak_terekam']++;
+                    break;
+                case 'LK':
+                    $statistik['libur']++;
+                    break;
+                case 'N/A':
+                    $statistik['na']++;
+                    break;
+                default:
+                    // Alpa atau status lainnya
+                    if (empty($kehadiran->status) || $kehadiran->status == 'Alpa') {
+                        $statistik['alpa']++;
+                    }
+                    break;
+            }
+        }
+
+        // Total kehadiran efektif (hadir + terlambat)
+        $statistik['total_hadir'] = $statistik['hadir'] + $statistik['terlambat'];
+        
+        // Total izin (semua jenis izin + sakit)
+        $statistik['total_izin'] = $statistik['izin_full'] + 
+                                    $statistik['izin_half'] + 
+                                    $statistik['izin_keluar'] + 
+                                    $statistik['sakit'];
+
+        // Pengajuan yang menunggu approval
+        $pengajuanMenunggu = [
+            'cuti' => 0, // akan diupdate setelah melihat struktur tabel
+            'izin' => Perizinan::where('uid', $userId)
+                ->where('status', 'Diproses')
+                ->count(),
+            'sakit' => Sakit::where('uid', $userId)
+                ->where('status', 'Diproses')
+                ->count(),
+        ];
+
+        return Inertia::render('User/Dashboard', [
+            'jatahCuti' => $jatahCuti,
+            'statistik' => $statistik,
+            'pengajuanMenunggu' => $pengajuanMenunggu,
+            'bulanTahun' => $currentDate->locale('id')->isoFormat('MMMM YYYY'),
+        ]);
     }
+
+
     public function head()
     {
         return Inertia::render('Atasan/Dashboard', []);

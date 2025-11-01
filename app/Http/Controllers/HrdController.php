@@ -533,7 +533,7 @@ private function getYearlyTableData($year, $tower, $divisi)
         return Inertia::render('Hrd/Absensi', []);
     }
 
-    public function getByDate(Request $request): JsonResponse 
+   public function getByDate(Request $request): JsonResponse 
 { 
     try { 
         $request->validate([ 
@@ -572,18 +572,22 @@ private function getYearlyTableData($year, $tower, $divisi)
  
              
         $kehadiran = Kehadiran::where('tanggal', $tanggal)->get()->keyBy('uid'); 
-     
-        // Format response data 
         $formattedData = $users->map(function ($user) use ($kehadiran, $tanggal, $isHoliday) { 
             // Ambil data kehadiran berdasarkan user_id 
             $attendance = $kehadiran->get($user->id); 
  
+            // Inisialisasi variabel default
+            $status = 'N/A';
+            $jamKedatangan = null;
+            $jamPulang = null;
+            $keterangan = null;
+
             // Tentukan status, jam kedatangan, dan jam pulang 
-            if ($isHoliday) { 
-                $status = 'Libur Kerja'; 
-                $jamKedatangan = '00:00'; 
-                $jamPulang = '00:00'; 
-                $keterangan = null;
+            if ($isHoliday) {
+                $status = 'Libur Kerja';
+                $jamKedatangan = '00:00';
+                $jamPulang = '00:00';
+                $keterangan = 'Hari Libur';
             } elseif ($attendance) { 
                 $status = $attendance->status; 
                 $jamKedatangan = $attendance->jam_kedatangan  
@@ -593,12 +597,7 @@ private function getYearlyTableData($year, $tower, $divisi)
                     ? Carbon::parse($attendance->jam_pulang)->format('H:i')  
                     : null; 
                 $keterangan = $attendance->keterangan ?? null;
-            } else { 
-                $status = 'N/A'; 
-                $jamKedatangan = null; 
-                $jamPulang = null; 
-                $keterangan = null;
-            } 
+            }
  
             return [ 
                 'id' => $attendance->id ?? null, 
@@ -731,6 +730,7 @@ public function getByUser(Request $request): JsonResponse
         })->values(); // Convert collection ke array dengan index numerik
 
         return response()->json($formattedData, 200); 
+        
     } catch (\Exception $e) { 
         return response()->json([ 
             'error' => 'Terjadi kesalahan', 
@@ -1005,7 +1005,6 @@ public function exportByTowerAndDivisi(Request $request)
                     $attendance = Kehadiran::where('tanggal', $tanggal)
                         ->where('uid', $user->id)
                         ->first();
-                    
                     // Tentukan status
                     if ($isHoliday) {
                         $status = 'Libur Kerja';

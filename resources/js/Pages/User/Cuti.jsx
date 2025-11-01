@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Eye, Plus, Clock, AlertCircle, FileText,Download, User, X, Save, CheckCircle } from 'lucide-react';
+import { Calendar, Eye, Plus, Clock, AlertCircle, FileText,Download, User, X, Save, ChevronLeft ,ChevronRight ,CheckCircle } from 'lucide-react';
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
 import { router } from '@inertiajs/react';
 
-function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
+function UserCuti({ jatahCuti = [], pemakaianCuti = {}, paginationLinks = [] }) {
+  const cutiList = pemakaianCuti?.data || [];
   const [selectedCuti, setSelectedCuti] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [showFormModal, setShowFormModal] = useState(false);
@@ -21,10 +22,16 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
     diketahui_atasan: '',
   diketahui_hrd: '',
   disetujui: ''
-
-
-    
   });
+  const handlePageChange = (url) => {
+    if (url) {
+      router.get(url, {}, {
+        preserveState: true,
+        preserveScroll: true,
+      });
+    }
+  };
+  const MAX_PINJAM_HARI = 4;
 
   const [errors, setErrors] = useState({});
 
@@ -55,23 +62,29 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
     }
   };
 
-    const openFormModal = () => {
-    setFormData({
-      jatah_cuti_id: jatahCuti.length > 0 ? jatahCuti[0].id : '',
-      tanggal_mulai: '',
-      tanggal_selesai: '',
-      cuti_setengah_hari: false,
-      alasan: '',
-      id_penerima_tugas: '',
-      tugas: '',
-          diketahui_atasan: '',
+const openFormModal = () => {
+  // Cari periode aktif
+  const periodeAktif = jatahCuti.find(j => j.is_current === true);
+  
+  setFormData({
+    jatah_cuti_id: periodeAktif ? periodeAktif.id : '',
+    tanggal_mulai: '',
+    tanggal_selesai: '',
+    cuti_setengah_hari: false,
+    alasan: '',
+    id_penerima_tugas: '',
+    tugas: '',
+    diketahui_atasan: '',
     diketahui_hrd: '',
     disetujui: ''
+  });
+  setErrors({});
+  setShowFormModal(true);
+};
+const formatHari = (hari) => {
+  return Number(hari) % 1 === 0 ? Math.floor(hari) : Number(hari);
+};
 
-    });
-    setErrors({});
-    setShowFormModal(true);
-  };
 
   const closeFormModal = () => {
     setShowFormModal(false);
@@ -137,28 +150,39 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
   const selectedJatah = jatahCuti.find(j => j.id === parseInt(formData.jatah_cuti_id));
 
   const handleSubmit = (e) => {
-    e.preventDefault();
-      if (!formData.diketahui_atasan && !formData.diketahui_hrd && !formData.disetujui) {
+  e.preventDefault();
+  
+  if (!formData.diketahui_atasan && !formData.diketahui_hrd && !formData.disetujui) {
     setErrors({
       error: 'Minimal pilih satu jalur persetujuan (Atasan, HRD, atau Pimpinan)'
     });
     return;
   }
 
-    setProcessing(true);
-    
-    
-    router.post('/cuti/store', formData, {
-      onSuccess: () => {
-        closeFormModal();
-        setProcessing(false);
-      },
-      onError: (errors) => {
-        setErrors(errors);
-        setProcessing(false);
-      }
-    });
-  };
+  // Validasi pinjaman periode depan
+  const selectedJatah = jatahCuti.find(j => j.id === parseInt(formData.jatah_cuti_id));
+  if (selectedJatah && !selectedJatah.is_current && selectedJatah.is_borrowable) {
+    if (workDays > MAX_PINJAM_HARI) {
+      setErrors({
+        error: `Maksimal peminjaman cuti dari periode depan adalah ${MAX_PINJAM_HARI} hari`
+      });
+      return;
+    }
+  }
+
+  setProcessing(true);
+  
+  router.post('/cuti/store', formData, {
+    onSuccess: () => {
+      closeFormModal();
+      setProcessing(false);
+    },
+    onError: (errors) => {
+      setErrors(errors);
+      setProcessing(false);
+    }
+  });
+};
 
     const getStatusBadge = (status) => {
     const statusConfig = {
@@ -207,74 +231,105 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
       <div className="p-6">
         <table className="w-full">
           <tbody className="divide-y divide-gray-200">
-            <tr>
-              <td className="py-2 text-sm text-gray-700 w-1/3">Tahun ke</td>
-              <td className="py-2 text-sm text-gray-900 font-medium">: {jatahCuti[0].tahun_ke || '1'}</td>
-            </tr>
-           <tr>
-            <td className="py-2 text-sm text-gray-700">TMK</td>
-            <td className="py-2 text-sm text-gray-900 font-medium">
-              : {jatahCuti[0].tmk ? new Date(jatahCuti[0].tmk).toLocaleDateString('id-ID', { 
-                  day: '2-digit', 
-                  month: '2-digit', 
-                  year: 'numeric' 
-                }) : '-'}
-              {jatahCuti[0].tmk && (
-                <span className="text-gray-600 ml-2">
-                  ({(() => {
-                    const years = jatahCuti[0].masa_kerja_tahun || 0;
-                    const months = jatahCuti[0].masa_kerja_bulan || 0;
-                    const days = Math.round(jatahCuti[0].masa_kerja_hari || 0); // ✅ dibulatkan
-                  
-                    let result = [];
-                  
-                    if (years > 0) result.push(`${years} tahun`);
-                    if (months > 0) result.push(`${months} bulan`);
-                    if (days > 0 || result.length === 0) result.push(`${days} hari`);
-                  
-                    return result.join(' ');
-                  })()})
-                </span>
-              )}
-            </td>
-          </tr>
+  <tr>
+    <td className="py-2 text-sm text-gray-700 w-1/3">Tahun ke</td>
+    <td className="py-2 text-sm text-gray-900 font-medium">: {jatahCuti[0].tahun_ke || '1'}</td>
+  </tr>
+  
+  <tr>
+    <td className="py-2 text-sm text-gray-700">TMK</td>
+    <td className="py-2 text-sm text-gray-900 font-medium">
+      : {jatahCuti[0].tmk ? new Date(jatahCuti[0].tmk).toLocaleDateString('id-ID', { 
+          day: '2-digit', 
+          month: '2-digit', 
+          year: 'numeric' 
+        }) : '-'}
+      {jatahCuti[0].tmk && (
+        <span className="text-gray-600 ml-2">
+          ({(() => {
+            const years = jatahCuti[0].masa_kerja_tahun || 0;
+            const months = jatahCuti[0].masa_kerja_bulan || 0;
+            const days = Math.round(jatahCuti[0].masa_kerja_hari || 0);
+          
+            let result = [];
+          
+            if (years > 0) result.push(`${years} tahun`);
+            if (months > 0) result.push(`${months} bulan`);
+            if (days > 0 || result.length === 0) result.push(`${days} hari`);
+          
+            return result.join(' ');
+          })()})
+        </span>
+      )}
+    </td>
+  </tr>
 
-            <tr>
-              <td className="py-2 text-sm text-gray-700">Hak cuti sebenarnya</td>
-              <td className="py-2 text-sm text-gray-900 font-medium">
-                : {jatahCuti[0].jumlah_cuti} hari
-                {/* <button className="ml-3 text-blue-600 hover:text-blue-800 text-xs underline">
-                  Klik untuk setting hak cuti
-                </button> */}
-              </td>
-            </tr>
-            <tr>
-              <td className="py-2 text-sm text-gray-700">Dipinjam utk tahun ke {Math.max(jatahCuti[0].tahun_ke - 1, 0)}</td>
-              <td className="py-2 text-sm text-gray-900 font-medium">: {jatahCuti[0].pinjam_tahun_0 || '0'} hari</td>
-            </tr>
-            <tr>
-              <td className="py-2 text-sm text-gray-700">Dapat dipinjam cuti tahun ke {jatahCuti[0].tahun_ke +1}</td>
-              <td className="py-2 text-sm text-gray-900 font-medium">
-                : {jatahCuti[1].sisa_cuti || '0'} hari
-                {/* <button className="ml-3 text-blue-600 hover:text-blue-800 text-xs underline">
-                  Klik untuk pinjam cuti tahun ke 2
-                </button> */}
-              </td>
-            </tr>
-            <tr>
-              <td className="py-2 text-sm text-gray-700">Cuti bersama</td>
-              <td className="py-2 text-sm text-gray-900 font-medium">: {jatahCuti[0].cuti_bersama || '0'} hari</td>
-            </tr>
-            <tr>
-              <td className="py-2 text-sm text-gray-700">Telah terpakai</td>
-              <td className="py-2 text-sm text-gray-900 font-medium">: {jatahCuti[0].cuti_dipakai || '0'} hari</td>
-            </tr>
-            <tr className="bg-blue-50">
-              <td className="py-2 text-sm font-semibold text-gray-900">Sisa cuti</td>
-              <td className="py-2 text-sm font-bold text-blue-600">: {jatahCuti[0].sisa_cuti} hari</td>
-            </tr>
-          </tbody>
+  <tr>
+    <td className="py-2 text-sm text-gray-700">Hak cuti sebenarnya</td>
+    <td className="py-2 text-sm text-gray-900 font-medium">
+      : {formatHari(jatahCuti[0].jumlah_cuti)} hari
+    </td>
+  </tr>
+  
+  <tr>
+    <td className="py-2 text-sm text-gray-700">Dipinjam utk tahun ke {Math.max(jatahCuti[0].tahun_ke - 1, 0)}</td>
+    <td className="py-2 text-sm text-gray-900 font-medium">: {formatHari(jatahCuti[0].pinjam_tahun_0) || '0'} hari</td>
+  </tr>
+  
+  <tr>
+    <td className="py-2 text-sm text-gray-700">Dapat dipinjam cuti tahun ke {jatahCuti[0].tahun_ke + 1}</td>
+    <td className="py-2 text-sm text-gray-900 font-medium">
+      : {formatHari(jatahCuti[1].sisa_cuti) || '0'} hari
+    </td>
+  </tr>
+  
+  <tr>
+    <td className="py-2 text-sm text-gray-700">Telah terpakai</td>
+    <td className="py-2 text-sm text-gray-900 font-medium">: {formatHari(jatahCuti[0].cuti_dipakai) || '0'} hari</td>
+  </tr>
+  
+  <tr className="bg-blue-50">
+    <td className="py-2 text-sm font-semibold text-gray-900">Sisa cuti</td>
+    <td className="py-2 text-sm font-bold text-blue-600">: {formatHari(jatahCuti[0].sisa_cuti)} hari</td>
+  </tr>
+  
+  <tr>
+    <td className="py-2 text-sm text-gray-700">Detail pemakaian</td>
+    <td className="py-2 text-sm text-gray-900 font-medium">
+      :
+      {pemakaianCuti?.data && pemakaianCuti.data.filter(c => 
+        c.status_final === 'disetujui' && 
+        c.jatah_cuti?.tahun_ke === jatahCuti[0].tahun_ke
+      ).length > 0 ? (
+        <span className="ml-2 text-[13px] text-gray-900">
+          {pemakaianCuti.data
+            .filter(c => 
+              c.status_final === 'disetujui' && 
+              c.jatah_cuti?.tahun_ke === jatahCuti[0].tahun_ke
+            )
+            .map((cuti, idx) => (
+              <span key={idx} className="inline-flex items-center gap-1 mr-2">
+                <span className="text-blue-600 text-sm">•</span>
+                <span className="font-semibold">{formatHari(cuti.jumlah_hari)}</span>
+                <span>hari</span>
+                <span>
+                  ({formatDate(cuti.tanggal_mulai)}
+                  {cuti.tanggal_mulai !== cuti.tanggal_selesai && 
+                    ` - ${formatDate(cuti.tanggal_selesai)}`})
+                </span>
+              </span>
+            ))}
+        </span>
+      ) : (
+        <span className="ml-2 text-gray-500 text-xs">Belum ada cuti terpakai</span>
+      )}
+    </td>
+  </tr>
+</tbody>
+
+
         </table>
+       
       </div>
     </div>
   )}
@@ -306,8 +361,8 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {pemakaianCuti && pemakaianCuti.length > 0 ? (
-                  pemakaianCuti.map((cuti) => (
+                {pemakaianCuti?.data && pemakaianCuti.data.length > 0 ? (
+                  pemakaianCuti.data.map((cuti) => (
                     <tr key={cuti.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                         {formatDate(cuti.tanggal_pengajuan)}
@@ -323,7 +378,7 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600">
-                        {cuti.jumlah_hari} hari
+                        {formatHari(cuti.jumlah_hari)} hari
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
                         {cuti.alasan}
@@ -331,30 +386,29 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
                       <td className="px-6 py-4 whitespace-nowrap">
                         {getStatusBadge(cuti.status_final)}
                       </td>
-                      
                       <td className="px-6 py-4 whitespace-nowrap text-center">
-  <div className="flex items-center justify-center gap-2">
-    <button
-      onClick={() => {
-        setSelectedCuti(cuti);
-        setShowModal(true);
-      }}
-      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-      title="Lihat Detail"
-    >
-      <Eye className="w-4 h-4" />
-    </button>
-    <button
-      onClick={() => {
-        window.open(`/cuti/download-pdf/${cuti.id}`, '_blank');
-      }}
-      className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-      title="Download PDF"
-    >
-      <Download className="w-4 h-4" />
-    </button>
-  </div>
-</td>
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => {
+                              setSelectedCuti(cuti);
+                              setShowModal(true);
+                            }}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Lihat Detail"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => {
+                              window.open(`/cuti/download-pdf/${cuti.id}`, '_blank');
+                            }}
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            title="Download PDF"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
                   ))
                 ) : (
@@ -365,7 +419,64 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
                   </tr>
                 )}
               </tbody>
+              
             </table>
+             {pemakaianCuti?.data && pemakaianCuti.data.length > 0 && (
+  <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
+    <div className="text-sm text-gray-700">
+      Menampilkan{' '}
+      <span className="font-medium">{pemakaianCuti.from || 0}</span>
+      {' '}-{' '}
+      <span className="font-medium">{pemakaianCuti.to || 0}</span>
+      {' '}dari{' '}
+      <span className="font-medium">{pemakaianCuti.total || 0}</span>
+      {' '}pengajuan
+    </div>
+    
+    <div className="flex gap-2">
+      {paginationLinks && paginationLinks.map((link, index) => {
+        if (link.url === null) {
+          return (
+            <button
+              key={index}
+              disabled
+              className="px-3 py-2 text-sm border border-gray-300 rounded bg-gray-100 text-gray-400 cursor-not-allowed"
+            >
+              {link.label === '&laquo; Previous' ? (
+                <ChevronLeft className="w-4 h-4" />
+              ) : link.label === 'Next &raquo;' ? (
+                <ChevronRight className="w-4 h-4" />
+              ) : (
+                <span dangerouslySetInnerHTML={{ __html: link.label }} />
+              )}
+            </button>
+          );
+        }
+
+        return (
+          <button
+            key={index}
+            onClick={() => handlePageChange(link.url)}
+            className={`px-3 py-2 text-sm border rounded transition-colors ${
+              link.active
+                ? 'bg-blue-600 text-white border-blue-600 font-semibold'
+                : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+            }`}
+          >
+            {link.label === '&laquo; Previous' ? (
+              <ChevronLeft className="w-4 h-4" />
+            ) : link.label === 'Next &raquo;' ? (
+              <ChevronRight className="w-4 h-4" />
+            ) : (
+              <span dangerouslySetInnerHTML={{ __html: link.label }} />
+            )}
+          </button>
+        );
+      })}
+    </div>
+  </div>
+)}
+
           </div>
         </div>
 
@@ -397,21 +508,30 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
   <label className="block text-sm font-medium text-gray-700 mb-2">
     Pilih Jatah Cuti <span className="text-red-500">*</span>
   </label>
-  <select
-    name="jatah_cuti_id"
-    value={formData.jatah_cuti_id}
-    onChange={handleInputChange}
-    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-    required
-  >
-    <option value="">Pilih Periode</option>
-    {jatahCuti.filter(j => j.sisa_cuti > 0).map((jatah) => (
-      <option key={jatah.id} value={jatah.id}>
-        {jatah.label} - Sisa: {jatah.sisa_cuti} hari
-        {jatah.is_borrowable && ' (Pinjam dari periode depan)'}
-      </option>
-    ))}
-  </select>
+    <select
+      name="jatah_cuti_id"
+      value={formData.jatah_cuti_id}
+      onChange={handleInputChange}
+      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+      required
+    >
+      <option value="">Pilih Periode Cuti</option>
+      {jatahCuti
+        .filter(j => j.sisa_cuti > 0 && j.is_current) 
+        .map((jatah) => (
+          <option key={jatah.id} value={jatah.id}>
+            Tahun ke-{jatah.tahun_ke} - Jatah Cuti : {formatHari(jatah.sisa_cuti)} hari
+          </option>
+        ))}
+      {jatahCuti
+        .filter(j => j.sisa_cuti > 0 && !j.is_current && j.is_borrowable)
+        .map((jatah) => (
+          <option key={jatah.id} value={jatah.id}>
+            {jatah.label} - Sisa: {formatHari(jatah.sisa_cuti)} hari (Pinjam dari periode depan)
+          </option>
+        ))}
+    </select>
+
   {errors.jatah_cuti_id && (
     <p className="text-red-500 text-sm mt-1">{errors.jatah_cuti_id}</p>
   )}
@@ -491,6 +611,11 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
                     {selectedJatah && (
                       <div className="mt-2 text-sm text-blue-700">
                         Sisa cuti setelah pengajuan: {(selectedJatah.sisa_cuti - workDays).toFixed(1)} hari
+                      </div>
+                    )}
+                    {selectedJatah && !selectedJatah.is_current && selectedJatah.is_borrowable && (
+                      <div className="mt-2 text-sm text-amber-700 font-medium">
+                        ⚠️ Meminjam dari periode depan (Max: {MAX_PINJAM_HARI} hari)
                       </div>
                     )}
                   </div>
@@ -671,14 +796,19 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
                   >
                     Batal
                   </button>
-                  <button
+                 <button
                     type="submit"
-                    disabled={processing || (selectedJatah && workDays > selectedJatah.sisa_cuti)}
+                    disabled={
+                      processing || 
+                      (selectedJatah && workDays > selectedJatah.sisa_cuti) ||
+                      (selectedJatah && !selectedJatah.is_current && selectedJatah.is_borrowable && workDays > MAX_PINJAM_HARI)
+                    }
                     className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     <Save className="w-4 h-4" />
                     {processing ? 'Memproses...' : 'Ajukan Cuti'}
                   </button>
+
                 </div>
               </form>
             </div>
@@ -694,7 +824,7 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
           Masa Percobaan - Belum Mendapat Jatah Cuti
         </p>
         <p className="text-sm text-yellow-700 mt-1">
-          Anda masih dalam periode percobaan. Jatah cuti 12 hari akan aktif setelah Anda bekerja selama 1 tahun penuh.
+          Belum 1 tahun . Jatah cuti 12 hari akan aktif setelah Anda bekerja selama 1 tahun penuh.
         </p>
       </div>
     </div>
@@ -724,7 +854,7 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = [] }) {
                     </div>
                     <div className="text-right">
                       <label className="text-sm font-medium text-gray-600">Durasi</label>
-                      <p className="text-2xl font-bold text-blue-600">{selectedCuti.jumlah_hari} hari</p>
+                      <p className="text-2xl font-bold text-blue-600">{formatHari(selectedCuti.jumlah_hari)} hari</p>
                     </div>
                   </div>
                 </div>
