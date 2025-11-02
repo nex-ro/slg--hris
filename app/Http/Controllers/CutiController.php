@@ -852,6 +852,138 @@ private function calculateActivePeriod($tmk)
         ],
     ]);
 }
+public function storePengajuanAdmin(Request $request)
+{
+    $validated = $request->validate([
+        'uid' => 'required|exists:users,id', // User yang akan cuti
+        'jatah_cuti_id' => 'required|exists:jatah_cuti,id',
+        'tanggal_mulai' => 'required|date',
+        'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
+        'cuti_setengah_hari' => 'boolean',
+        'alasan' => 'required|string|max:500',
+        'id_penerima_tugas' => 'nullable|exists:users,id',
+        'tugas' => 'nullable|string|max:1000',
+        'diketahui_atasan' => 'nullable|exists:users,id',
+        'diketahui_hrd' => 'nullable|exists:users,id',
+        'disetujui' => 'nullable|exists:users,id',
+    ]);
+
+    // Validasi: Minimal satu approver harus dipilih
+    if (!$validated['diketahui_atasan'] && !$validated['diketahui_hrd'] && !$validated['disetujui']) {
+        return back()->withErrors(['error' => 'Pilih minimal satu approver (Atasan, HRD, atau Pimpinan)']);
+    }
+
+    $user = User::findOrFail($validated['uid']); // User yang akan cuti
+    $jatahCuti = JatahCuti::findOrFail($validated['jatah_cuti_id']);
+    
+    // ✅ VALIDASI PERIODE
+    $tmkDate = \Carbon\Carbon::parse($user->tmk);
+    $today = \Carbon\Carbon::now();
+    $years = 0;
+    $tempDate = $tmkDate->copy();
+    
+    while ($tempDate->copy()->addYear()->lte($today)) {
+        $years++;
+        $tempDate->addYear();
+    }
+    
+    $activePeriod = $years;
+    
+    // Validasi: Tidak boleh pakai periode yang sudah lewat
+    if ($jatahCuti->tahun_ke < $activePeriod) {
+        return back()->withErrors([
+            'error' => 'Tidak dapat menggunakan cuti dari periode yang sudah lewat. Gunakan periode aktif atau periode masa depan.'
+        ]);
+    }
+    
+    // Validasi: Jika pakai periode masa depan saat masih periode 0
+    if ($jatahCuti->tahun_ke > $activePeriod && $activePeriod == 0) {
+        return back()->withErrors([
+            'error' => 'Karyawan masih dalam periode percobaan (belum 1 tahun). Tidak dapat meminjam cuti periode masa depan.'
+        ]);
+    }
+    
+    // Validasi ownership
+    if ($jatahCuti->uid !== $user->id) {
+        return back()->withErrors(['error' => 'Jatah cuti tidak valid untuk karyawan ini']);
+    }
+
+    $tanggalMulai = \Carbon\Carbon::parse($validated['tanggal_mulai']);
+    $tanggalSelesai = \Carbon\Carbon::parse($validated['tanggal_selesai']);
+    
+    // Hitung jumlah hari kerja
+    $jumlahHari = 0;
+    $currentDate = $tanggalMulai->copy();
+    
+    while ($currentDate->lte($tanggalSelesai)) {
+        if ($currentDate->dayOfWeek >= 1 && $currentDate->dayOfWeek <= 5) {
+            $jumlahHari++;
+        }
+        $currentDate->addDay();
+    }
+    
+    if ($request->cuti_setengah_hari) {
+        $jumlahHari = 0.5;
+    }
+
+    // Validasi sisa cuti
+    if ($jatahCuti->sisa_cuti < $jumlahHari) {
+        return back()->withErrors(['error' => 'Sisa cuti tidak mencukupi. Sisa cuti: ' . $jatahCuti->sisa_cuti . ' hari']);
+    }
+
+    // Pengecekan bentrok
+    $bentrok = PemakaianCuti::where('uid', $user->id)
+        ->where(function($query) {
+            $query->where(function($q) {
+                $q->where('status_diketahui_atasan', '!=', 'ditolak')
+                  ->orWhereNull('status_diketahui_atasan');
+            })
+            ->where(function($q) {
+                $q->where('status_diketahui_hrd', '!=', 'ditolak')
+                  ->orWhereNull('status_diketahui_hrd');
+            })
+            ->where(function($q) {
+                $q->where('status_disetujui', '!=', 'ditolak')
+                  ->orWhereNull('status_disetujui');
+            });
+        })
+        ->where(function($query) use ($tanggalMulai, $tanggalSelesai) {
+            $query->whereBetween('tanggal_mulai', [$tanggalMulai, $tanggalSelesai])
+                  ->orWhereBetween('tanggal_selesai', [$tanggalMulai, $tanggalSelesai])
+                  ->orWhere(function($q) use ($tanggalMulai, $tanggalSelesai) {
+                      $q->where('tanggal_mulai', '<=', $tanggalMulai)
+                        ->where('tanggal_selesai', '>=', $tanggalSelesai);
+                  });
+        })
+        ->exists();
+
+    if ($bentrok) {
+        return back()->withErrors(['error' => 'Tanggal yang dipilih bentrok dengan pengajuan cuti lainnya']);
+    }
+
+    // Create pengajuan cuti
+    PemakaianCuti::create([
+        'uid' => $validated['uid'], // User yang cuti
+        'jatah_cuti_id' => $validated['jatah_cuti_id'],
+        'tanggal_mulai' => $validated['tanggal_mulai'],
+        'tanggal_selesai' => $validated['tanggal_selesai'],
+        'cuti_setengah_hari' => $request->cuti_setengah_hari ?? false,
+        'jumlah_hari' => $jumlahHari,
+        'alasan' => $validated['alasan'],
+        'tanggal_pengajuan' => now(),
+        'id_penerima_tugas' => $validated['id_penerima_tugas'] ?? null,
+        'tugas' => $validated['tugas'] ?? null,
+        'diketahui_atasan' => $validated['diketahui_atasan'] ?? null,
+        'diketahui_hrd' => $validated['diketahui_hrd'] ?? null,
+        'disetujui' => $validated['disetujui'] ?? null,
+        'status_diketahui_atasan' => $validated['diketahui_atasan'] ? 'diproses' : null,
+        'status_diketahui_hrd' => $validated['diketahui_hrd'] ? 'diproses' : null,
+        'status_disetujui' => $validated['disetujui'] ? 'diproses' : null,
+    ]);
+
+    return redirect()->back()->with('success', 'Pengajuan cuti untuk ' . $user->name . ' berhasil diajukan dan menunggu persetujuan');
+}
+
 
     public function store(Request $request)
 {

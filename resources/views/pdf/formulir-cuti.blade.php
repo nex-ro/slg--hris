@@ -173,7 +173,7 @@
         </div>
         <div class="company-info">
             <div class="company-name">PT. Bengkulu Sawit Lestari</div>
-            <div class="company-address">Jl. Raya Manna - Bintuhan, Air Sulau, Kedurang ilir, Kab. Bengkulu Selatan, Bengkulu, 38556</div>
+            <div class="company-address">Pantai Indah Kapuk St, RT.6/RW.2, Kamal Muara, Penjaringan, North Jakarta City, Jakarta 14470</div>
         </div>
     </div>
 

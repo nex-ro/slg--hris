@@ -170,6 +170,9 @@ Route::middleware('hrd')->group(function () {
 
     Route::post('/hrd/cuti/approval', [CutiController::class, 'approval'])->name('hrd.cuti.approval');
 
+    Route::post('/hrd/cuti/store-pengajuan-admin', [CutiController::class, 'storePengajuanAdmin'])
+    ->name('hrd.cuti.storePengajuanAdmin');
+
 });
 Route::middleware('head')->group(function () {
     Route::get('/HEAD/dashboard', [HrdController::class, 'index'])->middleware(['auth', 'verified'])->name('head.dashboard');

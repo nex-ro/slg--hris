@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { router } from '@inertiajs/react';
-import { Search, Plus, Edit2, Trash2, X, Calculator, CheckCircle, XCircle, Eye, Clock, User } from 'lucide-react';
+import { Search, Plus, Edit2, Trash2, X, Calculator, CheckCircle, XCircle, Eye, Clock, User, Save, Download } from 'lucide-react';
 import LayoutTemplate from '@/Layouts/LayoutTemplate';
 
 function Cuti({ jatahCuti, users, tahunList, filters = {}, pemakaianCuti = [], auth }) {
@@ -16,30 +16,70 @@ function Cuti({ jatahCuti, users, tahunList, filters = {}, pemakaianCuti = [], a
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [catatan, setCatatan] = useState('');
-const [showUserDetailModal, setShowUserDetailModal] = useState(false);
-const [selectedUserGroup, setSelectedUserGroup] = useState(null);
+  const [showUserDetailModal, setShowUserDetailModal] = useState(false);
+  const [selectedUserGroup, setSelectedUserGroup] = useState(null);
 
-const [searchPengajuan, setSearchPengajuan] = useState('');
-const [currentPagePengajuan, setCurrentPagePengajuan] = useState(1);
-const itemsPerPagePengajuan = 10;
+  const [searchPengajuan, setSearchPengajuan] = useState('');
+  const [currentPagePengajuan, setCurrentPagePengajuan] = useState(1);
+  const itemsPerPagePengajuan = 10;
 
-const [searchJatah, setSearchJatah] = useState('');
-const [currentPageJatah, setCurrentPageJatah] = useState(1);
-const itemsPerPageJatah = 9; 
+  const [searchJatah, setSearchJatah] = useState('');
+  const [currentPageJatah, setCurrentPageJatah] = useState(1);
+  const itemsPerPageJatah = 9; 
+
+  const [showFormModalAdmin, setShowFormModalAdmin] = useState(false);
+  const [selectedUserForCuti, setSelectedUserForCuti] = useState(null);
+  const [jatahCutiForUser, setJatahCutiForUser] = useState([]);
+
+  const [showSelectUserModal, setShowSelectUserModal] = useState(false);
+const [searchUser, setSearchUser] = useState('');
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      router.reload({ 
+        only: ['pemakaianCuti', 'jatahCuti'],
+        preserveScroll: true,
+        preserveState: true
+      });
+    }, 30000); // Refresh setiap 30 detik
+
+    return () => clearInterval(interval);
+  }, []);
 
   const formatCutiNumber = (num) => {
     return parseFloat(num || 0).toFixed(2);
   };
 
-  const [formData, setFormData] = useState({
-    uid: '',
-    tahun_ke: '',
-    tahun: new Date().getFullYear(),
-    jumlah_cuti: '',
-    keterangan: '',
-    sisa_cuti: '',
-    cuti_dipakai: ''
-  });
+  const openFormModalAdminFromPengajuan = () => {
+  setShowSelectUserModal(true);
+  setSearchUser('');
+};
+
+const selectUserAndOpenForm = async (userGroup) => {
+  setShowSelectUserModal(false);
+  openFormModalAdmin(userGroup);
+};
+const handleDownloadPdf = (cutiId) => {
+  window.open(route('cuti.download-pdf', cutiId), '_blank');
+};
+
+
+const [formData, setFormData] = useState({
+  // ... state yang sudah ada ...
+  jatah_cuti_id: '',
+  tanggal_mulai: '',
+  tanggal_selesai: '',
+  cuti_setengah_hari: false,
+  alasan: '',
+  id_penerima_tugas: '',
+  tugas: '',
+  diketahui_atasan: '',
+  diketahui_hrd: '',
+  disetujui: '',
+});
+
+const [workDays, setWorkDays] = useState(0);
+
 
   const currentUserId = auth?.user?.id;
 
@@ -133,21 +173,143 @@ const handlePageChangeJatah = (page) => {
   const handleSubmit = () => {
     if (modalType === 'create') {
       router.post(route('hrd.cuti.store'), formData, {
-        onSuccess: () => closeModal()
+        onSuccess: () => {
+          closeModal();
+          router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
+        }
       });
     } else {
       router.put(route('hrd.cuti.update', selectedData.id), formData, {
-        onSuccess: () => closeModal()
+        onSuccess: () => {
+          closeModal();
+          router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
+        }
       });
     }
   };
 
-  const handleDelete = (id) => {
+  const openFormModalAdmin = async (userGroup) => {
+  setSelectedUserForCuti(userGroup);
+  
+  // Hitung periode aktif user
+  const tmk = new Date(userGroup.user.tmk);
+  const today = new Date();
+  const yearsDiff = today.getFullYear() - tmk.getFullYear();
+  const monthDiff = today.getMonth() - tmk.getMonth();
+  const dayDiff = today.getDate() - tmk.getDate();
+  
+  let activePeriod = yearsDiff;
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    activePeriod--;
+  }
+  
+  // Filter jatah cuti: periode aktif dan periode depan (jika bukan periode 0)
+  const availableCuti = userGroup.cutiList.filter(item => {
+    if (item.tahun_ke === activePeriod) {
+      return item.sisa_cuti > 0; // Periode aktif
+    }
+    if (item.tahun_ke === activePeriod + 1 && activePeriod > 0) {
+      return item.sisa_cuti > 0; // Periode depan (hanya jika bukan periode 0)
+    }
+    return false;
+  }).map(item => ({
+    ...item,
+    is_current: item.tahun_ke === activePeriod,
+    is_borrowable: item.tahun_ke === activePeriod + 1 && activePeriod > 0
+  }));
+  
+  setJatahCutiForUser(availableCuti);
+  
+  // ✅ RESET FORM DATA
+  setFormData({
+    jatah_cuti_id: '',
+    tanggal_mulai: '',
+    tanggal_selesai: '',
+    cuti_setengah_hari: false,
+    alasan: '',
+    id_penerima_tugas: '',
+    tugas: '',
+    diketahui_atasan: '',
+    diketahui_hrd: '',
+    disetujui: '',
+  });
+  setWorkDays(0);
+  
+  setShowFormModalAdmin(true);
+};
+
+
+const closeFormModalAdmin = () => {
+  setShowFormModalAdmin(false);
+  setSelectedUserForCuti(null);
+  setJatahCutiForUser([]);
+  setFormData({
+    jatah_cuti_id: '',
+    tanggal_mulai: '',
+    tanggal_selesai: '',
+    cuti_setengah_hari: false,
+    alasan: '',
+    id_penerima_tugas: '',
+    tugas: '',
+    diketahui_atasan: '',
+    diketahui_hrd: '',
+    disetujui: '',
+  });
+  setWorkDays(0);
+};
+
+// ========================================
+// FUNGSI HANDLE SUBMIT ADMIN (UPDATE)
+// ========================================
+
+const handleSubmitAdmin = (e) => {
+  e.preventDefault();
+  
+  // Validasi: Minimal satu approver harus dipilih
+  if (!formData.diketahui_atasan && !formData.diketahui_hrd && !formData.disetujui) {
+    alert('Pilih minimal satu approver (Atasan, HRD, atau Pimpinan)');
+    return;
+  }
+  
+  // Validasi: Tanggal selesai harus >= tanggal mulai
+  if (new Date(formData.tanggal_selesai) < new Date(formData.tanggal_mulai)) {
+    alert('Tanggal selesai tidak boleh lebih awal dari tanggal mulai');
+    return;
+  }
+  
+  const submitData = {
+    ...formData,
+    uid: selectedUserForCuti.user.id 
+  };
+  
+  router.post(route('hrd.cuti.storePengajuanAdmin'), submitData, {
+    onSuccess: () => {
+      closeFormModalAdmin();
+      router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
+    },
+    onError: (errors) => {
+      console.error('Validation errors:', errors);
+      // Tampilkan error ke user
+      if (errors.error) {
+        alert(errors.error);
+      } else {
+        alert('Terjadi kesalahan saat mengajukan cuti');
+      }
+    }
+  });
+};
+
+
+
+const handleDelete = (id) => {
     if (confirm('Apakah Anda yakin ingin menghapus data ini?')) {
-      router.delete(route('hrd.cuti.destroy', id));
+      router.delete(route('hrd.cuti.destroy', id), {
+        onSuccess: () => {
+          router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
+        }
+      });
     }
   };
-
   const handleApproval = (cutiId, approvalType, status) => {
   const cuti = pemakaianCuti.find(c => c.id === cutiId);
   if (cuti && (cuti.status_final === 'ditolak' || cuti.status_final === 'disetujui')) {
@@ -195,10 +357,11 @@ const submitApproval = () => {
       setCatatan('');
       setShowDetailModal(false);
       setSelectedCuti(null);
+      // Refresh data setelah approval
+      router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
     }
   });
 };
-
   
   const getStatusBadge = (status) => {
     const statusConfig = {
@@ -223,11 +386,10 @@ const submitApproval = () => {
     });
   };
 
-  // Update fungsi canApprove untuk cek status_final
   const canApproveAsAtasan = (cuti) => {
     return cuti.diketahui_atasan === currentUserId && 
            cuti.status_diketahui_atasan === 'diproses' &&
-           cuti.status_final === 'diproses'; // ✅ TAMBAH CEK INI
+           cuti.status_final === 'diproses'; 
   };
 
   const canApproveAsHRD = (cuti) => {
@@ -276,6 +438,66 @@ const pendingApprovals = pemakaianCutiArray.filter(cuti => {
   
   return isAtasan || isHRD || isPimpinan;
 }).length || 0;
+const handleInputChange = (e) => {
+  const { name, value, type, checked } = e.target;
+  const newValue = type === 'checkbox' ? checked : value;
+  
+  setFormData(prev => {
+    const updated = { ...prev, [name]: newValue };
+    
+    // Auto-calculate work days ketika tanggal berubah
+    if (name === 'tanggal_mulai' || name === 'tanggal_selesai') {
+      if (updated.tanggal_mulai && updated.tanggal_selesai) {
+        calculateWorkDays(updated.tanggal_mulai, updated.tanggal_selesai, updated.cuti_setengah_hari);
+      }
+    }
+    
+    // Auto-sync tanggal selesai jika cuti setengah hari
+    if (name === 'cuti_setengah_hari' && checked) {
+      updated.tanggal_selesai = updated.tanggal_mulai;
+      calculateWorkDays(updated.tanggal_mulai, updated.tanggal_mulai, true);
+    }
+    
+    return updated;
+  });
+};
+
+const calculateWorkDays = (startDate, endDate, isHalfDay) => {
+  if (!startDate || !endDate) {
+    setWorkDays(0);
+    return;
+  }
+
+  if (isHalfDay) {
+    setWorkDays(0.5);
+    return;
+  }
+
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  let count = 0;
+  let current = new Date(start);
+
+  while (current <= end) {
+    const dayOfWeek = current.getDay();
+    // Count only weekdays (Monday=1 to Friday=5)
+    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+      count++;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+
+  setWorkDays(count);
+};
+
+// ========================================
+// FUNGSI OPEN FORM MODAL ADMIN (UPDATE)
+// ========================================
+
+
+
+
+
 
 // Filter & Pagination
 const filteredPengajuanCuti = pemakaianCutiArray.filter(cuti => {
@@ -607,6 +829,8 @@ const handlePageChangePengajuan = (page) => {
         {activeTab === 'pengajuan' && (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                 <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+
+        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
       <div className="flex flex-col md:flex-row gap-4 items-center">
         <div className="flex-1 relative w-full">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -627,7 +851,22 @@ const handlePageChangePengajuan = (page) => {
             Clear
           </button>
         )}
+        {/* ✅ BUTTON TAMBAH PENGAJUAN CUTI */}
+        <button
+          onClick={openFormModalAdminFromPengajuan}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
+        >
+          <Plus className="w-5 h-5" />
+          Tambah Pengajuan Cuti
+        </button>
       </div>
+      {searchPengajuan && (
+        <p className="text-sm text-gray-600 mt-2">
+          Ditemukan {filteredPengajuanCuti.length} hasil dari pencarian "{searchPengajuan}"
+        </p>
+      )}
+    </div>
+
       {searchPengajuan && (
         <p className="text-sm text-gray-600 mt-2">
           Ditemukan {filteredPengajuanCuti.length} hasil dari pencarian "{searchPengajuan}"
@@ -742,14 +981,26 @@ const handlePageChangePengajuan = (page) => {
           </div>
         </td>
         <td className="px-6 py-4 text-center">
-          <button
-            onClick={() => openDetailModal(cuti)}
-            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-            title="Lihat Detail"
-          >
-            <Eye className="w-4 h-4" />
-          </button>
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => openDetailModal(cuti)}
+              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+              title="Lihat Detail"
+            >
+              <Eye className="w-4 h-4" />
+            </button>
+            {cuti.status_final === 'disetujui' && (
+              <button
+                onClick={() => handleDownloadPdf(cuti.id)}
+                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                title="Download PDF"
+              >
+                <Download className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </td>
+
       </tr>
     ))
   ) : (
@@ -829,146 +1080,8 @@ const handlePageChangePengajuan = (page) => {
         )}
         
 
-        {/* Modal Form Jatah Cuti */}
-        {showModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center p-4" style={{ zIndex: 9999, position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, margin: 0 }}>
-            <div className="bg-white rounded-lg p-6 w-full max-w-md max-h-screen overflow-y-auto">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-800">
-                  {modalType === 'create' ? 'Tambah Jatah Cuti' : 'Edit Jatah Cuti'}
-                </h2>
-                <button onClick={closeModal} className="text-gray-400 hover:text-gray-600">
-                  <X className="w-6 h-6" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Karyawan</label>
-                  <select
-                    value={formData.uid}
-                    onChange={(e) => setFormData({ ...formData, uid: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                    disabled={modalType === 'edit'}
-                  >
-                    <option value="">Pilih Karyawan</option>
-                    {users.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.name} - TMK: {user.tmk}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tahun</label>
-                  <input
-                    type="number"
-                    value={formData.tahun}
-                    onChange={(e) => setFormData({ ...formData, tahun: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                    min="2020"
-                  />
-                </div>
-
-                {modalType === 'create' && (
-                  <button
-                    type="button"
-                    onClick={calculateCuti}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    <Calculator className="w-4 h-4" />
-                    Hitung Otomatis
-                  </button>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tahun Ke</label>
-                  <input
-                    type="number"
-                    value={formData.tahun_ke}
-                    onChange={(e) => setFormData({ ...formData, tahun_ke: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                    min="1"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Jumlah Cuti (hari)</label>
-                  <input
-                    type="number"
-                    value={formData.jumlah_cuti}
-                    onChange={(e) => setFormData({ ...formData, jumlah_cuti: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    required
-                    min="0"
-                  />
-                </div>
-
-                {modalType === 'edit' && (
-                  <>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Cuti Dipakai (hari)</label>
-                      <input
-                        type="number"
-                        value={formData.cuti_dipakai}
-                        onChange={(e) => setFormData({ ...formData, cuti_dipakai: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        required
-                        min="0"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Sisa Cuti (hari)</label>
-                      <input
-                        type="number"
-                        value={formData.sisa_cuti}
-                        onChange={(e) => setFormData({ ...formData, sisa_cuti: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        required
-                        min="0"
-                      />
-                    </div>
-                  </>
-                )}
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Keterangan</label>
-                  <textarea
-                    value={formData.keterangan}
-                    onChange={(e) => setFormData({ ...formData, keterangan: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    rows="3"
-                  />
-                </div>
-
-                <div className="flex gap-3 pt-4">
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    Batal
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSubmit}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-                  >
-                    {modalType === 'create' ? 'Tambah' : 'Update'}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Modal Detail Pengajuan Cuti */}
-       {/* Modal Detail Pengajuan Cuti */}
 {showDetailModal && selectedCuti && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
@@ -1312,215 +1425,304 @@ const handlePageChangePengajuan = (page) => {
     </div>
   </div>
 )}
-{showUserDetailModal && selectedUserGroup && (
+{showSelectUserModal && (
   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between p-6 border-b border-gray-200 sticky top-0 bg-white z-10">
+    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
+      <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-green-50">
         <div className="flex items-center gap-3">
-          <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
-            {selectedUserGroup.user?.name?.charAt(0).toUpperCase()}
-          </div>
-          <div>
-            <h3 className="text-xl font-semibold text-gray-800">{selectedUserGroup.user?.name}</h3>
-            <p className="text-sm text-gray-600">{selectedUserGroup.user?.email}</p>
-          </div>
+          <User className="w-6 h-6 text-green-600" />
+          <h3 className="text-xl font-semibold text-gray-800">Pilih Karyawan</h3>
         </div>
         <button
-          onClick={closeUserDetailModal}
+          onClick={() => setShowSelectUserModal(false)}
           className="text-gray-400 hover:text-gray-600 transition-colors"
         >
           <X className="w-6 h-6" />
         </button>
       </div>
 
-      <div className="p-6 space-y-6">
-        {(() => {
-          // Filter hanya periode aktif
-          const tmk = new Date(selectedUserGroup.user.tmk);
-          const today = new Date();
-          const yearsDiff = today.getFullYear() - tmk.getFullYear();
-          const monthDiff = today.getMonth() - tmk.getMonth();
-          const dayDiff = today.getDate() - tmk.getDate();
-          
-          let activePeriod = yearsDiff;
-          if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
-            activePeriod--;
-          }
-          
-          const aktiveCuti = selectedUserGroup.cutiList.filter(item => item.tahun_ke >= activePeriod);
-          
-          // Hitung masa kerja detail
-          const tmkDate = new Date(selectedUserGroup.user.tmk);
-          const diffTime = Math.abs(today - tmkDate);
-          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          const years = Math.floor(diffDays / 365);
-          const remainingDays = diffDays % 365;
-          const months = Math.floor(remainingDays / 30);
-          const days = remainingDays % 30;
-          
-          
-          const totalJatah = aktiveCuti.reduce((sum, item) => sum + parseFloat(item.jumlah_cuti || 0), 0);
-          const totalTerpakai = aktiveCuti.reduce((sum, item) => sum + parseFloat(item.cuti_dipakai || 0), 0);
-          const totalSisa = aktiveCuti.reduce((sum, item) => sum + parseFloat(item.sisa_cuti || 0), 0);
-          
-          // Cari periode aktif (tahun_ke == activePeriod)
-          const periodeAktif = aktiveCuti.find(item => item.tahun_ke === activePeriod);
-          const periodeNext = aktiveCuti.find(item => item.tahun_ke === activePeriod + 1);
-          const periodePrev = selectedUserGroup.cutiList.find(item => item.tahun_ke === activePeriod - 1);
-          
-          return (
-            <>
-              <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg p-6 text-white">
-                <h4 className="text-lg font-bold mb-4">Informasi Jatah Cuti</h4>
-                
-                <div className="space-y-3">
-                  {/* Tahun ke */}
-                  <div className="flex justify-between items-center pb-2 border-b border-blue-400">
-                    <span className="text-blue-100">Tahun ke</span>
-                    <span className="font-semibold">: {activePeriod}</span>
-                  </div>
+      <div className="p-6">
+        {/* Search Input */}
+        <div className="mb-4 relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <input
+            type="text"
+            placeholder="Cari nama karyawan..."
+            value={searchUser}
+            onChange={(e) => setSearchUser(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          />
+        </div>
 
-                  {/* TMK */}
-                  <div className="flex justify-between items-center pb-2 border-b border-blue-400">
-                    <span className="text-blue-100">TMK</span>
-                    <span className="font-semibold">
-                      : {formatDate(selectedUserGroup.user.tmk)} ({years} tahun {months} bulan {days} hari)
-                    </span>
-                  </div>
+        {/* User List */}
+        <div className="space-y-2 max-h-96 overflow-y-auto">
+          {(() => {
+            const groupedData = Object.values(
+              jatahCuti.data.reduce((acc, item) => {
+                const userId = item.user?.id;
+                if (!acc[userId]) {
+                  acc[userId] = { user: item.user, cutiList: [] };
+                }
+                acc[userId].cutiList.push(item);
+                return acc;
+              }, {})
+            );
 
-                  {/* Hak cuti sebenarnya */}
-                  <div className="flex justify-between items-center pb-2 border-b border-blue-400">
-                    <span className="text-blue-100">Hak cuti sebenarnya</span>
-                    <span className="font-semibold">: {formatCutiNumber(periodeAktif?.jumlah_cuti || 0)} hari</span>
-                  </div>
+            const filteredUsers = groupedData.filter(userGroup => 
+              !searchUser || userGroup.user?.name?.toLowerCase().includes(searchUser.toLowerCase())
+            );
 
-                  {/* Dipinjam utk tahun ke prev */}
-                  {periodePrev && (
-                    <div className="flex justify-between items-center pb-2 border-b border-blue-400">
-                      <span className="text-blue-100">Dipinjam utk tahun ke {activePeriod - 1}</span>
-                      <span className="font-semibold">: {formatCutiNumber(periodePrev?.pinjam_tahun_next || 0)} hari</span>
+            return filteredUsers.length > 0 ? (
+              filteredUsers.map((userGroup, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => selectUserAndOpenForm(userGroup)}
+                  className="w-full p-4 border border-gray-200 rounded-lg hover:bg-green-50 hover:border-green-300 transition-all text-left"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gradient-to-br from-green-500 to-green-600 rounded-full flex items-center justify-center text-white font-bold">
+                      {userGroup.user?.name?.charAt(0).toUpperCase()}
                     </div>
-                  )}
-
-                  {/* Dapat dipinjam cuti tahun ke next */}
-                  {periodeNext && (
-                    <div className="flex justify-between items-center pb-2 border-b border-blue-400">
-                      <span className="text-blue-100">Dapat dipinjam cuti tahun ke {activePeriod + 1}</span>
-                      <span className="font-semibold">: {formatCutiNumber(periodeNext?.sisa_cuti || 0)} hari</span>
+                    <div className="flex-1">
+                      <p className="font-semibold text-gray-900">{userGroup.user?.name}</p>
+                      <p className="text-sm text-gray-600">{userGroup.user?.email}</p>
                     </div>
-                  )}
-
-                  {/* Telah terpakai */}
-                  <div className="flex justify-between items-center pb-2 border-b border-blue-400">
-                    <span className="text-blue-100">Telah terpakai</span>
-                    <span className="font-semibold">: {formatCutiNumber(periodeAktif?.cuti_dipakai || 0)} hari</span>
                   </div>
-
-                  {/* Sisa cuti */}
-                  <div className="flex justify-between items-center pb-2 border-b-2 border-blue-300">
-                    <span className="text-blue-100 font-bold">Sisa cuti</span>
-                    <span className="font-bold text-xl text-yellow-300">
-                      : {formatCutiNumber(periodeAktif?.sisa_cuti || 0)} hari
-                    </span>
-                  </div>
-
-                  {/* Telah terpakai dengan detail */}
-                                   <div className="pb-2 border-b border-blue-400">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-blue-100">Telah terpakai</span>
-                      <span className="font-semibold">: {formatCutiNumber(periodeAktif?.cuti_dipakai || 0)} hari</span>
-                    </div>
-                    {(() => {
-                      // Filter penggunaan cuti yang sudah disetujui untuk periode aktif ini
-                      const cutiDipakai = periodeAktif?.pemakaian?.filter(p => p.status_final === 'disetujui') || [];
-                      
-                      return cutiDipakai.length > 0 && (
-                        <div className="ml-4 mt-2 space-y-1">
-                          {cutiDipakai.map((cuti, idx) => (
-                            <div key={idx} className="text-sm text-blue-100">
-                              • {formatCutiNumber(cuti.jumlah_hari)} hari ({formatDate(cuti.tanggal_mulai)} - {formatDate(cuti.tanggal_selesai)})
-                            </div>
-                          ))}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                </div>
+                </button>
+              ))
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                <User className="w-12 h-12 mx-auto mb-2 text-gray-300" />
+                <p>Tidak ada karyawan yang ditemukan</p>
               </div>
-
-              {/* Detail Per Periode */}
-              <div>
-                <h4 className="text-sm font-semibold text-gray-700 mb-3">Detail Jatah Cuti Per Periode</h4>
-                <div className="space-y-3">
-                  {aktiveCuti.map((item, itemIdx) => (
-                    <div key={itemIdx} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="text-base font-semibold text-gray-800">
-                          Periode {item.tahun_ke} - Tahun {item.tahun}
-                          {item.tahun_ke === activePeriod && (
-                            <span className="ml-2 px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
-                              Aktif
-                            </span>
-                          )}
-                        </span>
-                        <div className="flex gap-1">
-                          <button
-                            onClick={() => openModal('edit', item)}
-                            className="p-2 text-blue-600 hover:bg-blue-100 rounded transition-colors"
-                            title="Edit"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(item.id)}
-                            className="p-2 text-red-600 hover:bg-red-100 rounded transition-colors"
-                            title="Hapus"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-3 gap-3 mb-3">
-                        <div className="bg-white rounded p-2">
-                          <p className="text-xs text-gray-500">Jatah</p>
-                          <p className="text-lg font-semibold text-blue-600">{formatCutiNumber(item.jumlah_cuti)} hari</p>
-                        </div>
-                        <div className="bg-white rounded p-2">
-                          <p className="text-xs text-gray-500">Terpakai</p>
-                          <p className="text-lg font-semibold text-red-600">{formatCutiNumber(item.cuti_dipakai)} hari</p>
-                        </div>
-                        <div className="bg-white rounded p-2">
-                          <p className="text-xs text-gray-500">Sisa</p>
-                          <p className="text-lg font-semibold text-green-600">{formatCutiNumber(item.sisa_cuti)} hari</p>
-                        </div>
-                      </div>
-                      {item.keterangan && (
-                        <p className="text-xs text-gray-500 italic bg-yellow-50 p-2 rounded">
-                          📝 {item.keterangan}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Riwayat Penggunaan Cuti */}
-             
-            </>
-          );
-        })()}
+            );
+          })()}
+        </div>
       </div>
+    </div>
+  </div>
+)}
 
-      {/* Footer */}
-      <div className="p-6 border-t border-gray-200 sticky bottom-0 bg-white">
+{/* ✅ MODAL FORM PENGAJUAN CUTI ADMIN */}
+{showFormModalAdmin && selectedUserForCuti && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-green-50">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-green-600 rounded-lg">
+            <Plus className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold text-gray-800">Ajukan Cuti untuk Karyawan</h3>
+            <p className="text-sm text-gray-600">
+              User: <strong>{selectedUserForCuti.user.name}</strong>
+            </p>
+          </div>
+        </div>
         <button
-          onClick={closeUserDetailModal}
-          className="w-full px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+          onClick={closeFormModalAdmin}
+          className="text-gray-400 hover:text-gray-600 transition-colors"
         >
-          Tutup
+          <X className="w-6 h-6" />
         </button>
       </div>
+
+      <form onSubmit={handleSubmitAdmin} className="p-6 space-y-4">
+        {/* Pilih Jatah Cuti */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Pilih Jatah Cuti <span className="text-red-500">*</span>
+          </label>
+          <select
+            name="jatah_cuti_id"
+            value={formData.jatah_cuti_id}
+            onChange={handleInputChange}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            required
+          >
+            <option value="">Pilih Periode Cuti</option>
+            {jatahCutiForUser
+              .filter(j => j.is_current)
+              .map((jatah) => (
+                <option key={jatah.id} value={jatah.id}>
+                  Tahun ke-{jatah.tahun_ke} - Sisa: {formatCutiNumber(jatah.sisa_cuti)} hari
+                </option>
+              ))}
+            {jatahCutiForUser
+              .filter(j => j.is_borrowable)
+              .map((jatah) => (
+                <option key={jatah.id} value={jatah.id}>
+                  Tahun ke-{jatah.tahun_ke} - Sisa: {formatCutiNumber(jatah.sisa_cuti)} hari (Pinjam periode depan)
+                </option>
+              ))}
+          </select>
+        </div>
+
+        {/* Cuti Setengah Hari */}
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            name="cuti_setengah_hari"
+            checked={formData.cuti_setengah_hari}
+            onChange={handleInputChange}
+            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+          />
+          <label className="text-sm font-medium text-gray-700">
+            Cuti Setengah Hari
+          </label>
+        </div>
+
+        {/* Tanggal Mulai & Selesai */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tanggal Mulai <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              name="tanggal_mulai"
+              value={formData.tanggal_mulai}
+              onChange={(e) => {
+                handleInputChange(e);
+                if (formData.cuti_setengah_hari) {
+                  setFormData({
+                    ...formData,
+                    tanggal_mulai: e.target.value,
+                    tanggal_selesai: e.target.value
+                  });
+                }
+              }}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tanggal Selesai <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              name="tanggal_selesai"
+              value={formData.tanggal_selesai}
+              onChange={handleInputChange}
+              min={formData.tanggal_mulai}
+              disabled={formData.cuti_setengah_hari}
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-100"
+              required
+            />
+          </div>
+        </div>
+
+        {/* Info Durasi */}
+        {workDays > 0 && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-blue-900">Durasi Cuti:</span>
+              <span className="text-lg font-bold text-blue-600">{workDays} hari</span>
+            </div>
+          </div>
+        )}
+
+        {/* Alasan */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Alasan Cuti <span className="text-red-500">*</span>
+          </label>
+          <textarea
+            name="alasan"
+            value={formData.alasan}
+            onChange={handleInputChange}
+            rows="3"
+            maxLength="500"
+            placeholder="Jelaskan alasan pengajuan cuti..."
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            required
+          />
+        </div>
+
+        {/* Alur Persetujuan */}
+        <div className="border-t pt-4">
+          <h4 className="text-sm font-semibold text-gray-700 mb-3">
+            Alur Persetujuan <span className="text-red-500 text-xs">(Minimal pilih 1)</span>
+          </h4>
+          <div className="space-y-3">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Diketahui Atasan
+              </label>
+              <select
+                name="diketahui_atasan"
+                value={formData.diketahui_atasan}
+                onChange={handleInputChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              >
+                <option value="">Pilih Atasan</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Diketahui HRD
+              </label>
+              <select
+                name="diketahui_hrd"
+                value={formData.diketahui_hrd}
+                onChange={handleInputChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              >
+                <option value="">Pilih HRD</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Disetujui Pimpinan
+              </label>
+              <select
+                name="disetujui"
+                value={formData.disetujui}
+                onChange={handleInputChange}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+              >
+                <option value="">Pilih Pimpinan</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id}>
+                    {user.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Buttons */}
+        <div className="flex gap-3 pt-4 border-t">
+          <button
+            type="button"
+            onClick={closeFormModalAdmin}
+            className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            Batal
+          </button>
+          <button
+            type="submit"
+            className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <Save className="w-4 h-4" />
+            Ajukan Cuti
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 )}

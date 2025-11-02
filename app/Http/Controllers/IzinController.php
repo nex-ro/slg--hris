@@ -16,35 +16,33 @@ use App\Models\Notification;
 
 class IzinController extends Controller
 {
-    /**
-     * Display a listing of the resource (untuk user biasa)
-     */
     public function index()
-    {
-        // Get all users with 'head' role for dropdown selection
-        $heads = User::where('role', 'head')
-            ->select('id', 'name', 'jabatan', 'email')
-            ->orderBy('name')
-            ->get();
+{
+    // UBAH: Dari hanya 'head' menjadi array role
+    $heads = User::whereIn('role', ['head', 'hrd', 'eksekutif'])
+        ->select('id', 'name', 'jabatan', 'email', 'role')
+        ->orderBy('name')
+        ->get();
+        
+    $perizinans = Perizinan::where('uid', Auth::id())
+        ->with([
+            'user:id,name,email,jabatan',
+            'diketahuiOleh:id,name,email,jabatan,role',
+            'disetujuiOleh:id,name,email,jabatan,role'
+        ])
+        ->latest()
+        ->paginate(10);
 
-        // Get current user's izin submissions with relationships
-        $perizinans = Perizinan::where('uid', Auth::id())
-            ->with([
-                'user:id,name,email,jabatan',
-                'diketahuiOleh:id,name,email,jabatan',
-                'disetujuiOleh:id,name,email,jabatan'
-            ])
-            ->latest()
-            ->paginate(10);
+    return Inertia::render('User/Izin', [
+        'heads' => $heads,
+        'perizinans' => $perizinans,
+        'auth' => [
+            'user' => Auth::user()
+        ]
+    ]);
+}
 
-        return Inertia::render('User/Izin', [
-            'heads' => $heads,
-            'perizinans' => $perizinans,
-            'auth' => [
-                'user' => Auth::user()
-            ]
-        ]);
-    }
+
 
 private function sendPerizinanNotification($perizinan, $action = 'diajukan')
 {
@@ -576,10 +574,10 @@ public function approve(Request $request, $id)
             }
             $perizinan->save();
             
-            // Kirim notifikasi HRD approve
             $this->sendPerizinanNotification($perizinan, 'disetujui_hrd');
 
-        } elseif ($currentUser->role === 'head') {
+        // UBAH: Dari hanya 'head' menjadi mencakup head, hrd, dan eksekutif
+        } elseif (in_array($currentUser->role, ['head', 'hrd', 'eksekutif'])) {
             if ($perizinan->uid_diketahui != $currentUser->id) {
                 return back()->with('error', 'Anda tidak memiliki akses untuk menyetujui perizinan ini');
             }
@@ -594,7 +592,6 @@ public function approve(Request $request, $id)
             }
             $perizinan->save();
             
-            // Kirim notifikasi Head approve
             $this->sendPerizinanNotification($perizinan, 'disetujui_head');
 
         } else {
@@ -604,7 +601,6 @@ public function approve(Request $request, $id)
         $perizinan->refresh();
         $this->updateOverallStatus($perizinan);
         
-        // Jika status berubah menjadi Disetujui PENUH, kirim notifikasi final
         $perizinan->refresh();
         if ($perizinan->status === 'Disetujui' && $oldStatus !== 'Disetujui') {
             $this->updateKehadiranIzin($perizinan);
@@ -618,6 +614,7 @@ public function approve(Request $request, $id)
         return back()->with('error', 'Gagal menyetujui perizinan');
     }
 }
+
 
 
 
@@ -659,7 +656,6 @@ public function generatePdf($id)
 
 public function reject(Request $request, $id)
 {
-    // PERBAIKAN: Hapus validasi min 10 karakter
     $validator = Validator::make($request->all(), [
         'catatan' => 'required|string|max:500'
     ], [
@@ -685,7 +681,8 @@ public function reject(Request $request, $id)
             $perizinan->catatan = $request->catatan;
             $perizinan->save();
 
-        } elseif ($currentUser->role === 'head') {
+        // UBAH: Dari hanya 'head' menjadi mencakup head, hrd, dan eksekutif
+        } elseif (in_array($currentUser->role, ['head', 'hrd', 'eksekutif'])) {
             if ($perizinan->uid_diketahui != $currentUser->id) {
                 return back()->with('error', 'Anda tidak memiliki akses untuk menolak perizinan ini');
             }
@@ -708,7 +705,6 @@ public function reject(Request $request, $id)
         $perizinan->refresh();
         $this->sendPerizinanNotification($perizinan, 'ditolak');
 
-        // Return back dengan flash message
         return back()->with('success', "Perizinan berhasil ditolak");
         
     } catch (\Exception $e) {
@@ -716,7 +712,6 @@ public function reject(Request $request, $id)
         return back()->with('error', 'Gagal menolak perizinan');
     }
 }
-
 /**
  * Update overall status berdasarkan status_diketahui dan status_disetujui
  */
@@ -882,15 +877,17 @@ private function updateOverallStatus($perizinan)
      * Get all heads (for dropdown)
      */
     public function getHeads()
-    {
-        $heads = User::where('role', 'head')
-            ->select('id', 'name', 'email', 'jabatan')
-            ->orderBy('name')
-            ->get();
-        
-        return response()->json([
-            'success' => true,
-            'data' => $heads
-        ]);
-    }
+{
+    // UBAH: Dari hanya 'head' menjadi array role
+    $heads = User::whereIn('role', ['head', 'hrd', 'eksekutif'])
+        ->select('id', 'name', 'email', 'jabatan', 'role')
+        ->orderBy('name')
+        ->get();
+    
+    return response()->json([
+        'success' => true,
+        'data' => $heads
+    ]);
+}
+
 }
