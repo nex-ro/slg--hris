@@ -42,70 +42,92 @@ class UserController extends Controller
             'flash' => session('flash')
         ]);
     }
-        public function getPegawai(Request $request)
-    {
-        $query = User::query();
+   public function pegawaiHead($divisi)
+{
+    $divisiName = str_replace('-', ' ', $divisi);
+    $divisiName = ucwords($divisiName);
     
-        // Search
-        if ($request->has('search') && $request->search != '') {
-            $search = $request->search;
-            $query->where(function($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('id', 'like', "%{$search}%");
-            });
-        }
-    
-        // Filter Divisi
-        if ($request->has('divisi') && $request->divisi != '') {
-            $query->where('divisi', $request->divisi);
-        }
-    
-        // Filter Jabatan
-        if ($request->has('jabatan') && $request->jabatan != '') {
-            $query->where('jabatan', $request->jabatan);
-        }
-    
-        // Filter Tower
-        if ($request->has('tower') && $request->tower != '') {
-            $query->where('tower', $request->tower);
-        }
-    
-        // Paginate dengan 15 item per page
-        $users = $query->orderBy('id', 'asc')->paginate(15);
-    
-        // Get unique values untuk filter dropdowns
-        $divisiList = User::select('divisi')
-            ->distinct()
-            ->whereNotNull('divisi')
-            ->where('active', 1)
-            ->where('divisi', '!=', '')
-            ->orderBy('divisi')
-            ->pluck('divisi');
-            
-        $jabatanList = User::select('jabatan')
-            ->distinct()
-            ->whereNotNull('jabatan')
-            
-            ->where('jabatan', '!=', '')
-            ->orderBy('jabatan')
-            ->pluck('jabatan');
-    
-        // Return JSON response
-        return response()->json([
-            'users' => [
-                'data' => $users->items(),
-                'current_page' => $users->currentPage(),
-                'last_page' => $users->lastPage(),
-                'per_page' => $users->perPage(),
-                'total' => $users->total(),
-                'from' => $users->firstItem(),
-                'to' => $users->lastItem(),
-            ],
-            'divisiList' => $divisiList,
-            'jabatanList' => $jabatanList,
-        ], 200);
+    return Inertia::render('Atasan/Pegawai', [
+        'flash' => session('flash'),
+        'filterDivisi' => $divisiName, 
+    ]);
+}
+
+
+       public function getPegawai(Request $request)
+{
+    $query = User::query();
+
+    // ✅ TAMBAHKAN: Filter Divisi dari params (prioritas tertinggi)
+    if ($request->has('filterDivisi') && $request->filterDivisi != '') {
+        $query->where('divisi', $request->filterDivisi);
     }
+
+    // Search
+    if ($request->has('search') && $request->search != '') {
+        $search = $request->search;
+        $query->where(function($q) use ($search) {
+            $q->where('name', 'like', "%{$search}%")
+              ->orWhere('email', 'like', "%{$search}%")
+              ->orWhere('id', 'like', "%{$search}%");
+        });
+    }
+
+    // Filter Divisi (dari dropdown filter biasa)
+    // ✅ PERBAIKI: Hanya apply jika tidak ada filterDivisi
+    if ($request->has('divisi') && $request->divisi != '' && !$request->has('filterDivisi')) {
+        $query->where('divisi', $request->divisi);
+    }
+
+    // Filter Jabatan
+    if ($request->has('jabatan') && $request->jabatan != '') {
+        $query->where('jabatan', $request->jabatan);
+    }
+
+    // Filter Tower
+    if ($request->has('tower') && $request->tower != '') {
+        $query->where('tower', $request->tower);
+    }
+
+    // Paginate dengan 15 item per page
+    $users = $query->orderBy('id', 'asc')->paginate(15);
+
+    // ✅ PERBAIKI: Get divisi list berdasarkan filterDivisi jika ada
+    $divisiQuery = User::select('divisi')
+        ->distinct()
+        ->whereNotNull('divisi')
+        ->where('active', 1)
+        ->where('divisi', '!=', '');
+    
+    // Jika ada filterDivisi, hanya ambil divisi tersebut
+    if ($request->has('filterDivisi') && $request->filterDivisi != '') {
+        $divisiQuery->where('divisi', $request->filterDivisi);
+    }
+    
+    $divisiList = $divisiQuery->orderBy('divisi')->pluck('divisi');
+        
+    $jabatanList = User::select('jabatan')
+        ->distinct()
+        ->whereNotNull('jabatan')
+        ->where('jabatan', '!=', '')
+        ->orderBy('jabatan')
+        ->pluck('jabatan');
+
+    // Return JSON response
+    return response()->json([
+        'users' => [
+            'data' => $users->items(),
+            'current_page' => $users->currentPage(),
+            'last_page' => $users->lastPage(),
+            'per_page' => $users->perPage(),
+            'total' => $users->total(),
+            'from' => $users->firstItem(),
+            'to' => $users->lastItem(),
+        ],
+        'divisiList' => $divisiList,
+        'jabatanList' => $jabatanList,
+    ], 200);
+}
 
 
     public function getUsers()

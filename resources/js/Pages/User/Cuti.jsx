@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, Eye, Plus, Clock, AlertCircle, FileText,Download, User, X, Save, ChevronLeft ,ChevronRight ,CheckCircle } from 'lucide-react';
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
-import { router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 
 function UserCuti({ jatahCuti = [], pemakaianCuti = {}, paginationLinks = [] }) {
   const cutiList = pemakaianCuti?.data || [];
@@ -220,6 +220,8 @@ const formatHari = (hari) => {
 
   return (
     <LayoutTemplate>
+      <Head title="Izin Cuti" />
+
       <div className="p-6 max-w-7xl mx-auto">
 
 <div className="mb-8">
@@ -482,7 +484,7 @@ const formatHari = (hari) => {
 
         {/* Modal Form Pengajuan */}
         {showFormModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-blue-50">
                 <div className="flex items-center gap-3">
@@ -833,7 +835,7 @@ const formatHari = (hari) => {
 
         {/* Modal Detail */}
         {showModal && selectedCuti && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <h3 className="text-xl font-semibold text-gray-800">Detail Pengajuan Cuti</h3>

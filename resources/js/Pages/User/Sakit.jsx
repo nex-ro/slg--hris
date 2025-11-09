@@ -1,11 +1,12 @@
 import { useState } from "react";
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
-import { router, usePage } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { Plus, Edit2, Trash2, Calendar, FileText, CheckCircle, XCircle, Clock, Upload, X } from "lucide-react";
 
 function Sakit() {
   const { sakits, flash } = usePage().props; // Ambil data dari backend
-  
+  const [dateError, setDateError] = useState("");
+
   const [showModal, setShowModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
@@ -24,6 +25,57 @@ function Sakit() {
     const url = `/storage/${bukti}`;
     window.open(url, '_blank');
   };
+
+// Perbaiki fungsi validasi tanggal
+const isWeekend = (dateString) => {
+  if (!dateString) return false;
+  const date = new Date(dateString + 'T00:00:00'); // Tambahkan waktu untuk menghindari timezone issue
+  const dayOfWeek = date.getDay();
+  return dayOfWeek === 0 || dayOfWeek === 6;
+};
+
+const getMinDate = () => {
+  const today = new Date();
+  let count = 0;
+  let currentDate = new Date(today);
+  
+  // Mundur 3 hari kerja (tidak termasuk Sabtu & Minggu)
+  while (count < 3) {
+    currentDate.setDate(currentDate.getDate() - 1);
+    const dayOfWeek = currentDate.getDay();
+    
+    // Jika bukan Sabtu (6) atau Minggu (0), hitung sebagai hari kerja
+    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+      count++;
+    }
+  }
+  
+  return currentDate.toISOString().split('T')[0];
+};
+
+
+// Fungsi untuk mendapatkan hari kerja berikutnya
+const getNextWorkingDay = (dateString) => {
+  let date = new Date(dateString + 'T00:00:00');
+  date.setDate(date.getDate() + 1);
+  
+  while (date.getDay() === 0 || date.getDay() === 6) {
+    date.setDate(date.getDate() + 1);
+  }
+  
+  return date.toISOString().split('T')[0];
+};
+
+// Fungsi untuk validasi range tanggal
+const validateDateRange = (startDate, endDate) => {
+  if (!startDate || !endDate) return true;
+  
+  const start = new Date(startDate + 'T00:00:00');
+  const end = new Date(endDate + 'T00:00:00');
+  
+  return end >= start;
+};
+
   const handleOpenModal = (data = null) => {
     if (data) {
       setEditMode(true);
@@ -63,23 +115,42 @@ function Sakit() {
   };
 
   const handleSubmit = (e) => {
-    e.preventDefault();
-    
-    // Validasi
-    if (!formData.tanggal_mulai || !formData.tanggal_selesai) {
-      alert("Tanggal mulai dan selesai harus diisi!");
-      return;
-    }
-    
-    if (!formData.keterangan) {
-      alert("Keterangan harus diisi!");
-      return;
-    }
-    
-    if (!editMode && !formData.bukti) {
-      alert("Bukti surat dokter harus diupload!");
-      return;
-    }
+  e.preventDefault();
+  
+  // Validasi
+  if (!formData.tanggal_mulai || !formData.tanggal_selesai) {
+    alert("Tanggal mulai dan selesai harus diisi!");
+    return;
+  }
+  // Validasi weekend
+  if (isWeekend(formData.tanggal_mulai)) {
+    alert("Tanggal mulai tidak boleh di hari Sabtu atau Minggu!");
+    return;
+  }
+  
+  if (isWeekend(formData.tanggal_selesai)) {
+    alert("Tanggal selesai tidak boleh di hari Sabtu atau Minggu!");
+    return;
+  }
+  
+  // Validasi H-3
+  const minDate = new Date(getMinDate());
+  const selectedDate = new Date(formData.tanggal_mulai);
+  
+  if (selectedDate < minDate) {
+    alert("Tanggal mulai tidak boleh lebih dari H-3 hari kerja!");
+    return;
+  }
+  
+  if (!formData.keterangan) {
+    alert("Keterangan harus diisi!");
+    return;
+  }
+  
+  if (!editMode && !formData.bukti) {
+    alert("Bukti surat dokter harus diupload!");
+    return;
+  }
 
     setProcessing(true);
 
@@ -204,6 +275,7 @@ function Sakit() {
 
   return (
     <LayoutTemplate>
+      <Head title="Sakit" />
       <div className="min-h-screen bg-gray-50 p-6">
         <div className="max-w-7xl mx-auto">
           {/* Flash Message */}
@@ -377,7 +449,7 @@ function Sakit() {
 
         {/* Modal */}
         {showModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
                 <h2 className="text-2xl font-bold text-gray-900">
@@ -394,36 +466,144 @@ function Sakit() {
               
               <div className="p-6">
                 <div className="space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Tanggal Mulai <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.tanggal_mulai}
-                        onChange={(e) => setFormData({ ...formData, tanggal_mulai: e.target.value })}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                        required
-                        disabled={processing}
-                      />
-                    </div>
+                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-2">
+      Tanggal Mulai <span className="text-red-500">*</span>
+    </label>
+    <input
+      type="date"
+      value={formData.tanggal_mulai}
+      onChange={(e) => {
+        const selectedDate = e.target.value;
+        
+        // Validasi weekend
+        if (isWeekend(selectedDate)) {
+          setDateError("Tidak bisa memilih hari Sabtu atau Minggu!");
+          // Reset input
+          setFormData({ ...formData, tanggal_mulai: "" });
+          return;
+        }
+        
+        // Validasi H-3
+        const minDate = new Date(getMinDate());
+        const selected = new Date(selectedDate + 'T00:00:00');
+        
+        if (selected < minDate) {
+          setDateError("Tanggal tidak boleh lebih dari H-3 hari kerja!");
+          setFormData({ ...formData, tanggal_mulai: "" });
+          return;
+        }
+        
+        // Validasi tanggal selesai jika sudah diisi
+        if (formData.tanggal_selesai && !validateDateRange(selectedDate, formData.tanggal_selesai)) {
+          setFormData({ 
+            ...formData, 
+            tanggal_mulai: selectedDate,
+            tanggal_selesai: "" // Reset tanggal selesai
+          });
+          setDateError("Tanggal selesai akan direset karena tidak valid");
+          setTimeout(() => setDateError(""), 3000);
+        } else {
+          setFormData({ ...formData, tanggal_mulai: selectedDate });
+          setDateError("");
+        }
+      }}
+      min={getMinDate()}
+      className={`w-full px-4 py-2 border ${dateError ? 'border-red-300 bg-red-50' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all`}
+      required
+      disabled={processing}
+    />
+    <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+      <Calendar className="w-3 h-3" />
+      Maksimal H-3 hari kerja (tidak termasuk weekend)
+    </p>
+    {dateError && (
+      <p className="text-xs text-red-600 mt-1 font-medium animate-pulse">
+        ⚠️ {dateError}
+      </p>
+    )}
+  </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Tanggal Selesai <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="date"
-                        value={formData.tanggal_selesai}
-                        onChange={(e) => setFormData({ ...formData, tanggal_selesai: e.target.value })}
-                        min={formData.tanggal_mulai}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none"
-                        required
-                        disabled={processing}
-                      />
-                    </div>
-                  </div>
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-2">
+      Tanggal Selesai <span className="text-red-500">*</span>
+    </label>
+    <input
+      type="date"
+      value={formData.tanggal_selesai}
+      onChange={(e) => {
+        const selectedDate = e.target.value;
+        
+        // Validasi weekend
+        if (isWeekend(selectedDate)) {
+          setDateError("Tidak bisa memilih hari Sabtu atau Minggu!");
+          setFormData({ ...formData, tanggal_selesai: "" });
+          return;
+        }
+        
+        // Validasi tanggal mulai harus diisi dulu
+        if (!formData.tanggal_mulai) {
+          setDateError("Pilih tanggal mulai terlebih dahulu!");
+          return;
+        }
+        
+        // Validasi range
+        if (!validateDateRange(formData.tanggal_mulai, selectedDate)) {
+          setDateError("Tanggal selesai tidak boleh lebih awal dari tanggal mulai!");
+          setFormData({ ...formData, tanggal_selesai: "" });
+          return;
+        }
+        
+        setFormData({ ...formData, tanggal_selesai: selectedDate });
+        setDateError("");
+      }}
+      min={formData.tanggal_mulai || getMinDate()}
+      className={`w-full px-4 py-2 border ${dateError ? 'border-red-300 bg-red-50' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all ${!formData.tanggal_mulai ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+      required
+      disabled={processing || !formData.tanggal_mulai}
+    />
+    <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+      <Calendar className="w-3 h-3" />
+      {formData.tanggal_mulai 
+        ? "Pilih tanggal selesai (tidak termasuk weekend)"
+        : "Pilih tanggal mulai terlebih dahulu"
+      }
+    </p>
+  </div>
+</div>
+
+{/* Info Box - Tambahkan di bawah grid tanggal */}
+<div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+  <div className="flex items-start gap-3">
+    <div className="bg-blue-500 rounded-full p-1 mt-0.5">
+      <Calendar className="w-4 h-4 text-white" />
+    </div>
+    <div className="flex-1">
+      <h4 className="text-sm font-semibold text-blue-900 mb-1">
+        Ketentuan Pengajuan Izin Sakit:
+      </h4>
+      <ul className="text-xs text-blue-800 space-y-1">
+        <li className="flex items-start gap-2">
+          <span className="text-blue-500 mt-0.5">•</span>
+          <span>Pengajuan maksimal H-3 hari kerja dari tanggal izin</span>
+        </li>
+        <li className="flex items-start gap-2">
+          <span className="text-blue-500 mt-0.5">•</span>
+          <span>Tidak dapat memilih hari Sabtu dan Minggu</span>
+        </li>
+        <li className="flex items-start gap-2">
+          <span className="text-blue-500 mt-0.5">•</span>
+          <span>Wajib melampirkan surat keterangan dokter</span>
+        </li>
+        <li className="flex items-start gap-2">
+          <span className="text-blue-500 mt-0.5">•</span>
+          <span>Data hanya dapat diubah jika status masih "Diproses"</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">

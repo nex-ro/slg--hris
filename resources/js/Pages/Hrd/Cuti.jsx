@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
-import { router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { Search, Plus, Edit2, Trash2, X, Calculator, CheckCircle, XCircle, Eye, Clock, User, Save, Download } from 'lucide-react';
 import LayoutTemplate from '@/Layouts/LayoutTemplate';
 
 function Cuti({ jatahCuti, users, tahunList, filters = {}, pemakaianCuti = [], auth }) {
-  console.log('Pemakaian Cuti Props:', pemakaianCuti); // Debug: log data yang diterima
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState('create');
   const [selectedData, setSelectedData] = useState(null);
@@ -138,26 +137,77 @@ const handlePageChangeJatah = (page) => {
     setSelectedData(null);
   };
 
-  const calculateCuti = async () => {
+ const calculateCuti = async () => {
     if (!formData.uid || !formData.tahun) {
       alert('Pilih user dan tahun terlebih dahulu');
       return;
     }
 
     try {
+      // ✅ DAPATKAN CSRF TOKEN FRESH
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (!csrfToken) {
+        alert('CSRF token tidak ditemukan. Refresh halaman dan coba lagi.');
+        return;
+      }
+
       const response = await fetch(route('hrd.cuti.calculate'), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+          'Accept': 'application/json',
+          'X-CSRF-TOKEN': csrfToken,
+          'X-Requested-With': 'XMLHttpRequest'
         },
+        credentials: 'same-origin',
         body: JSON.stringify({
           uid: formData.uid,
           tahun: formData.tahun
         })
       });
 
+      console.log('Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Server error:', errorText);
+        alert(`Error ${response.status}: Gagal menghitung cuti. Coba refresh halaman.`);
+        return;
+      }
+
+      const contentType = response.headers.get('content-type');
+      if (!contentType || !contentType.includes('application/json')) {
+        const errorText = await response.text();
+        console.error('Not JSON response:', errorText);
+        alert('Server mengembalikan format yang salah. Coba refresh halaman.');
+        return;
+      }
+
       const data = await response.json();
+      console.log('Response data:', data);
+      
+      if (!data || !data.success) {
+        alert(data.error || 'Gagal mendapatkan data dari server');
+        return;
+      }
+
+      // ✅ CEK DUPLIKASI TAHUN_KE
+      if (data.is_duplicate) {
+        alert(`Periode tahun ke-${data.tahun_ke} untuk karyawan ini sudah ada. Silakan pilih tahun yang berbeda atau edit data yang sudah ada.`);
+        return;
+      }
+
+      const isDuplicate = jatahCuti.data.some(item => 
+        parseInt(item.uid) === parseInt(formData.uid) && 
+        parseInt(item.tahun_ke) === parseInt(data.tahun_ke)
+      );
+
+      if (isDuplicate) {
+        alert(`Periode tahun ke-${data.tahun_ke} untuk karyawan ini sudah ada. Silakan pilih tahun yang berbeda atau edit data yang sudah ada.`);
+        return;
+      }
+
       setFormData(prev => ({
         ...prev,
         tahun_ke: data.tahun_ke,
@@ -165,24 +215,65 @@ const handlePageChangeJatah = (page) => {
         sisa_cuti: data.jumlah_cuti,
         cuti_dipakai: 0
       }));
+      
     } catch (error) {
       console.error('Error calculating cuti:', error);
+      alert('Terjadi kesalahan: ' + error.message);
     }
   };
 
   const handleSubmit = () => {
+    // Validasi form sebelum submit
+    if (!formData.uid) {
+      alert('Pilih karyawan terlebih dahulu');
+      return;
+    }
+    
+    if (!formData.tahun) {
+      alert('Masukkan tahun terlebih dahulu');
+      return;
+    }
+    
+    if (!formData.jumlah_cuti || parseFloat(formData.jumlah_cuti) <= 0) {
+      alert('Jumlah cuti harus lebih dari 0');
+      return;
+    }
+
     if (modalType === 'create') {
       router.post(route('hrd.cuti.store'), formData, {
         onSuccess: () => {
           closeModal();
+          alert('Jatah cuti berhasil ditambahkan');
           router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
+        },
+        onError: (errors) => {
+          console.error('Validation errors:', errors);
+          // Tampilkan pesan error ke user
+          if (errors.message) {
+            alert(errors.message);
+          } else if (errors.error) {
+            alert(errors.error);
+          } else {
+            alert('Terjadi kesalahan saat menyimpan data. Periksa console untuk detail.');
+          }
         }
       });
     } else {
       router.put(route('hrd.cuti.update', selectedData.id), formData, {
         onSuccess: () => {
           closeModal();
+          alert('Jatah cuti berhasil diupdate');
           router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
+        },
+        onError: (errors) => {
+          console.error('Validation errors:', errors);
+          if (errors.message) {
+            alert(errors.message);
+          } else if (errors.error) {
+            alert(errors.error);
+          } else {
+            alert('Terjadi kesalahan saat mengupdate data. Periksa console untuk detail.');
+          }
         }
       });
     }
@@ -300,7 +391,6 @@ const handleSubmitAdmin = (e) => {
 };
 
 
-
 const handleDelete = (id) => {
     if (confirm('Apakah Anda yakin ingin menghapus data ini?')) {
       router.delete(route('hrd.cuti.destroy', id), {
@@ -387,21 +477,30 @@ const submitApproval = () => {
   };
 
   const canApproveAsAtasan = (cuti) => {
-    return cuti.diketahui_atasan === currentUserId && 
+    const cutiAtasanId = parseInt(cuti.diketahui_atasan);
+  const userId = parseInt(currentUserId);
+
+    return cutiAtasanId === userId && 
            cuti.status_diketahui_atasan === 'diproses' &&
            cuti.status_final === 'diproses'; 
   };
 
   const canApproveAsHRD = (cuti) => {
-    return cuti.diketahui_hrd === currentUserId && 
+  const cutiHrdId = parseInt(cuti.diketahui_hrd);
+  const userId = parseInt(currentUserId);
+
+    return cutiHrdId === userId && 
            cuti.status_diketahui_hrd === 'diproses' &&
            cuti.status_final === 'diproses'; // ✅ TAMBAH CEK INI
   };
 
   const canApproveAsPimpinan = (cuti) => {
-    return cuti.disetujui === currentUserId && 
+    const cutiPimpinanId = parseInt(cuti.disetujui);
+    const userId = parseInt(currentUserId);
+
+    return cutiPimpinanId === userId && 
            cuti.status_disetujui === 'diproses' &&
-           cuti.status_final === 'diproses'; // ✅ TAMBAH CEK INI
+           cuti.status_final === 'diproses'; 
   };
 
   // Tambahkan fungsi untuk badge status final
@@ -527,6 +626,7 @@ const handlePageChangePengajuan = (page) => {
 
   return (
     <LayoutTemplate>
+      <Head title="Izin Cuti" />
       <div className="">
         <div className="">
           <h1 className="text-2xl font-bold text-gray-800 mb-2">Manajemen Cuti Karyawan</h1>
@@ -585,7 +685,7 @@ const handlePageChangePengajuan = (page) => {
 
         {activeTab === 'jatah' && (
           <>
-           <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+           <div className="bg-white rounded-lg shadow-sm p-6 ">
             <div className="flex flex-col md:flex-row gap-4 mb-4">
               <div className="flex-1 relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -607,7 +707,7 @@ const handlePageChangePengajuan = (page) => {
               </div>
               
               <button
-                onClick={() => openModal('create')}
+                  onClick={() => openModal('create')}
                 className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 <Plus className="w-5 h-5" />
@@ -830,7 +930,7 @@ const handlePageChangePengajuan = (page) => {
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                 <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
 
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div className="bg-white rounded-lg shadow-sm p-6">
       <div className="flex flex-col md:flex-row gap-4 items-center">
         <div className="flex-1 relative w-full">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -1083,7 +1183,7 @@ const handlePageChangePengajuan = (page) => {
 
         {/* Modal Detail Pengajuan Cuti */}
 {showDetailModal && selectedCuti && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+  <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between p-6 border-b border-gray-200">
         <h3 className="text-xl font-semibold text-gray-800">Detail Pengajuan Cuti</h3>
@@ -1334,7 +1434,7 @@ const handlePageChangePengajuan = (page) => {
       </div>
       {/* Modal Konfirmasi Approval */}
 {showConfirmModal && confirmAction && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+  <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
       <div className="flex items-center justify-between p-6 border-b border-gray-200">
         <h3 className="text-xl font-semibold text-gray-800">
@@ -1426,7 +1526,7 @@ const handlePageChangePengajuan = (page) => {
   </div>
 )}
 {showSelectUserModal && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+  <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
       <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-green-50">
         <div className="flex items-center gap-3">
@@ -1505,7 +1605,7 @@ const handlePageChangePengajuan = (page) => {
 
 {/* ✅ MODAL FORM PENGAJUAN CUTI ADMIN */}
 {showFormModalAdmin && selectedUserForCuti && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+  <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
       <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-green-50">
         <div className="flex items-center gap-3">
@@ -1723,6 +1823,135 @@ const handlePageChangePengajuan = (page) => {
           </button>
         </div>
       </form>
+    </div>
+  </div>
+)}
+{/* Modal Tambah/Edit Jatah Cuti */}
+{showModal && (
+  <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+      <div className="flex items-center justify-between p-6 border-b border-gray-200">
+        <h3 className="text-xl font-semibold text-gray-800">
+          {modalType === 'create' ? 'Tambah Jatah Cuti' : 'Edit Jatah Cuti'}
+        </h3>
+        <button
+          onClick={closeModal}
+          className="text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
+      </div>
+
+      <div className="p-6 space-y-4">
+        {/* Pilih User */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Pilih Karyawan <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={formData.uid}
+            onChange={(e) => setFormData({ ...formData, uid: e.target.value })}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            required
+            disabled={modalType === 'edit'}
+          >
+            <option value="">Pilih Karyawan</option>
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Tahun */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Tahun <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="number"
+            value={formData.tahun}
+            onChange={(e) => setFormData({ ...formData, tahun: e.target.value })}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            required
+            disabled={modalType === 'edit'}
+          />
+        </div>
+
+        {/* Button Hitung Cuti */}
+        {modalType === 'create' && formData.uid && formData.tahun && (
+          <button
+            type="button"
+            onClick={calculateCuti}
+            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+          >
+            <Calculator className="w-4 h-4" />
+            Hitung Jatah Cuti Otomatis
+          </button>
+        )}
+
+        {/* Tahun Ke- (readonly) */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Tahun Ke-
+          </label>
+          <input
+            type="number"
+            value={formData.tahun_ke}
+            readOnly
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100"
+          />
+        </div>
+
+        {/* Jumlah Cuti */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Jumlah Cuti (Hari) <span className="text-red-500">*</span>
+          </label>
+          <input
+            type="number"
+            step="0.5"
+            value={formData.jumlah_cuti}
+            onChange={(e) => setFormData({ 
+              ...formData, 
+              jumlah_cuti: e.target.value,
+              sisa_cuti: e.target.value 
+            })}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            required
+          />
+        </div>
+
+        {/* Keterangan */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Keterangan
+          </label>
+          <textarea
+            value={formData.keterangan}
+            onChange={(e) => setFormData({ ...formData, keterangan: e.target.value })}
+            rows="3"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            placeholder="Tambahkan catatan jika perlu..."
+          />
+        </div>
+      </div>
+
+      <div className="flex gap-3 p-6 border-t border-gray-200">
+        <button
+          onClick={closeModal}
+          className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+        >
+          Batal
+        </button>
+        <button
+          onClick={handleSubmit}
+          className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          {modalType === 'create' ? 'Simpan' : 'Update'}
+        </button>
+      </div>
     </div>
   </div>
 )}

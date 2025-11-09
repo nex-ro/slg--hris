@@ -7,6 +7,7 @@ function formatDateLocal(dateObj) {
   return `${year}-${month}-${day}`;
 }
 
+
 function ManualInputModal({ isOpen, kalender, onClose, onSave, getCsrfToken, fetchWithCsrf }) {
   const [formData, setFormData] = useState({
     tanggal: '',
@@ -59,6 +60,7 @@ useEffect(() => {
     }
   }, [isOpen]);
 
+
   // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -89,6 +91,7 @@ useEffect(() => {
   };
   const selectedStatus = statusOptions.find(opt => opt.value === formData.status);
   const selectedUser = users.find(user => user.id === formData.userId);
+  
   
   // Filter users berdasarkan pencarian
   const filteredUsers = users.filter(user => 

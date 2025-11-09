@@ -173,12 +173,7 @@ const DashboardLayouts = ({ children }) => {
 
     const headMenu = [
       { icon: LayoutDashboard, label: 'Dashboard', href: '/HEAD/dashboard' },
-      { icon: Users, label: 'Pegawai', href: '/pegawai',
-        subItems: [
-          { icon: List, label: 'Daftar Pegawai', href: '/pegawai/list' },
-          { icon: LogOutIcon, label: 'Resign', href: '/pegawai/resign' },
-        ]
-      },
+      { icon: Users, label: 'Pegawai', href: userDivisi ? `/pegawai/${userDivisi.toLowerCase().replace(/\s+/g, '-')}` : '/pegawai/list'},
       { icon: Calendar, label: 'List Absensi', href: userDivisi ? `/absensi/list/${userDivisi.toLowerCase().replace(/\s+/g, '-')}` : '/absensi/list'},
       {
         icon: FileText,

@@ -177,7 +177,9 @@ Route::middleware('hrd')->group(function () {
 Route::middleware('head')->group(function () {
     Route::get('/HEAD/dashboard', [HrdController::class, 'index'])->middleware(['auth', 'verified'])->name('head.dashboard');
     Route::get('/absensi/list/{divisi}', [AbsensiController::class, 'absensiHead'])->name('absensi.head');
-Route::get('/kehadiran/divisi', [HrdController::class, 'getByDateAndDivisi']);
+    Route::get('/kehadiran/divisi', [HrdController::class, 'getByDateAndDivisi']);
+    Route::get('/pegawai/{divisi}', [UserController::class, 'pegawaiHead'])->name('pegawai.head');
+
 
 });
 

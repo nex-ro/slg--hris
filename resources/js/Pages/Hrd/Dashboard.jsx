@@ -63,7 +63,7 @@ const Dashboard = ({
 
   return (
     <DashboardLayouts>
-      <Head title="Dashboard" />
+      <Head  title="Dashboard" />
       <div className="min-h-screen bg-gray-50 ">
       <div className="max-w-7xl mx-auto space-y-6">
         {/* tesss */}

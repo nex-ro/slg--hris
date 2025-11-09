@@ -31,6 +31,7 @@ function Absensi() {
   const [tempSelectedYangMakan, setTempSelectedYangMakan] = useState([]); // ubah nama
   const [searchYangMakan, setSearchYangMakan] = useState(''); // ubah nama
   const [exportFormat, setExportFormat] = useState(null);
+const [statusDropdownPosition, setStatusDropdownPosition] = useState({});
 
   const getAllKaryawanHadir = () => {
   return rawKehadiranData.filter(item => {
@@ -38,6 +39,35 @@ function Absensi() {
     return ['ontime', 'on time', 'hadir', 'terlambat', 'late', 'telat', 'fp-tr', 'c2', 'p2'].includes(status);
   });
 };
+
+useEffect(() => {
+  const handleStatusDropdownPosition = () => {
+    if (openStatusDropdown !== null) {
+      const buttonElement = document.querySelector(`[data-status-dropdown="${openStatusDropdown}"]`);
+      if (buttonElement) {
+        const rect = buttonElement.getBoundingClientRect();
+        const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+        
+        // Jika space di bawah kurang dari 320px dan space di atas lebih besar
+        if (spaceBelow < 320 && spaceAbove > spaceBelow) {
+          setStatusDropdownPosition(prev => ({...prev, [openStatusDropdown]: 'top'}));
+        } else {
+          setStatusDropdownPosition(prev => ({...prev, [openStatusDropdown]: 'bottom'}));
+        }
+      }
+    }
+  };
+
+  handleStatusDropdownPosition();
+  window.addEventListener('scroll', handleStatusDropdownPosition);
+  window.addEventListener('resize', handleStatusDropdownPosition);
+
+  return () => {
+    window.removeEventListener('scroll', handleStatusDropdownPosition);
+    window.removeEventListener('resize', handleStatusDropdownPosition);
+  };
+}, [openStatusDropdown]);
 
 const toggleSelectYangMakan = (userId) => {
   setTempSelectedYangMakan(prev => {
@@ -215,7 +245,8 @@ useEffect(() => {
   { value: 'C2', label: 'Cuti Setengah Hari', desc: 'Mengambil cuti setengah hari', color: 'bg-green-400', textColor: 'text-white', borderColor: 'border-green-400' },
   { value: 'DL', label: 'Dinas Luar', desc: 'Bertugas di luar kantor', color: 'bg-purple-500', textColor: 'text-white', borderColor: 'border-purple-500' },
   { value: 'WFH', label: 'Work From Home', desc: 'Bekerja dari rumah', color: 'bg-orange-500', textColor: 'text-white', borderColor: 'border-orange-500' },
-  { value: 'FP-TR', label: 'FP Tidak Ter-Record', desc: 'Fingerprint tidak terekam sistem', color: 'bg-red-500', textColor: 'text-white', borderColor: 'border-red-500' }
+  { value: 'FP-TR', label: 'FP Tidak Ter-Record', desc: 'Fingerprint tidak terekam sistem', color: 'bg-red-500', textColor: 'text-white', borderColor: 'border-red-500' },
+
 ];
 // Helper function untuk fetch dengan CSRF token otomatis retry
 const fetchWithCsrf = async (url, options = {}) => {
@@ -505,6 +536,7 @@ const ModalYangMakan = () => {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full mx-4 max-h-[90vh] flex flex-col overflow-hidden">
+        {/* Header */}
         <div className="bg-gradient-to-r from-green-600 to-green-500 px-6 py-4 flex-shrink-0">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -533,17 +565,31 @@ const ModalYangMakan = () => {
           </div>
         </div>
 
+        {/* Search Bar - PINDAHKAN KE DALAM CONTAINER DENGAN PADDING */}
         <div className="p-4 border-b border-gray-200 flex-shrink-0">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
+              autoFocus
               placeholder="Cari nama karyawan..."
               value={searchYangMakan}
               onChange={(e) => setSearchYangMakan(e.target.value)}
-              className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+              maxLength={50}
+              className="w-full pl-10 pr-10 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-sm"
+              autoComplete="off"
             />
+            {searchYangMakan && (
+              <button
+                onClick={() => setSearchYangMakan('')}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
           </div>
+          
+          {/* Tombol Select All / Deselect All */}
           <div className="flex gap-2 mt-3">
             <button
               onClick={() => setTempSelectedYangMakan(karyawanHadir.map(k => k.user?.id || k.uid))}
@@ -560,6 +606,7 @@ const ModalYangMakan = () => {
           </div>
         </div>
 
+        {/* List Karyawan */}
         <div className="flex-1 overflow-y-auto p-4">
           {filteredKaryawan.length === 0 ? (
             <div className="text-center py-8 text-gray-500">
@@ -568,13 +615,13 @@ const ModalYangMakan = () => {
             </div>
           ) : (
             <div className="grid grid-cols-1 gap-2">
-              {filteredKaryawan.map((item, idx) => {
+              {filteredKaryawan.map((item) => {
                 const userId = item.user?.id || item.uid;
                 const isMakan = tempSelectedYangMakan.includes(userId);
                 
                 return (
                   <button
-                    key={`${userId}-${idx}`}
+                    key={userId}
                     onClick={() => toggleSelectYangMakan(userId)}
                     className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all ${
                       isMakan
@@ -622,6 +669,7 @@ const ModalYangMakan = () => {
           )}
         </div>
 
+        {/* Footer */}
         <div className="bg-gray-50 px-6 py-4 border-t border-gray-200 flex gap-3 flex-shrink-0">
           <button
             onClick={() => {
@@ -864,7 +912,10 @@ const getStatusBadge = (item, idx) => {
   const status = item.status;
   const kehadiranId = item.id;
   
-  const statusInfo = statusOptions.find(s => s.value === status) || {
+  // Cari status info dari editableStatusOptions untuk status yang sudah diubah
+  const editableStatusInfo = editableStatusOptions.find(s => s.value === status);
+  
+  const statusInfo = editableStatusInfo || statusOptions.find(s => s.value === status) || {
     label: status || 'Unknown',
     color: 'bg-gray-500',
     textColor: 'text-white',
@@ -876,6 +927,7 @@ const getStatusBadge = (item, idx) => {
     return (
       <div className="relative">
         <button
+          data-status-dropdown={idx}
           onClick={() => setOpenStatusDropdown(openStatusDropdown === idx ? null : idx)}
           disabled={updatingStatus}
           className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${statusInfo.color} ${statusInfo.textColor} ${statusInfo.borderColor} hover:opacity-80 transition-all ${updatingStatus ? 'opacity-50 cursor-not-allowed' : ''}`}
@@ -890,7 +942,9 @@ const getStatusBadge = (item, idx) => {
               className="fixed inset-0 z-10" 
               onClick={() => setOpenStatusDropdown(null)}
             />
-            <div className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl border border-gray-200 z-20 max-h-80 overflow-y-auto">
+            <div className={`absolute right-0 w-64 bg-white rounded-xl shadow-2xl border border-gray-200 z-20 max-h-80 overflow-y-auto ${
+              statusDropdownPosition[idx] === 'top' ? 'bottom-full mb-2' : 'top-full mt-2'
+            }`}>
               <div className="p-2">
                 <div className="px-3 py-2 border-b border-gray-200 mb-1">
                   <p className="text-xs font-bold text-gray-700">
@@ -926,34 +980,34 @@ const getStatusBadge = (item, idx) => {
     );
   }
   
- if (status === 'Terlambat') {
-  return (
-    <div className="flex items-center gap-2">
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${statusInfo.color} ${statusInfo.textColor} ${statusInfo.borderColor}`}>
-        {statusInfo.label}
-        {item.keterangan && (
-          <span className="ml-1 text-[10px] opacity-75">✓</span>
+  if (status === 'Terlambat') {
+    return (
+      <div className="flex items-center gap-2">
+        <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${statusInfo.color} ${statusInfo.textColor} ${statusInfo.borderColor}`}>
+          {statusInfo.label}
+          {item.keterangan && (
+            <span className="ml-1 text-[10px] opacity-75">✓</span>
+          )}
+        </span>
+        {/* Icon HANYA muncul jika BELUM ada keterangan */}
+        {!item.keterangan && (
+          <button
+            onClick={() => {
+              setSelectedKehadiran(item);
+              setKeteranganText('');
+              setShowKeteranganModal(true);
+            }}
+            className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 p-1.5 rounded-lg transition-all"
+            title="Tambah keterangan"
+          >
+            <FileText className="w-4 h-4" />
+          </button>
         )}
-      </span>
-      {/* Icon HANYA muncul jika BELUM ada keterangan */}
-      {!item.keterangan && (
-        <button
-          onClick={() => {
-            setSelectedKehadiran(item);
-            setKeteranganText('');
-            setShowKeteranganModal(true);
-          }}
-          className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 p-1.5 rounded-lg transition-all"
-          title="Tambah keterangan"
-        >
-          <FileText className="w-4 h-4" />
-        </button>
-      )}
-    </div>
-  );
-}
+      </div>
+    );
+  }
   
-  // Untuk status lainnya, tampilkan badge biasa
+  // Untuk status lainnya, tampilkan badge biasa dengan warna yang sesuai
   return (
     <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border ${statusInfo.color} ${statusInfo.textColor} ${statusInfo.borderColor}`}>
       {statusInfo.label}

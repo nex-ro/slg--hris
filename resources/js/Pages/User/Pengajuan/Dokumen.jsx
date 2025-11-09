@@ -158,56 +158,56 @@ const Dokumen = () => {
         fields: ['Nama Lengkap', 'NIM', 'Program Studi', 'Semester', 'Keperluan']
       }
     },
-    {
-      id: 2,
-      title: 'Surat Kelakuan Baik',
-      type: 'surat',
-      modalComponent: 'ModalSuratKelakuanBaik', // Komponen modal custom
-      content: {
-        title: 'Form Surat Kelakuan Baik',
-        fields: ['Nama Lengkap', 'NIM', 'Program Studi', 'Alamat', 'Keperluan']
-      }
-    },
-    {
-      id: 3,
-      title: 'Surat Ket. Tidak Menerima Beasiswa',
-      type: 'surat',
-      modalComponent: 'ModalSuratBeasiswa', // Komponen modal custom
-      content: {
-        title: 'Form Surat Keterangan Tidak Menerima Beasiswa',
-        fields: ['Nama Lengkap', 'NIM', 'Program Studi', 'Tahun Akademik', 'Keperluan']
-      }
-    },
-    {
-      id: 4,
-      title: 'Surat Ket. Lulus Sidang TA',
-      type: 'surat',
-      modalComponent: 'default', // Menggunakan modal default
-      content: {
-        title: 'Form Surat Keterangan Lulus Sidang TA',
-        fields: ['Nama Lengkap', 'NIM', 'Program Studi', 'Judul TA', 'Tanggal Sidang']
-      }
-    },
-    {
-      id: 5,
-      title: 'Surat Sedang TA',
-      type: 'surat',
-      modalComponent: 'default',
-      content: {
-        title: 'Form Surat Sedang Tugas Akhir',
-        fields: ['Nama Lengkap', 'NIM', 'Program Studi', 'Judul TA', 'Dosen Pembimbing']
-      }
-    },
-    {
-      id: 6,
-      title: 'Surat Permohonan Izin Survey',
-      type: 'surat',
-      modalComponent: 'default',
-      content: {
-        title: 'Form Surat Permohonan Izin Survey',
-        fields: ['Nama Lengkap', 'NIM', 'Program Studi', 'Lokasi Survey', 'Tujuan Survey', 'Waktu Pelaksanaan']
-      }
-    }
+    // {
+    //   id: 2,
+    //   title: 'Surat Kelakuan Baik',
+    //   type: 'surat',
+    //   modalComponent: 'ModalSuratKelakuanBaik', // Komponen modal custom
+    //   content: {
+    //     title: 'Form Surat Kelakuan Baik',
+    //     fields: ['Nama Lengkap', 'NIM', 'Program Studi', 'Alamat', 'Keperluan']
+    //   }
+    // },
+    // {
+    //   id: 3,
+    //   title: 'Surat Ket. Tidak Menerima Beasiswa',
+    //   type: 'surat',
+    //   modalComponent: 'ModalSuratBeasiswa', // Komponen modal custom
+    //   content: {
+    //     title: 'Form Surat Keterangan Tidak Menerima Beasiswa',
+    //     fields: ['Nama Lengkap', 'NIM', 'Program Studi', 'Tahun Akademik', 'Keperluan']
+    //   }
+    // },
+    // {
+    //   id: 4,
+    //   title: 'Surat Ket. Lulus Sidang TA',
+    //   type: 'surat',
+    //   modalComponent: 'default', // Menggunakan modal default
+    //   content: {
+    //     title: 'Form Surat Keterangan Lulus Sidang TA',
+    //     fields: ['Nama Lengkap', 'NIM', 'Program Studi', 'Judul TA', 'Tanggal Sidang']
+    //   }
+    // },
+    // {
+    //   id: 5,
+    //   title: 'Surat Sedang TA',
+    //   type: 'surat',
+    //   modalComponent: 'default',
+    //   content: {
+    //     title: 'Form Surat Sedang Tugas Akhir',
+    //     fields: ['Nama Lengkap', 'NIM', 'Program Studi', 'Judul TA', 'Dosen Pembimbing']
+    //   }
+    // },
+    // {
+    //   id: 6,
+    //   title: 'Surat Permohonan Izin Survey',
+    //   type: 'surat',
+    //   modalComponent: 'default',
+    //   content: {
+    //     title: 'Form Surat Permohonan Izin Survey',
+    //     fields: ['Nama Lengkap', 'NIM', 'Program Studi', 'Lokasi Survey', 'Tujuan Survey', 'Waktu Pelaksanaan']
+    //   }
+    // }
   ];
 
   console.log(riwayatResign)
@@ -411,7 +411,7 @@ const Dokumen = () => {
 
       {/* Modal */}
       {showModal && modalContent && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             {/* Modal Header */}
             <div className="flex items-center justify-between p-6 border-b border-gray-200">
@@ -431,7 +431,7 @@ const Dokumen = () => {
       )}
     </div>
             {showDetailModal && detailData && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
               <div className="flex items-center justify-between p-6 border-b border-gray-200">
                 <h2 className="text-xl font-bold text-gray-900">Detail Pengajuan Resign</h2>

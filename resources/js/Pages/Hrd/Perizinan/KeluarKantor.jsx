@@ -20,6 +20,11 @@ function KeluarKantor() {
   const { auth } = usePage().props;
   const currentUser = auth?.user || auth; 
   
+useEffect(() => {
+  console.log('Current User:', currentUser);
+  console.log('User Role:', currentUser?.role);
+  console.log('User ID:', currentUser?.id);
+}, [currentUser]);
 
   const [formData, setFormData] = useState({
   uid: '',
@@ -48,15 +53,17 @@ const [formErrors, setFormErrors] = useState({});
     type: '',
     tanggal: ''
   });
-  const isAuthorizedHead = (item) => {
+// Perbaiki fungsi isAuthorizedHead
+const isAuthorizedHead = (item) => {
   if (!currentUser) return false;
-  return currentUser.id === item.uid_diketahui && item.status_diketahui === null;
+  // Bandingkan dengan konversi ke string atau number
+  return String(currentUser.id) === String(item.uid_diketahui) && 
+         item.status_diketahui === null;
 };
 
-// Helper function untuk cek apakah user adalah HRD - PERBAIKI INI
 const isAuthorizedHRD = (item) => {
   if (!currentUser) return false;
-  const isHRD = currentUser.role === 'hrd' && currentUser.role != 'head'
+  const isHRD = currentUser.role === 'hrd' && currentUser.role !== 'head';
   
   // PERBAIKAN: HRD bisa approve jika status_disetujui masih null DAN status_diketahui sudah disetujui
   return isHRD && 
@@ -724,7 +731,9 @@ const confirmReject = () => {
                     </tr>
                   ) : (
                     filteredData.map((item) => (
+                  
                       <tr key={item.id} className="hover:bg-gray-50">
+                        {console.log(item)}
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div>

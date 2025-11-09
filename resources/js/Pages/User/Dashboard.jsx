@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import DashboardLayouts from "@/Layouts/DasboardLayout";
 import { Calendar, Clock, Users, FileText, TrendingUp, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { Head } from '@inertiajs/react';
 
 function Dashboard({ auth, jatahCuti, statistik, pengajuanMenunggu, bulanTahun }) {
   const [stats] = useState({
@@ -31,6 +32,8 @@ function Dashboard({ auth, jatahCuti, statistik, pengajuanMenunggu, bulanTahun }
 
   return (
     <DashboardLayouts>
+      <Head title="Dashboard" />
+
       <div className="p-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
