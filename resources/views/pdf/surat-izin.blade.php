@@ -308,15 +308,13 @@
             <div class="signature-box">
                 <div class="signature-title">Diminta oleh :</div>
                 <div class="signature-space">
-                    @if($perizinan->status === 'Disetujui')
-                        @php
-                            $userTtdPath = $perizinan->user->ttd ? public_path('storage/ttd/' . basename($perizinan->user->ttd)) : null;
-                        @endphp
-                        @if($userTtdPath && file_exists($userTtdPath))
-                            <img src="{{ $userTtdPath }}" alt="TTD" class="signature-image">
-                        @else
-                            <img src="{{ public_path('asset/acc.png') }}" alt="Disetujui" class="signature-image">
-                        @endif
+                    @php
+                        $userTtdPath = $perizinan->user->ttd ? public_path('storage/ttd/' . basename($perizinan->user->ttd)) : null;
+                    @endphp
+                    @if($userTtdPath && file_exists($userTtdPath))
+                        <img src="{{ $userTtdPath }}" alt="TTD" class="signature-image">
+                    @else
+                        <img src="{{ public_path('asset/acc.png') }}" alt="TTD" class="signature-image">
                     @endif
                     <div class="signature-line"></div>
                 </div>

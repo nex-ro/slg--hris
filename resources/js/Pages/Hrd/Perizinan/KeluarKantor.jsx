@@ -20,11 +20,7 @@ function KeluarKantor() {
   const { auth } = usePage().props;
   const currentUser = auth?.user || auth; 
   
-useEffect(() => {
-  console.log('Current User:', currentUser);
-  console.log('User Role:', currentUser?.role);
-  console.log('User ID:', currentUser?.id);
-}, [currentUser]);
+
 
   const [formData, setFormData] = useState({
   uid: '',
@@ -53,23 +49,25 @@ const [formErrors, setFormErrors] = useState({});
     type: '',
     tanggal: ''
   });
-// Perbaiki fungsi isAuthorizedHead
-const isAuthorizedHead = (item) => {
+// Check apakah user bisa approve sebagai Target User (diketahui_oleh)
+const canApproveAsTarget = (item) => {
   if (!currentUser) return false;
-  // Bandingkan dengan konversi ke string atau number
   return String(currentUser.id) === String(item.uid_diketahui) && 
          item.status_diketahui === null;
 };
 
-const isAuthorizedHRD = (item) => {
+// Check apakah user bisa approve sebagai HRD
+const canApproveAsHRD = (item) => {
   if (!currentUser) return false;
-  const isHRD = currentUser.role === 'hrd' && currentUser.role !== 'head';
-  
-  // PERBAIKAN: HRD bisa approve jika status_disetujui masih null DAN status_diketahui sudah disetujui
-  return isHRD && 
-         item.status_diketahui === 'Disetujui' && 
-         item.status_disetujui === null;
+  return currentUser.role === 'hrd' && item.status_disetujui === null;
 };
+
+// Check apakah bisa tampilkan tombol aksi
+const canShowActionButtons = (item) => {
+  return canApproveAsTarget(item) || canApproveAsHRD(item);
+};
+
+// HAPUS fungsi: isAuthorizedHead, getApprovalLabel (tidak dipakai lagi)
 
 const handlePrint = async (id) => {
   try {
@@ -86,20 +84,8 @@ const handlePrint = async (id) => {
     alert('Gagal generate PDF: ' + error.message);
   }
 };
-// Helper function untuk cek apakah bisa menampilkan tombol aksi
-const canShowActionButtons = (item) => {
-  return isAuthorizedHead(item) || isAuthorizedHRD(item);
-};
 
-// Helper function untuk mendapatkan label tombol
-const getApprovalLabel = (item) => {
-  if (isAuthorizedHead(item)) {
-    return 'Terima';
-  } else if (isAuthorizedHRD(item)) {
-    return 'Setujui';
-  }
-  return 'Terima';
-};
+
 
 
   const getStatusIcon = (status) => {
@@ -327,7 +313,7 @@ const handleSubmit = async (e) => {
     setLoading(false);
   }
 };
-  const getStatusDisplay = (status) => {
+const getStatusDisplay = (status) => {
   if (status === 'Disetujui') {
     return (
       <div className="flex items-center gap-1.5 text-green-700">
@@ -343,9 +329,10 @@ const handleSubmit = async (e) => {
       </div>
     );
   } else {
-    return <span className="text-sm text-gray-400">-</span>;
+    return <span className="text-sm text-gray-400">Menunggu Persetujuan HRD</span>;
   }
 };
+
 
 
   // Hitung filter aktif
@@ -453,9 +440,7 @@ const confirmApproval = () => {
     preserveState: false,
     preserveScroll: false,
     onSuccess: () => {
-      const message = isAuthorizedHead(selectedPerizinan) 
-        ? 'Perizinan berhasil diketahui!' 
-        : 'Perizinan berhasil disetujui!';
+      const message = 'Perizinan berhasil diketahui!' ;
       alert(message);
       setShowApprovalModal(false);
       setSelectedPerizinan(null);
@@ -709,10 +694,10 @@ const confirmReject = () => {
                       Waktu
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status Diketahui
+                      Diketahui Oleh
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status Disetujui
+                      Diterima Oleh
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       Status
@@ -731,9 +716,8 @@ const confirmReject = () => {
                     </tr>
                   ) : (
                     filteredData.map((item) => (
-                  
                       <tr key={item.id} className="hover:bg-gray-50">
-                        {console.log(item)}
+                        {/* Karyawan */}
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div>
@@ -741,15 +725,21 @@ const confirmReject = () => {
                             </div>
                           </div>
                         </td>
+                        
+                        {/* Tipe Izin */}
                         <td className="px-6 py-4">
                           <span className="text-sm text-gray-900">{getTypeLabel(item.type_perizinan)}</span>
                         </td>
+                        
+                        {/* Tanggal */}
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-2 text-sm text-gray-900">
                             <Calendar className="w-4 h-4 text-gray-400" />
                             {new Date(item.tanggal).toLocaleDateString('id-ID')}
                           </div>
                         </td>
+                        
+                        {/* Waktu */}
                         <td className="px-6 py-4">
                           {item.type_perizinan === 'p1' ? (
                             <span className="text-sm text-gray-500">Seharian</span>
@@ -760,74 +750,121 @@ const confirmReject = () => {
                             </div>
                           )}
                         </td>
-                        {/* Kolom Status Diketahui - BARU */}
+                        
+                        {/* Diketahui Oleh - UBAH: Hanya tampilkan nama, tanpa status */}
                         <td className="px-6 py-4">
-                          {getStatusDisplay(item.status_diketahui)}
+  <div className="space-y-2">
+    {/* Nama & Jabatan */}
+    <div>
+      <div className="text-sm font-medium text-gray-900">
+        {item.diketahui_oleh?.name || '-'}
+      </div>
+      <div className="text-xs text-gray-500">
+        {item.diketahui_oleh?.jabatan || ''}
+      </div>
+    </div>
+    
+    {/* Status - BARU */}
+    <div className="mt-2">
+      {getStatusDisplay(item.status_diketahui)}
+    </div>
+    
+    {/* Tombol Approve untuk Target User - BARU */}
+    {canApproveAsTarget(item) && (
+      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+        <button
+          onClick={() => handleApprove(item)}
+          className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors flex items-center gap-1"
+          title="Terima"
+        >
+          <Check className="w-3.5 h-3.5" />
+          Terima
+        </button>
+        <button
+          onClick={() => handleReject(item)}
+          className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors flex items-center gap-1"
+          title="Tolak"
+        >
+          <X className="w-3.5 h-3.5" />
+          Tolak
+        </button>
+      </div>
+    )}
+  </div>
+</td>
+
+                        
+                        {/* Status HRD dengan tombol aksi */}
+                       <td className="px-6 py-4">
+                          <div className="space-y-2">
+                            {/* Status - BARU */}
+                            <div>
+                              {getStatusDisplay(item.status_disetujui)}
+                            </div>
+                            
+                            {/* Tombol Approve untuk HRD - BARU */}
+                            {canApproveAsHRD(item) && (
+                              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+                                <button
+                                  onClick={() => handleApprove(item)}
+                                  className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors flex items-center gap-1"
+                                  title="Setujui"
+                                >
+                                  <Check className="w-3.5 h-3.5" />
+                                  Setujui
+                                </button>
+                                <button
+                                  onClick={() => handleReject(item)}
+                                  className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors flex items-center gap-1"
+                                  title="Tolak"
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                  Tolak
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </td>
-                        {/* Kolom Status Disetujui - BARU */}
-                        <td className="px-6 py-4">
-                          {getStatusDisplay(item.status_disetujui)}
-                        </td>
-                        {/* Kolom Status Keseluruhan */}
+
+                          
+                        {/* Status Keseluruhan */}
                         <td className="px-6 py-4">
                           <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${getStatusBadge(item.status)}`}>
                             {item.status}
                           </span>
                         </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                           
                           
-                            {/* Tombol Aksi - hanya tampil jika status masih bisa diproses */}
-                           {/* Ganti kondisi lama dengan yang baru */}
-{canShowActionButtons(item) && (
+                        {/* Aksi */}
+                        {/* Aksi - HANYA UNTUK VIEW/PRINT/DELETE */}
+<td className="px-6 py-4">
   <div className="flex items-center gap-2">
     <button
-      onClick={() => handleApprove(item)}
-      className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors flex items-center gap-1"
-      title={getApprovalLabel(item)}
+      onClick={() => {
+        setSelectedPerizinan(item);
+        setShowDetailModal(true);
+      }}
+      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+      title="Lihat Detail"
     >
-      <Check className="w-3.5 h-3.5" />
-      {getApprovalLabel(item)}
+      <Eye className="w-4 h-4" />
     </button>
     <button
-      onClick={() => handleReject(item)}
-      className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors flex items-center gap-1"
-      title="Tolak"
+      onClick={() => handlePrint(item.id)}
+      className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+      title="Print PDF"
     >
-      <X className="w-3.5 h-3.5" />
-      Tolak
+      <Printer className="w-4 h-4" />
+    </button>
+    <button
+      onClick={() => handleDelete(item.id)}
+      className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+      title="Hapus"
+    >
+      <Trash2 className="w-4 h-4" />
     </button>
   </div>
-)}
-                
-                             <button
-                              onClick={() => {
-                                setSelectedPerizinan(item);
-                                setShowDetailModal(true);
-                              }}
-                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                              title="Lihat Detail"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
-                                <button
-                                  onClick={() => handlePrint(item.id)}
-                                  className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                  title="Print PDF"
-                                >
-                                  <Printer className="w-4 h-4" />
-                                </button>
+</td>
 
-                            <button
-                              onClick={() => handleDelete(item.id)}
-                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                              title="Hapus"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
                       </tr>
                     ))
                   )}
@@ -854,129 +891,125 @@ const confirmReject = () => {
                   </button>
                 </div>
               </div>
-              <div className="p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-  <div>
-    <label className="text-sm font-medium text-gray-500">Nama Karyawan</label>
-    <p className="mt-1 text-gray-900">{selectedPerizinan.user.name}</p>
-  </div>
-  <div>
-    <label className="text-sm font-medium text-gray-500">Jabatan</label>
-    <p className="mt-1 text-gray-900">{selectedPerizinan.user.jabatan}</p>
-  </div>
-  <div>
-    <label className="text-sm font-medium text-gray-500">Email</label>
-    <p className="mt-1 text-gray-900">{selectedPerizinan.user.email}</p>
-  </div>
-  <div>
-    <label className="text-sm font-medium text-gray-500">Tipe Perizinan</label>
-    <p className="mt-1 text-gray-900">{getTypeLabel(selectedPerizinan.type_perizinan)}</p>
-  </div>
-  <div>
-    <label className="text-sm font-medium text-gray-500">Tanggal</label>
-    <p className="mt-1 text-gray-900">
-      {new Date(selectedPerizinan.tanggal).toLocaleDateString('id-ID', { 
-        weekday: 'long', 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-      })}
-    </p>
-  </div>
-  <div>
-    <label className="text-sm font-medium text-gray-500">Waktu</label>
-    <p className="mt-1 text-gray-900">
-      {selectedPerizinan.type_perizinan === 'p1' 
-        ? 'Seharian' 
-        : `${selectedPerizinan.jam_keluar} - ${selectedPerizinan.jam_kembali}`
-      }
-    </p>
-  </div>
-  
-  {/* Status Diketahui - BARU */}
-  <div>
-    <label className="text-sm font-medium text-gray-500">Status Diketahui</label>
-    <div className="mt-1">
-      {getStatusDisplay(selectedPerizinan.status_diketahui)}
-    </div>
-  </div>
-  
-  {/* Status Disetujui - BARU */}
-  <div>
-    <label className="text-sm font-medium text-gray-500">Status Disetujui</label>
-    <div className="mt-1">
-      {getStatusDisplay(selectedPerizinan.status_disetujui)}
-    </div>
-  </div>
-  <div>
-    <label className="text-sm font-medium text-gray-500">Diketahui Oleh</label>
-    <p className="mt-1 text-gray-900">{selectedPerizinan?.diketahui_oleh?.name || "-"}</p>
-  </div>
-  <div>
-    <label className="text-sm font-medium text-gray-500">Disetujui Oleh</label>
-    <p className="mt-1 text-gray-900">{selectedPerizinan?.disetujuiOleh?.name || "Tim HRD"}</p>
-  </div>
-  <div>
-    <label className="text-sm font-medium text-gray-500">Status Keseluruhan</label>
-    <p className="mt-1">
-      <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${getStatusBadge(selectedPerizinan.status)}`}>
-        {selectedPerizinan.status}
-      </span>
-    </p>
-  </div>
-  
-</div>
-                
+             <div className="p-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-500">Keperluan</label>
-                  <p className="mt-1 text-gray-900 bg-gray-50 p-3 rounded-lg">
-                    {selectedPerizinan.keperluan}
+                  <label className="text-sm font-medium text-gray-500">Nama Karyawan</label>
+                  <p className="mt-1 text-gray-900">{selectedPerizinan.user.name}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Jabatan</label>
+                  <p className="mt-1 text-gray-900">{selectedPerizinan.user.jabatan}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Email</label>
+                  <p className="mt-1 text-gray-900">{selectedPerizinan.user.email}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Tipe Perizinan</label>
+                  <p className="mt-1 text-gray-900">{getTypeLabel(selectedPerizinan.type_perizinan)}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Tanggal</label>
+                  <p className="mt-1 text-gray-900">
+                    {new Date(selectedPerizinan.tanggal).toLocaleDateString('id-ID', { 
+                      weekday: 'long', 
+                      year: 'numeric', 
+                      month: 'long', 
+                      day: 'numeric' 
+                    })}
                   </p>
                 </div>
-                {selectedPerizinan.catatan && (
-                  <div>
-                    <label className="text-sm font-medium text-gray-500">Catatan</label>
-                    <p className="mt-1 text-gray-900 bg-gray-50 p-3 rounded-lg border-l-4 border-blue-500">
-                      {selectedPerizinan.catatan}
-                    </p>
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Waktu</label>
+                  <p className="mt-1 text-gray-900">
+                    {selectedPerizinan.type_perizinan === 'p1' 
+                      ? 'Seharian' 
+                      : `${selectedPerizinan.jam_keluar} - ${selectedPerizinan.jam_kembali}`
+                    }
+                  </p>
+                </div>
+                  
+                {/* Diketahui Oleh - UBAH: Hanya nama, tanpa status */}
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Diketahui Oleh</label>
+                  <p className="mt-1 text-gray-900">{selectedPerizinan?.diketahui_oleh?.name || "-"}</p>
+                  <p className="text-xs text-gray-500">{selectedPerizinan?.diketahui_oleh?.jabatan || ""}</p>
+                </div>
+                  
+                {/* Status HRD - UBAH */}
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Status HRD</label>
+                  <div className="mt-1">
+                    {getStatusDisplay(selectedPerizinan.status_disetujui)}
                   </div>
-                )}
+                </div>
+                  
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Disetujui Oleh</label>
+                  <p className="mt-1 text-gray-900">{selectedPerizinan?.disetujui_oleh?.name || "Belum disetujui"}</p>
+                </div>
+                  {console.log(selectedPerizinan.di)}
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Status Keseluruhan</label>
+                  <p className="mt-1">
+                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${getStatusBadge(selectedPerizinan.status)}`}>
+                      {selectedPerizinan.status}
+                    </span>
+                  </p>
+                </div>
               </div>
-              
-              <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+                  
+              <div>
+                <label className="text-sm font-medium text-gray-500">Keperluan</label>
+                <p className="mt-1 text-gray-900 bg-gray-50 p-3 rounded-lg">
+                  {selectedPerizinan.keperluan}
+                </p>
+              </div>
+              {selectedPerizinan.catatan && (
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Catatan</label>
+                  <p className="mt-1 text-gray-900 bg-gray-50 p-3 rounded-lg border-l-4 border-blue-500">
+                    {selectedPerizinan.catatan}
+                  </p>
+                </div>
+              )}
+            </div>
+
+             <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
   <button
     onClick={() => setShowDetailModal(false)}
     className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
   >
     Tutup
   </button>
-  {/* Hanya tampil jika masih bisa diproses */}
-    {/* Di bagian bawah detail modal, ganti kondisi */}
-{canShowActionButtons(selectedPerizinan) && (
-  <>
-    <button
-      onClick={() => {
-        setShowDetailModal(false);
-        handleReject(selectedPerizinan);
-      }}
-      className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-2"
-    >
-      <X className="w-4 h-4" />
-      Tolak
-    </button>
-    <button
-      onClick={() => {
-        setShowDetailModal(false);
-        handleApprove(selectedPerizinan);
-      }}
-      className="px-4 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2"
-    >
-      <Check className="w-4 h-4" />
-      {getApprovalLabel(selectedPerizinan)}
-    </button>
-  </>
-)}
+  {/* Hanya tampil untuk HRD */}
+  {canShowActionButtons(selectedPerizinan) && (
+    <>
+      <button
+        onClick={() => {
+          setShowDetailModal(false);
+          handleReject(selectedPerizinan);
+        }}
+        className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-2"
+      >
+        <X className="w-4 h-4" />
+        Tolak
+      </button>
+      <button
+        onClick={() => {
+          setShowDetailModal(false);
+          handleApprove(selectedPerizinan);
+        }}
+        className="px-4 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2"
+      >
+        <Check className="w-4 h-4" />
+        Setujui
+      </button>
+    </>
+  )}
 </div>
+
             </div>
           </div>
         )}
@@ -1030,6 +1063,7 @@ const confirmReject = () => {
     </div>
   </div>
 )}
+
 
 {/* Reject Modal */}
     {showRejectModal && selectedPerizinan && (
@@ -1121,7 +1155,7 @@ const confirmReject = () => {
             {/* Pilih Head yang Mengetahui */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
-                Diketahui Oleh (Head) <span className="text-red-500">*</span>
+                Diketahui Oleh <span className="text-red-500">*</span>
               </label>
               <select
                 value={formData.uid_diketahui}
@@ -1130,13 +1164,16 @@ const confirmReject = () => {
                   formErrors.uid_diketahui ? 'border-red-500' : 'border-gray-300'
                 }`}
               >
-                <option value="">Pilih Head</option>
+                <option value="">Pilih User yang Mengetahui</option>
                 {heads.map(head => (
                   <option key={head.id} value={head.id}>
                     {head.name} - {head.jabatan}
                   </option>
                 ))}
               </select>
+              <p className="mt-1 text-xs text-gray-500">
+                Pilih user yang akan diberitahu tentang perizinan ini (bukan sebagai approver)
+              </p>
               {formErrors.uid_diketahui && (
                 <p className="mt-1 text-sm text-red-600">{formErrors.uid_diketahui}</p>
               )}

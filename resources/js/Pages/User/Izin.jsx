@@ -1,14 +1,21 @@
 import { useState, useEffect } from "react";
 import { useForm, router, Head } from "@inertiajs/react";
-import { FileText, Clock, CheckCircle, XCircle, AlertCircle, Plus } from "lucide-react";
+import { FileText, Clock, CheckCircle, XCircle, AlertCircle, Plus ,UserCheck } from "lucide-react";
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
 import { usePage } from '@inertiajs/react';
 
-function Izin({ heads, perizinans }) {
+function Izin({ heads, perizinans, pendingApprovals }) {
+  const [activeTab, setActiveTab] = useState('my-izin'); 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingIzin, setEditingIzin] = useState(null);
   const { flash } = usePage().props;
+  
+  const [isApprovalModalOpen, setIsApprovalModalOpen] = useState(false);
+  const [selectedApproval, setSelectedApproval] = useState(null);
+  const [approvalAction, setApprovalAction] = useState(null);
+  const [catatan, setCatatan] = useState('');
+
 
   const { data, setData, post, processing, errors, reset } = useForm({
     type_perizinan: 'p1',
@@ -145,6 +152,31 @@ function Izin({ heads, perizinans }) {
       });
     }
   };
+
+    const handleApprovalAction = (izin, action) => {
+    setSelectedApproval(izin);
+    setApprovalAction(action);
+    setIsApprovalModalOpen(true);
+  };
+    const submitApproval = () => {
+    if (!selectedApproval) return;
+
+    const endpoint = approvalAction === 'approve' 
+      ? route('izin.approve', selectedApproval.id)
+      : route('izin.reject', selectedApproval.id);
+
+    router.post(endpoint, {
+      catatan: catatan
+    }, {
+      onSuccess: () => {
+        setIsApprovalModalOpen(false);
+        setSelectedApproval(null);
+        setCatatan('');
+        router.reload({ only: ['pendingApprovals'] });
+      }
+    });
+  };
+
 
   const showTimeFields = data.type_perizinan === 'p2' || data.type_perizinan === 'p3';
 
@@ -473,25 +505,64 @@ function Izin({ heads, perizinans }) {
           </div>
         </div>
       )}
+<div className="">
+  {/* Header dengan Button Pengajuan */}
+  <div className="mb-6 flex justify-between items-center">
+    <div>
+      <h1 className="text-2xl font-bold text-gray-800">Tracking Pengajuan Izin</h1>
+      <p className="text-gray-600 mt-1">Pantau status pengajuan izin Anda</p>
+    </div>
+    <button
+      onClick={() => setIsCreateModalOpen(true)}
+      className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
+    >
+      <Plus className="w-5 h-5" />
+      Ajukan Izin Baru
+    </button>
+  </div>
 
-      <div className="">
-        {/* Header dengan Button Pengajuan */}
-        <div className="mb-6 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-gray-800">Tracking Pengajuan Izin</h1>
-            <p className="text-gray-600 mt-1">Pantau status pengajuan izin Anda</p>
-          </div>
-          <button
-            onClick={() => setIsCreateModalOpen(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
-          >
-            <Plus className="w-5 h-5" />
-            Ajukan Izin Baru
-          </button>
-        </div>
+  {/* TAMBAHAN BARU: Tab Navigation */}
+  {/* Tab Navigation */}
+<div className="mb-6 border-b border-gray-200">
+  <nav className="flex gap-4">
+    <button
+      onClick={() => setActiveTab('my-izin')}
+      className={`px-6 py-3 font-semibold border-b-2 transition-colors ${
+        activeTab === 'my-izin'
+          ? 'border-blue-600 text-blue-600'
+          : 'border-transparent text-gray-500 hover:text-gray-700'
+      }`}
+    >
+      <span className="flex items-center gap-2">
+        <FileText className="w-5 h-5" />
+        Pengajuan Saya
+      </span>
+    </button>
+    
+    {/* Tampilkan tab approval selalu, tapi beri badge jika ada pending */}
+    <button
+      onClick={() => setActiveTab('approval')}
+      className={`px-6 py-3 font-semibold border-b-2 transition-colors relative ${
+        activeTab === 'approval'
+          ? 'border-blue-600 text-blue-600'
+          : 'border-transparent text-gray-500 hover:text-gray-700'
+      }`}
+    >
+      <span className="flex items-center gap-2">
+        <UserCheck className="w-5 h-5" />
+        Perlu Persetujuan
+        {pendingApprovals && pendingApprovals.length > 0 && (
+          <span className="ml-1 px-2 py-0.5 text-xs bg-red-500 text-white rounded-full">
+            {pendingApprovals.length}
+          </span>
+        )}
+      </span>
+    </button>
+  </nav>
+</div>
 
-        {/* List Pengajuan */}
-        <div className="bg-white rounded-lg shadow-md">
+  {activeTab === 'my-izin' ? (
+      <div className="bg-white rounded-lg shadow-md">
           {perizinans && perizinans.data && perizinans.data.length > 0 ? (
             <div className="divide-y divide-gray-200">
               {perizinans.data.map((izin) => (
@@ -678,7 +749,153 @@ function Izin({ heads, perizinans }) {
             </div>
           )}
         </div>
+  ) : (
+    <div className="bg-white rounded-lg shadow-md">
+      {pendingApprovals && pendingApprovals.length > 0 ? (
+        <div className="divide-y divide-gray-200">
+          {pendingApprovals.map((izin) => (
+            <div key={izin.id} className="p-6 hover:bg-gray-50 transition-colors">
+              <div className="flex items-start justify-between mb-4">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-3">
+                    <Clock className="w-5 h-5 text-yellow-500" />
+                    <h3 className="text-xl font-bold text-gray-800">
+                      {getTypeLabel(izin.type_perizinan)}
+                    </h3>
+                    <span className="px-4 py-1.5 rounded-full text-sm font-semibold bg-yellow-100 text-yellow-800">
+                      Menunggu Persetujuan Anda
+                    </span>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-gray-700 min-w-[120px]">Dari:</span>
+                        <span className="text-gray-600">{izin.user.name} - {izin.user.jabatan}</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-gray-700 min-w-[120px]">Tanggal:</span>
+                        <span className="text-gray-600">{formatDate(izin.tanggal)}</span>
+                      </div>
+                      {izin.jam_keluar !== '00:00' && izin.jam_kembali !== '00:00' && (
+                        <div className="flex items-start gap-2">
+                          <span className="font-semibold text-gray-700 min-w-[120px]">Waktu:</span>
+                          <span className="text-gray-600">{izin.jam_keluar} - {izin.jam_kembali}</span>
+                        </div>
+                      )}
+                    </div>
+                    <div className="space-y-3">
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-gray-700 min-w-[120px]">Keperluan:</span>
+                        <span className="text-gray-600">{izin.keperluan}</span>
+                      </div>
+                      <div className="flex items-start gap-2">
+                        <span className="font-semibold text-gray-700 min-w-[120px]">Divisi:</span>
+                        <span className="text-gray-600">{izin.user.divisi || '-'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="flex gap-3 mt-4 pt-4 border-t border-gray-200">
+                <button
+                  onClick={() => handleApprovalAction(izin, 'approve')}
+                  className="flex-1 px-6 py-3 text-sm font-semibold text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <CheckCircle className="w-5 h-5" />
+                    Setujui
+                  </span>
+                </button>
+                <button
+                  onClick={() => handleApprovalAction(izin, 'reject')}
+                  className="flex-1 px-6 py-3 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors"
+                >
+                  <span className="flex items-center justify-center gap-2">
+                    <XCircle className="w-5 h-5" />
+                    Tolak
+                  </span>
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="p-12 text-center">
+          <UserCheck className="w-16 h-16 mx-auto text-gray-300 mb-4" />
+          <h3 className="text-lg font-medium text-gray-900 mb-2">Tidak Ada Perizinan</h3>
+          <p className="text-gray-500">Tidak ada perizinan yang perlu persetujuan Anda saat ini</p>
+        </div>
+      )}
+    </div>
+  )}
+</div>
+    
+      {/* Modal Approval - TAMBAHAN BARU */}
+{isApprovalModalOpen && selectedApproval && (
+  <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl max-w-lg w-full">
+      <div className="p-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-gray-800">
+            {approvalAction === 'approve' ? 'Setujui' : 'Tolak'} Perizinan
+          </h2>
+          <button
+            onClick={() => setIsApprovalModalOpen(false)}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <XCircle className="w-6 h-6" />
+          </button>
+        </div>
+
+        <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+          <div className="space-y-2">
+            <div><strong>Nama:</strong> {selectedApproval.user.name}</div>
+            <div><strong>Tipe:</strong> {getTypeLabel(selectedApproval.type_perizinan)}</div>
+            <div><strong>Tanggal:</strong> {formatDate(selectedApproval.tanggal)}</div>
+            <div><strong>Keperluan:</strong> {selectedApproval.keperluan}</div>
+          </div>
+        </div>
+
+        <div className="mb-6">
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Catatan {approvalAction === 'reject' && <span className="text-red-500">*</span>}
+          </label>
+          <textarea
+            value={catatan}
+            onChange={(e) => setCatatan(e.target.value)}
+            rows="4"
+            placeholder={approvalAction === 'approve' ? 'Catatan (opsional)' : 'Alasan penolakan'}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 resize-none"
+            required={approvalAction === 'reject'}
+          />
+        </div>
+
+        <div className="flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => setIsApprovalModalOpen(false)}
+            className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+          >
+            Batal
+          </button>
+          <button
+            onClick={submitApproval}
+            disabled={approvalAction === 'reject' && !catatan.trim()}
+            className={`px-6 py-2 text-white rounded-lg disabled:opacity-50 ${
+              approvalAction === 'approve' 
+                ? 'bg-green-600 hover:bg-green-700' 
+                : 'bg-red-600 hover:bg-red-700'
+            }`}
+          >
+            {approvalAction === 'approve' ? 'Setujui' : 'Tolak'}
+          </button>
+        </div>
       </div>
+    </div>
+  </div>
+)}
     </LayoutTemplate>
   );
 }

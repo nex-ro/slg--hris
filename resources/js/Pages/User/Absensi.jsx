@@ -149,7 +149,7 @@ function Absensi() {
   return (
     <LayoutTemplate>
       <Head title="Absensi Saya" />
-      
+    
       <div className="min-h-screen bg-gray-50">
         <div className="max-w-7xl mx-auto">
           {/* Header */}

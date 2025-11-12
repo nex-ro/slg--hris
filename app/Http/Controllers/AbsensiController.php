@@ -407,8 +407,6 @@ public function printKatering(Request $request)
     $tower = $request->tower;
     $kehadiran = $request->kehadiran;
     $tidakMakan = $request->yang_makan ?? []; 
-    Log::info('Tidak Makan IDs: ' . implode(',', $tidakMakan));
-    // Validasi data
     if (empty($kehadiran) || empty($tower) || empty($tanggal)) {
         return response()->json([
             'error' => 'Data tidak lengkap'
@@ -503,7 +501,10 @@ public function printKateringPDF(Request $request)
             $userId = $user['user']['id'] ?? null;
             return $userId && in_array($userId, $tidakMakan);
         });
-
+        $eifelSite = $eifelAll->filter(function($user) {
+            $role = strtolower(trim($user['user']['role'] ?? ''));
+            return $role === 'site';
+        });
         // Data Liberty
         $libertySakit = $getByStatus($libertyAll, ['sakit']);
         $libertyCuti = $getByStatus($libertyAll, ['c1', 'c2', 'c3', 'cuti']);
@@ -516,9 +517,15 @@ public function printKateringPDF(Request $request)
             $userId = $user['user']['id'] ?? null;
             return $userId && in_array($userId, $tidakMakan);
         });
+        
+        $libertySite = $libertyAll->filter(function($user) {
+            $role = strtolower(trim($user['user']['role'] ?? ''));
+            return $role === 'site';
+        });
+
         // Hitung total
-        $eifelTotal = $eifelAll->count();
-        $libertyTotal = $libertyAll->count();
+        $eifelTotal = $eifelAll->count() - $eifelSite->count();
+        $libertyTotal = $libertyAll->count() - $libertySite->count();
         
         $wfhCount = $eifelWFH->count();
         $wfhCountL = $libertyWFH->count();
@@ -536,7 +543,7 @@ public function printKateringPDF(Request $request)
         })->count();
         
         $tidakMakanCountEiffel = $eifelTidakMakan->count();
-        $eifelHadirTotal = $eifelAll->count() - ($sakitCount + $cutiCount + $dinasCount + $keluarCount + $wfhCount + $tidakMakanCountEiffel);
+        $eifelHadirTotal = $eifelTotal - ($sakitCount + $cutiCount + $dinasCount + $keluarCount + $wfhCount + $tidakMakanCountEiffel);
 
         $sakitCountL = $libertySakit->count();
         $cutiCountL = $libertyCuti->count();
@@ -551,7 +558,7 @@ public function printKateringPDF(Request $request)
         })->count();
         
         $tidakMakanCountLiberty = $libertyTidakMakan->count();
-        $libertyHadirTotal = $libertyAll->count() - ($sakitCountL + $cutiCountL + $dinasCountL + $keluarCountL + $wfhCountL + $tidakMakanCountLiberty);
+        $libertyHadirTotal = $libertyTotal - ($sakitCountL + $cutiCountL + $dinasCountL + $keluarCountL + $wfhCountL + $tidakMakanCountLiberty);
 
         // Hitung akumulasi
         $totalLantai19 = $eifelHadirTotal;
@@ -587,11 +594,13 @@ public function printKateringPDF(Request $request)
             'eifelDinasLuar' => $eifelDinasLuar,
             'eifelKeluar' => $eifelKeluar,
             'eifelTidakMakan' => $eifelTidakMakan, 
+            'eifelSite' => $eifelSite,
             'libertySakit' => $libertySakit,
             'libertyCuti' => $libertyCuti,
             'libertyDinasLuar' => $libertyDinasLuar,
             'libertyKeluar' => $libertyKeluar,
             'libertyTidakMakan' => $libertyTidakMakan,
+            'libertySite' => $libertySite, 
             'eifelHadirTotal' => $eifelHadirTotal,
             'libertyHadirTotal' => $libertyHadirTotal,
             'totalLantai19' => $totalLantai19,

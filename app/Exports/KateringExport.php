@@ -36,6 +36,14 @@ class KateringExport implements FromCollection, WithHeadings, WithStyles, WithCo
         }
     }
 
+    protected function excludeSiteRole($collection)
+{
+    return $collection->filter(function($user) {
+        $role = strtolower(trim($user['user']['role'] ?? ''));
+        return $role !== 'site';
+    });
+}
+
     public function collection()
     {
         $data = [];
@@ -137,6 +145,11 @@ class KateringExport implements FromCollection, WithHeadings, WithStyles, WithCo
         $eifelKeluar = $getByStatus($eifelAll, ['p1', 'p3', 'keluar_kantor', 'keluar kantor']);
         $eifelTidakMakan = $getTidakMakan($eifelAll);
 
+        $eifelSite = $eifelAll->filter(function($user) {
+            $role = strtolower(trim($user['user']['role'] ?? ''));
+            return $role === 'site';
+        });
+        
         // Data Liberty
         $libertySakit = $getByStatus($libertyAll, ['sakit']);
         $libertyCuti = $getByStatus($libertyAll, ['c1', 'c3', 'cuti']);
@@ -144,10 +157,15 @@ class KateringExport implements FromCollection, WithHeadings, WithStyles, WithCo
         $libertyDinasLuar = $getByStatus($libertyAll, ['dinas_luar', 'dinas luar','dl']);
         $libertyKeluar = $getByStatus($libertyAll, ['p1', 'p3', 'keluar_kantor', 'keluar kantor']);
         $libertyTidakMakan = $getTidakMakan($libertyAll);
+        
+        $libertySite = $libertyAll->filter(function($user) {
+            $role = strtolower(trim($user['user']['role'] ?? ''));
+            return $role === 'site';
+        });
 
         // Total keseluruhan
-        $eifelTotal = $eifelAll->count();
-        $libertyTotal = $libertyAll->count();
+        $eifelTotal = $eifelAll->count() - $eifelSite->count();
+        $libertyTotal = $libertyAll->count() - $libertySite->count();
 
         // Total hadir (yang makan katering)
         $eifelHadirTotal = $eifelHadir->count();

@@ -17,11 +17,9 @@ function Cuti({ jatahCuti, users, tahunList, filters = {}, pemakaianCuti = [], a
   const [catatan, setCatatan] = useState('');
   const [showUserDetailModal, setShowUserDetailModal] = useState(false);
   const [selectedUserGroup, setSelectedUserGroup] = useState(null);
-
   const [searchPengajuan, setSearchPengajuan] = useState('');
   const [currentPagePengajuan, setCurrentPagePengajuan] = useState(1);
   const itemsPerPagePengajuan = 10;
-
   const [searchJatah, setSearchJatah] = useState('');
   const [currentPageJatah, setCurrentPageJatah] = useState(1);
   const itemsPerPageJatah = 9; 
@@ -31,7 +29,12 @@ function Cuti({ jatahCuti, users, tahunList, filters = {}, pemakaianCuti = [], a
   const [jatahCutiForUser, setJatahCutiForUser] = useState([]);
 
   const [showSelectUserModal, setShowSelectUserModal] = useState(false);
-const [searchUser, setSearchUser] = useState('');
+  const [searchUser, setSearchUser] = useState('');
+  
+  const currentUserRole = auth?.user?.role;
+  const isHeadRole = currentUserRole === 'head';
+
+
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -45,15 +48,43 @@ const [searchUser, setSearchUser] = useState('');
     return () => clearInterval(interval);
   }, []);
 
-  const formatCutiNumber = (num) => {
-    return parseFloat(num || 0).toFixed(2);
-  };
-
+const formatCutiNumber = (num) => {
+  return Math.round(parseFloat(num || 0)); // Menampilkan 12
+};
   const openFormModalAdminFromPengajuan = () => {
   setShowSelectUserModal(true);
   setSearchUser('');
 };
 
+// ✅ TAMBAHKAN INI setelah semua useState
+useEffect(() => {
+  const refreshCsrfToken = async () => {
+    try {
+      const response = await fetch(window.location.href, {
+        method: 'GET',
+        credentials: 'same-origin'
+      });
+      
+      if (response.ok) {
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newToken = doc.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        
+        if (newToken) {
+          const metaTag = document.querySelector('meta[name="csrf-token"]');
+          if (metaTag) {
+            metaTag.setAttribute('content', newToken);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error refreshing CSRF token:', error);
+    }
+  };
+
+  refreshCsrfToken();
+}, []);
 const selectUserAndOpenForm = async (userGroup) => {
   setShowSelectUserModal(false);
   openFormModalAdmin(userGroup);
@@ -137,90 +168,76 @@ const handlePageChangeJatah = (page) => {
     setSelectedData(null);
   };
 
- const calculateCuti = async () => {
-    if (!formData.uid || !formData.tahun) {
-      alert('Pilih user dan tahun terlebih dahulu');
+const calculateCuti = async () => {
+  if (!formData.uid || !formData.tahun) {
+    alert('Pilih user dan tahun terlebih dahulu');
+    return;
+  }
+
+  try {
+    // ✅ GUNAKAN fetchWithCsrf (tidak perlu CSRF manual lagi)
+    const response = await fetchWithCsrf(route('hrd.cuti.calculate'), {
+      method: 'POST',
+      body: JSON.stringify({
+        uid: formData.uid,
+        tahun: formData.tahun
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Server error:', errorText);
+      alert(`Error ${response.status}: Gagal menghitung cuti.`);
       return;
     }
 
-    try {
-      // ✅ DAPATKAN CSRF TOKEN FRESH
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-      
-      if (!csrfToken) {
-        alert('CSRF token tidak ditemukan. Refresh halaman dan coba lagi.');
-        return;
-      }
-
-      const response = await fetch(route('hrd.cuti.calculate'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        credentials: 'same-origin',
-        body: JSON.stringify({
-          uid: formData.uid,
-          tahun: formData.tahun
-        })
-      });
-
-      console.log('Response status:', response.status);
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('Server error:', errorText);
-        alert(`Error ${response.status}: Gagal menghitung cuti. Coba refresh halaman.`);
-        return;
-      }
-
-      const contentType = response.headers.get('content-type');
-      if (!contentType || !contentType.includes('application/json')) {
-        const errorText = await response.text();
-        console.error('Not JSON response:', errorText);
-        alert('Server mengembalikan format yang salah. Coba refresh halaman.');
-        return;
-      }
-
-      const data = await response.json();
-      console.log('Response data:', data);
-      
-      if (!data || !data.success) {
-        alert(data.error || 'Gagal mendapatkan data dari server');
-        return;
-      }
-
-      // ✅ CEK DUPLIKASI TAHUN_KE
-      if (data.is_duplicate) {
-        alert(`Periode tahun ke-${data.tahun_ke} untuk karyawan ini sudah ada. Silakan pilih tahun yang berbeda atau edit data yang sudah ada.`);
-        return;
-      }
-
-      const isDuplicate = jatahCuti.data.some(item => 
-        parseInt(item.uid) === parseInt(formData.uid) && 
-        parseInt(item.tahun_ke) === parseInt(data.tahun_ke)
-      );
-
-      if (isDuplicate) {
-        alert(`Periode tahun ke-${data.tahun_ke} untuk karyawan ini sudah ada. Silakan pilih tahun yang berbeda atau edit data yang sudah ada.`);
-        return;
-      }
-
-      setFormData(prev => ({
-        ...prev,
-        tahun_ke: data.tahun_ke,
-        jumlah_cuti: data.jumlah_cuti,
-        sisa_cuti: data.jumlah_cuti,
-        cuti_dipakai: 0
-      }));
-      
-    } catch (error) {
-      console.error('Error calculating cuti:', error);
-      alert('Terjadi kesalahan: ' + error.message);
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const errorText = await response.text();
+      console.error('Not JSON response:', errorText);
+      alert('Server mengembalikan format yang salah.');
+      return;
     }
-  };
+
+    const data = await response.json();
+    console.log('Response data:', data);
+    
+    if (!data || !data.success) {
+      alert(data.error || 'Gagal mendapatkan data dari server');
+      return;
+    }
+
+    // ✅ CEK DUPLIKASI
+    if (data.is_duplicate) {
+      alert(`Periode tahun ke-${data.tahun_ke} untuk karyawan ini sudah ada.`);
+      return;
+    }
+
+    const isDuplicate = jatahCuti.data.some(item => 
+      parseInt(item.uid) === parseInt(formData.uid) && 
+      parseInt(item.tahun_ke) === parseInt(data.tahun_ke)
+    );
+
+    if (isDuplicate) {
+      alert(`Periode tahun ke-${data.tahun_ke} untuk karyawan ini sudah ada.`);
+      return;
+    }
+
+    setFormData(prev => ({
+      ...prev,
+      tahun_ke: data.tahun_ke,
+      jumlah_cuti: data.jumlah_cuti,
+      sisa_cuti: data.jumlah_cuti,
+      cuti_dipakai: 0
+    }));
+
+    alert('Jatah cuti berhasil dihitung!');
+    
+  } catch (error) {
+    console.error('Error calculating cuti:', error);
+    alert('Terjadi kesalahan: ' + error.message);
+  }
+};
 
   const handleSubmit = () => {
     // Validasi form sebelum submit
@@ -243,7 +260,6 @@ const handlePageChangeJatah = (page) => {
       router.post(route('hrd.cuti.store'), formData, {
         onSuccess: () => {
           closeModal();
-          alert('Jatah cuti berhasil ditambahkan');
           router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
         },
         onError: (errors) => {
@@ -282,7 +298,7 @@ const handlePageChangeJatah = (page) => {
   const openFormModalAdmin = async (userGroup) => {
   setSelectedUserForCuti(userGroup);
   
-  // Hitung periode aktif user
+  // Filter jatah cuti yang tersedia
   const tmk = new Date(userGroup.user.tmk);
   const today = new Date();
   const yearsDiff = today.getFullYear() - tmk.getFullYear();
@@ -294,13 +310,12 @@ const handlePageChangeJatah = (page) => {
     activePeriod--;
   }
   
-  // Filter jatah cuti: periode aktif dan periode depan (jika bukan periode 0)
   const availableCuti = userGroup.cutiList.filter(item => {
     if (item.tahun_ke === activePeriod) {
-      return item.sisa_cuti > 0; // Periode aktif
+      return item.sisa_cuti > 0;
     }
     if (item.tahun_ke === activePeriod + 1 && activePeriod > 0) {
-      return item.sisa_cuti > 0; // Periode depan (hanya jika bukan periode 0)
+      return item.sisa_cuti > 0;
     }
     return false;
   }).map(item => ({
@@ -311,8 +326,8 @@ const handlePageChangeJatah = (page) => {
   
   setJatahCutiForUser(availableCuti);
   
-  // ✅ RESET FORM DATA
-  setFormData({
+  // ✅ PERBAIKAN: Reset form dengan struktur yang benar
+  const initialFormData = {
     jatah_cuti_id: '',
     tanggal_mulai: '',
     tanggal_selesai: '',
@@ -322,18 +337,22 @@ const handlePageChangeJatah = (page) => {
     tugas: '',
     diketahui_atasan: '',
     diketahui_hrd: '',
-    disetujui: '',
-  });
-  setWorkDays(0);
+    disetujui: ''
+  };
   
+  setFormData(initialFormData);
+  setWorkDays(0);
   setShowFormModalAdmin(true);
 };
+
 
 
 const closeFormModalAdmin = () => {
   setShowFormModalAdmin(false);
   setSelectedUserForCuti(null);
   setJatahCutiForUser([]);
+  
+  // Reset form data ke state awal
   setFormData({
     jatah_cuti_id: '',
     tanggal_mulai: '',
@@ -344,10 +363,12 @@ const closeFormModalAdmin = () => {
     tugas: '',
     diketahui_atasan: '',
     diketahui_hrd: '',
-    disetujui: '',
+    disetujui: ''
   });
+  
   setWorkDays(0);
 };
+
 
 // ========================================
 // FUNGSI HANDLE SUBMIT ADMIN (UPDATE)
@@ -428,8 +449,6 @@ const closeUserDetailModal = () => {
 };
 const submitApproval = () => {
   if (!confirmAction) return;
-
-  // Validasi catatan wajib untuk penolakan
   if (confirmAction.status === 'ditolak' && !catatan.trim()) {
     alert('Catatan wajib diisi saat menolak pengajuan cuti');
     return;
@@ -525,7 +544,91 @@ const submitApproval = () => {
     setShowDetailModal(true);
   };
 
+// ✅ Fungsi 1: fetchFreshCsrfToken
+const fetchFreshCsrfToken = async () => {
+  try {
+    const response = await fetch(window.location.href, {
+      method: 'GET',
+      credentials: 'same-origin'
+    });
+    
+    if (response.ok) {
+      const html = await response.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      const newToken = doc.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (newToken) {
+        const metaTag = document.querySelector('meta[name="csrf-token"]');
+        if (metaTag) {
+          metaTag.setAttribute('content', newToken);
+        }
+        return newToken;
+      }
+    }
+  } catch (error) {
+    console.error('Error fetching fresh CSRF token:', error);
+  }
+  return null;
+};
 
+// ✅ Fungsi 2: getCsrfToken
+const getCsrfToken = () => {
+  const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+  
+  if (!token) {
+    console.error('CSRF token tidak ditemukan!');
+    return '';
+  }
+  
+  return token;
+};
+
+// ✅ Fungsi 3: fetchWithCsrf
+const fetchWithCsrf = async (url, options = {}, retries = 1) => {
+  let csrfToken = getCsrfToken();
+  
+  const defaultOptions = {
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-TOKEN': csrfToken,
+      'X-Requested-With': 'XMLHttpRequest',
+      'Accept': 'application/json'
+    },
+    credentials: 'same-origin',
+    ...options
+  };
+
+  try {
+    let response = await fetch(url, defaultOptions);
+
+    if (response.status === 419 && retries > 0) {
+      console.log('419 Error detected, refreshing CSRF token...');
+      
+      const newToken = await fetchFreshCsrfToken();
+      
+      if (newToken) {
+        defaultOptions.headers['X-CSRF-TOKEN'] = newToken;
+        response = await fetch(url, defaultOptions);
+        
+        if (response.status === 419) {
+          alert('Session telah berakhir. Halaman akan di-refresh.');
+          window.location.reload();
+          throw new Error('CSRF token masih invalid');
+        }
+      } else {
+        alert('Gagal memperbarui session. Halaman akan di-refresh.');
+        window.location.reload();
+        throw new Error('Gagal mendapatkan CSRF token baru');
+      }
+    }
+
+    return response;
+  } catch (error) {
+    console.error('Error in fetchWithCsrf:', error);
+    throw error;
+  }
+};
 const pemakaianCutiArray = pemakaianCuti || [];
 
 const pendingApprovals = pemakaianCutiArray.filter(cuti => {
@@ -544,22 +647,33 @@ const handleInputChange = (e) => {
   setFormData(prev => {
     const updated = { ...prev, [name]: newValue };
     
-    // Auto-calculate work days ketika tanggal berubah
-    if (name === 'tanggal_mulai' || name === 'tanggal_selesai') {
-      if (updated.tanggal_mulai && updated.tanggal_selesai) {
-        calculateWorkDays(updated.tanggal_mulai, updated.tanggal_selesai, updated.cuti_setengah_hari);
+    // Handle cuti setengah hari
+    if (name === 'cuti_setengah_hari') {
+      if (checked && updated.tanggal_mulai) {
+        updated.tanggal_selesai = updated.tanggal_mulai;
+        calculateWorkDays(updated.tanggal_mulai, updated.tanggal_mulai, true);
+      } else if (!checked && updated.tanggal_mulai && updated.tanggal_selesai) {
+        calculateWorkDays(updated.tanggal_mulai, updated.tanggal_selesai, false);
       }
     }
     
-    // Auto-sync tanggal selesai jika cuti setengah hari
-    if (name === 'cuti_setengah_hari' && checked) {
-      updated.tanggal_selesai = updated.tanggal_mulai;
-      calculateWorkDays(updated.tanggal_mulai, updated.tanggal_mulai, true);
+    // Auto-calculate work days ketika tanggal berubah
+    if (name === 'tanggal_mulai' || name === 'tanggal_selesai') {
+      if (updated.tanggal_mulai && updated.tanggal_selesai) {
+        // Jika cuti setengah hari, gunakan tanggal yang sama
+        if (updated.cuti_setengah_hari) {
+          updated.tanggal_selesai = updated.tanggal_mulai;
+          calculateWorkDays(updated.tanggal_mulai, updated.tanggal_mulai, true);
+        } else {
+          calculateWorkDays(updated.tanggal_mulai, updated.tanggal_selesai, false);
+        }
+      }
     }
     
     return updated;
   });
 };
+
 
 const calculateWorkDays = (startDate, endDate, isHalfDay) => {
   if (!startDate || !endDate) {
@@ -661,7 +775,8 @@ const handlePageChangePengajuan = (page) => {
     </button>
 
     {/* TAB 2 */}
-    <button
+   {!isHeadRole && (
+     <button
       onClick={() => setActiveTab('jatah')}
       className={`relative flex-1 px-6 py-4 font-semibold transition-all duration-300 
         ${activeTab === 'jatah'
@@ -678,6 +793,7 @@ const handlePageChangePengajuan = (page) => {
         <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-500 to-blue-600 rounded-t-lg"></div>
       )}
     </button>
+   )}
   </div>
     </div>
 
@@ -784,7 +900,7 @@ const handlePageChangePengajuan = (page) => {
                       className="bg-white rounded-lg shadow-md hover:shadow-lg transition-all border border-gray-200 cursor-pointer"
                       onClick={() => openUserDetailModal(userGroup)}
                     >
-                      <div className="p-5">
+                      <div className="p-5" >
                         <div className="flex items-center gap-3 mb-4">
                           <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-blue-600 rounded-full flex items-center justify-center text-white font-bold text-lg">
                             {userGroup.user?.name?.charAt(0).toUpperCase()}
@@ -794,7 +910,6 @@ const handlePageChangePengajuan = (page) => {
                             <p className="text-sm text-gray-500">{userGroup.user?.email}</p>
                           </div>
                         </div>
-                  
                         <div className="mb-3 text-center">
                           <span className="inline-block px-3 py-1 bg-blue-50 text-blue-700 text-xs font-semibold rounded-full">
                             Periode Tahun Ke-{activePeriod}
@@ -805,19 +920,19 @@ const handlePageChangePengajuan = (page) => {
                           <div className="bg-blue-50 rounded-lg p-3 text-center">
                             <p className="text-xs text-gray-600 mb-1">Jatah</p>
                             <p className="text-lg font-bold text-blue-600">
-                              {formatCutiNumber(totalJatah)}
+                              {formatCutiNumber(totalJatah)} hari
                             </p>
                           </div>
                           <div className="bg-red-50 rounded-lg p-3 text-center">
                             <p className="text-xs text-gray-600 mb-1">Terpakai</p>
                             <p className="text-lg font-bold text-red-600">
-                              {formatCutiNumber(totalTerpakai)}
+                              {formatCutiNumber(totalTerpakai)} hari
                             </p>
                           </div>
                           <div className="bg-green-50 rounded-lg p-3 text-center">
                             <p className="text-xs text-gray-600 mb-1">Sisa</p>
                             <p className="text-lg font-bold text-green-600">
-                              {formatCutiNumber(totalSisa)}
+                              {formatCutiNumber(totalSisa)} hari
                             </p>
                           </div>
                         </div>
@@ -1432,7 +1547,6 @@ const handlePageChangePengajuan = (page) => {
   </div>
 )}
       </div>
-      {/* Modal Konfirmasi Approval */}
 {showConfirmModal && confirmAction && (
   <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
@@ -1525,6 +1639,358 @@ const handlePageChangePengajuan = (page) => {
     </div>
   </div>
 )}
+{showUserDetailModal && selectedUserGroup && (
+  <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl max-w-5xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-gradient-to-r from-blue-500 to-indigo-600">
+        <div className="flex items-center gap-4">
+          <div className="w-16 h-16 bg-white rounded-full flex items-center justify-center text-blue-600 font-bold text-2xl shadow-lg">
+            {selectedUserGroup.user?.name?.charAt(0).toUpperCase()}
+          </div>
+          <div className="text-white">
+            <h3 className="text-2xl font-bold">{selectedUserGroup.user?.name}</h3>
+            <p className="text-blue-100">{selectedUserGroup.user?.email}</p>
+            <p className="text-sm text-blue-200 mt-1">
+              TMK: {formatDate(selectedUserGroup.user?.tmk)}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={closeUserDetailModal}
+          className="text-white hover:text-blue-200 transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
+      </div>
+
+      <div className="p-6">
+        {/* Summary Cards */}
+       {/* TAMBAHAN: Informasi User dalam bentuk tabel - Periode Aktif */}
+{(() => {
+  const tmk = new Date(selectedUserGroup.user.tmk);
+  const today = new Date();
+  const yearsDiff = today.getFullYear() - tmk.getFullYear();
+  const monthDiff = today.getMonth() - tmk.getMonth();
+  const dayDiff = today.getDate() - tmk.getDate();
+  
+  let activePeriod = yearsDiff;
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    activePeriod--;
+  }
+  
+  const aktiveCuti = selectedUserGroup.cutiList.find(item => item.tahun_ke === activePeriod);
+  const nextYearCuti = selectedUserGroup.cutiList.find(item => item.tahun_ke === (activePeriod + 1));
+  
+  // Hitung masa kerja detail
+  let totalYears = yearsDiff;
+  let totalMonths = monthDiff;
+  let totalDays = dayDiff;
+  
+  if (totalDays < 0) {
+    totalMonths--;
+    const prevMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+    totalDays += prevMonth.getDate();
+  }
+  if (totalMonths < 0) {
+    totalYears--;
+    totalMonths += 12;
+  }
+  
+  return (
+    <div className="mb-6 bg-gray-50 rounded-lg p-4">
+      <table className="w-full">
+        <tbody className="text-sm">
+          <tr className="border-b border-gray-200">
+            <td className="py-2 text-gray-600 w-48">Tahun ke</td>
+            <td className="py-2 text-gray-900">: {activePeriod}</td>
+          </tr>
+          <tr className="border-b border-gray-200">
+            <td className="py-2 text-gray-600">TMK</td>
+            <td className="py-2 text-gray-900">
+              : {formatDate(selectedUserGroup.user?.tmk)} ({totalYears} tahun {totalMonths} bulan {totalDays} hari)
+            </td>
+          </tr>
+          <tr className="border-b border-gray-200">
+            <td className="py-2 text-gray-600">Hak cuti sebenarnya</td>
+            <td className="py-2 text-gray-900">
+              : {formatCutiNumber(aktiveCuti?.jumlah_cuti || 0)} hari
+            </td>
+          </tr>
+          <tr className="border-b border-gray-200">
+            <td className="py-2 text-gray-600">Dipinjam utk tahun ke 0</td>
+            <td className="py-2 text-gray-900">: 0 hari</td>
+          </tr>
+          <tr className="border-b border-gray-200">
+            <td className="py-2 text-gray-600">Dapat dipinjam cuti tahun ke {activePeriod + 1}</td>
+            <td className="py-2 text-gray-900">
+              : {formatCutiNumber(nextYearCuti?.jumlah_cuti || 0)} hari
+            </td>
+          </tr>
+          <tr className="border-b border-gray-200">
+            <td className="py-2 text-gray-600">Telah terpakai</td>
+            <td className="py-2 text-gray-900">
+              : {formatCutiNumber(aktiveCuti?.cuti_dipakai || 0)} hari
+            </td>
+          </tr>
+          <tr className="bg-blue-50 border-b border-gray-200">
+            <td className="py-2 text-gray-700 font-semibold">Sisa cuti</td>
+            <td className="py-2 font-bold text-blue-600">
+              : {formatCutiNumber(aktiveCuti?.sisa_cuti || 0)} hari
+            </td>
+          </tr>
+          <tr>
+            <td className="py-2 text-gray-600 align-top">Detail pemakaian</td>
+            <td className="py-2 text-gray-900">
+              : {(() => {
+                const approvedCuti = pemakaianCuti.filter(c => 
+                  parseInt(c.uid) === parseInt(selectedUserGroup.user.id) && 
+                  c.status_final === 'disetujui'
+                );
+                if (approvedCuti.length === 0) {
+                  return 'Belum ada cuti terpakai';
+                }
+                
+                return (
+                  <div className="space-y-1 ml-2">
+                    {approvedCuti.map((cuti, idx) => (
+                      <div key={idx} className="text-sm">
+                        • {formatCutiNumber(cuti.jumlah_hari)} hari ({formatDate(cuti.tanggal_mulai)} - {formatDate(cuti.tanggal_selesai)})
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+})()}
+
+        {/* Tabel Jatah Cuti per Periode */}
+        <div className="mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+              <Calculator className="w-5 h-5 text-blue-600" />
+              Riwayat Jatah Cuti
+            </h4>
+           
+          </div>
+          
+          <div className="overflow-x-auto border border-gray-200 rounded-lg">
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tahun Ke-</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Tahun</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Jatah</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Terpakai</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase">Sisa</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Keterangan</th>
+                  <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase">Aksi</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {selectedUserGroup.cutiList
+                  .sort((a, b) => b.tahun_ke - a.tahun_ke)
+                  .map((cuti) => {
+                    // Hitung periode aktif
+                    const tmk = new Date(selectedUserGroup.user.tmk);
+                    const today = new Date();
+                    const yearsDiff = today.getFullYear() - tmk.getFullYear();
+                    const monthDiff = today.getMonth() - tmk.getMonth();
+                    const dayDiff = today.getDate() - tmk.getDate();
+                    let activePeriod = yearsDiff;
+                    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+                      activePeriod--;
+                    }
+                    const isActive = cuti.tahun_ke === activePeriod;
+                    
+                    return (
+                      <tr key={cuti.id} className={isActive ? 'bg-blue-50' : 'hover:bg-gray-50'}>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold text-gray-900">{cuti.tahun_ke}</span>
+                            {isActive && (
+                              <span className="px-2 py-0.5 bg-blue-600 text-white text-xs font-bold rounded-full">
+                                Aktif
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-900">{cuti.tahun}</td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                          <span className="font-semibold text-blue-600">{formatCutiNumber(cuti.jumlah_cuti)} hari</span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                          <span className="font-semibold text-red-600">{formatCutiNumber(cuti.cuti_dipakai)} hari</span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-right">
+                          <span className={`font-semibold ${parseFloat(cuti.sisa_cuti) > 0 ? 'text-green-600' : 'text-gray-400'}`}>
+                            {formatCutiNumber(cuti.sisa_cuti)} hari
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-sm text-gray-600">
+                          {cuti.keterangan || '-'}
+                        </td>
+                        <td className="px-4 py-3 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <button
+                              onClick={() => {
+                                closeUserDetailModal();
+                                openModal('edit', cuti);
+                              }}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Edit"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                if (confirm('Apakah Anda yakin ingin menghapus data jatah cuti ini?')) {
+                                  handleDelete(cuti.id);
+                                  closeUserDetailModal();
+                                }
+                              }}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Hapus"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Riwayat Pengajuan Cuti */}
+        <div>
+          <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+            <Clock className="w-5 h-5 text-blue-600" />
+            Riwayat Pengajuan Cuti
+          </h4>
+          
+          <div className="space-y-3">
+            {(() => {
+              const userCutiHistory = pemakaianCuti.filter(
+                c => parseInt(c.uid) === parseInt(selectedUserGroup.user.id)
+              );
+              
+              return userCutiHistory.length > 0 ? (
+                userCutiHistory
+                  .sort((a, b) => new Date(b.tanggal_pengajuan) - new Date(a.tanggal_pengajuan))
+                  .map((cuti) => (
+                    <div 
+                      key={cuti.id} 
+                      className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow bg-white"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-3 mb-2">
+                            <span className="text-sm font-medium text-gray-600">
+                              {formatDate(cuti.tanggal_mulai)} - {formatDate(cuti.tanggal_selesai)}
+                            </span>
+                            <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
+                              {cuti.jumlah_hari} hari
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-700 mb-2">{cuti.alasan}</p>
+                          <p className="text-xs text-gray-500">
+                            Diajukan: {formatDate(cuti.tanggal_pengajuan)}
+                          </p>
+                        </div>
+                        <div className="ml-4">
+                          {getStatusFinalBadge(cuti.status_final)}
+                        </div>
+                      </div>
+                      
+                      <div className="border-t pt-3 mt-3">
+                        <div className="grid grid-cols-3 gap-3 text-xs">
+                          <div>
+                            <p className="text-gray-500 mb-1">Atasan</p>
+                            {cuti.status_diketahui_atasan ? (
+                              getStatusBadge(cuti.status_diketahui_atasan)
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-gray-500 mb-1">HRD</p>
+                            {cuti.status_diketahui_hrd ? (
+                              getStatusBadge(cuti.status_diketahui_hrd)
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-gray-500 mb-1">Pimpinan</p>
+                            {cuti.status_disetujui ? (
+                              getStatusBadge(cuti.status_disetujui)
+                            ) : (
+                              <span className="text-gray-400">-</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {cuti.catatan && (
+                        <div className="mt-3 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs">
+                          <p className="font-medium text-yellow-900 mb-1">Catatan:</p>
+                          <p className="text-gray-700">{cuti.catatan}</p>
+                        </div>
+                      )}
+                      
+                      <div className="mt-3 flex justify-end gap-2">
+                        <button
+                          onClick={() => {
+                            closeUserDetailModal();
+                            openDetailModal(cuti);
+                          }}
+                          className="flex items-center gap-1 px-3 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                        >
+                          <Eye className="w-3 h-3" />
+                          Detail
+                        </button>
+                        {cuti.status_final === 'disetujui' && (
+                          <button
+                            onClick={() => handleDownloadPdf(cuti.id)}
+                            className="flex items-center gap-1 px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                          >
+                            <Download className="w-3 h-3" />
+                            PDF
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))
+              ) : (
+                <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                  <Clock className="w-12 h-12 text-gray-300 mx-auto mb-2" />
+                  <p className="text-gray-500">Belum ada riwayat pengajuan cuti</p>
+                </div>
+              );
+            })()}
+          </div>
+        </div>
+      </div>
+
+      <div className="p-6 border-t border-gray-200 bg-gray-50">
+        <button
+          onClick={closeUserDetailModal}
+          className="w-full px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+        >
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+)}
+
 {showSelectUserModal && (
   <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[80vh] overflow-y-auto">
@@ -1718,7 +2184,7 @@ const handlePageChangePengajuan = (page) => {
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-center justify-between">
               <span className="text-sm font-medium text-blue-900">Durasi Cuti:</span>
-              <span className="text-lg font-bold text-blue-600">{workDays} hari</span>
+              <span className="text-lg font-bold text-blue-600">{formatCutiNumber(workDays)} hari</span>
             </div>
           </div>
         )}
@@ -1829,29 +2295,34 @@ const handlePageChangePengajuan = (page) => {
 {/* Modal Tambah/Edit Jatah Cuti */}
 {showModal && (
   <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
-      <div className="flex items-center justify-between p-6 border-b border-gray-200">
-        <h3 className="text-xl font-semibold text-gray-800">
+    {/* UBAH: max-w-md -> max-w-lg, TAMBAH: max-h-[85vh] overflow-y-auto */}
+    <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[85vh] overflow-y-auto">
+      
+      {/* UBAH: p-6 -> p-4, text-xl -> text-lg, w-6 h-6 -> w-5 h-5, TAMBAH: bg-blue-50 */}
+      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-blue-50">
+        <h3 className="text-lg font-semibold text-gray-800">
           {modalType === 'create' ? 'Tambah Jatah Cuti' : 'Edit Jatah Cuti'}
         </h3>
         <button
           onClick={closeModal}
           className="text-gray-400 hover:text-gray-600 transition-colors"
         >
-          <X className="w-6 h-6" />
+          <X className="w-5 h-5" />
         </button>
       </div>
 
-      <div className="p-6 space-y-4">
-        {/* Pilih User */}
+      {/* UBAH: p-6 space-y-4 -> p-4 space-y-3 */}
+      <div className="p-4 space-y-3">
+        
+        {/* Pilih User - UBAH: mb-2 -> mb-1, px-4 py-2 -> px-3 py-2, TAMBAH: text-sm */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Pilih Karyawan <span className="text-red-500">*</span>
           </label>
           <select
             value={formData.uid}
             onChange={(e) => setFormData({ ...formData, uid: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             required
             disabled={modalType === 'edit'}
           >
@@ -1864,49 +2335,49 @@ const handlePageChangePengajuan = (page) => {
           </select>
         </div>
 
-        {/* Tahun */}
+        {/* Tahun - UBAH: mb-2 -> mb-1, px-4 py-2 -> px-3 py-2, TAMBAH: text-sm */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Tahun <span className="text-red-500">*</span>
           </label>
           <input
             type="number"
             value={formData.tahun}
             onChange={(e) => setFormData({ ...formData, tahun: e.target.value })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             required
             disabled={modalType === 'edit'}
           />
         </div>
 
-        {/* Button Hitung Cuti */}
+        {/* Button Hitung Cuti - UBAH: px-4 py-2 -> px-3 py-2, TAMBAH: text-sm */}
         {modalType === 'create' && formData.uid && formData.tahun && (
           <button
             type="button"
             onClick={calculateCuti}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
           >
             <Calculator className="w-4 h-4" />
             Hitung Jatah Cuti Otomatis
           </button>
         )}
 
-        {/* Tahun Ke- (readonly) */}
+        {/* Tahun Ke- - UBAH: mb-2 -> mb-1, px-4 py-2 -> px-3 py-2, TAMBAH: text-sm */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Tahun Ke-
           </label>
           <input
             type="number"
             value={formData.tahun_ke}
             readOnly
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100"
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-100"
           />
         </div>
 
-        {/* Jumlah Cuti */}
+        {/* Jumlah Cuti - UBAH: mb-2 -> mb-1, px-4 py-2 -> px-3 py-2, TAMBAH: text-sm */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Jumlah Cuti (Hari) <span className="text-red-500">*</span>
           </label>
           <input
@@ -1918,36 +2389,37 @@ const handlePageChangePengajuan = (page) => {
               jumlah_cuti: e.target.value,
               sisa_cuti: e.target.value 
             })}
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             required
           />
         </div>
 
-        {/* Keterangan */}
+        {/* Keterangan - UBAH: mb-2 -> mb-1, rows="3" -> rows="2", px-4 py-2 -> px-3 py-2, TAMBAH: text-sm */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 mb-1">
             Keterangan
           </label>
           <textarea
             value={formData.keterangan}
             onChange={(e) => setFormData({ ...formData, keterangan: e.target.value })}
-            rows="3"
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            rows="2"
+            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             placeholder="Tambahkan catatan jika perlu..."
           />
         </div>
       </div>
 
-      <div className="flex gap-3 p-6 border-t border-gray-200">
+      {/* Footer - UBAH: p-6 -> p-4, px-4 py-2 -> px-3 py-2, TAMBAH: text-sm */}
+      <div className="flex gap-3 p-4 border-t border-gray-200">
         <button
           onClick={closeModal}
-          className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          className="flex-1 px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
         >
           Batal
         </button>
         <button
           onClick={handleSubmit}
-          className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           {modalType === 'create' ? 'Simpan' : 'Update'}
         </button>

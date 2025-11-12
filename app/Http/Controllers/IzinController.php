@@ -16,11 +16,10 @@ use App\Models\Notification;
 
 class IzinController extends Controller
 {
-    public function index()
+public function index()
 {
-    // UBAH: Dari hanya 'head' menjadi array role
-    $heads = User::whereIn('role', ['head', 'hrd', 'eksekutif'])
-        ->select('id', 'name', 'jabatan', 'email', 'role')
+    $heads = User::select('id', 'name', 'jabatan', 'email', 'role')
+        ->where('id', '!=', Auth::id())
         ->orderBy('name')
         ->get();
         
@@ -33,14 +32,39 @@ class IzinController extends Controller
         ->latest()
         ->paginate(10);
 
+    // TAMBAHAN BARU: Get perizinan yang perlu disetujui oleh user ini
+    $pendingApprovals = Perizinan::where('uid_diketahui', Auth::id())
+        ->where('status_diketahui', null)
+        ->with([
+            'user:id,name,email,jabatan,divisi',
+            'diketahuiOleh:id,name,email,jabatan,role',
+            'disetujuiOleh:id,name,email,jabatan,role'
+        ])
+        ->latest()
+        ->get();
+
     return Inertia::render('User/Izin', [
         'heads' => $heads,
         'perizinans' => $perizinans,
+        'pendingApprovals' => $pendingApprovals, // TAMBAHAN BARU
         'auth' => [
             'user' => Auth::user()
         ]
     ]);
 }
+
+public function getHeads()
+{
+    $heads = User::select('id', 'name', 'email', 'jabatan', 'role')
+        ->orderBy('name')
+        ->get();
+    
+    return response()->json([
+        'success' => true,
+        'data' => $heads
+    ]);
+}
+
 
 
 
@@ -58,7 +82,7 @@ private function sendPerizinanNotification($perizinan, $action = 'diajukan')
         $tanggalFormatted = Carbon::parse($perizinan->tanggal)->format('d/m/Y');
 
         if ($action === 'diajukan') {
-            // Notifikasi untuk HRD (type: hrd)
+            // Notifikasi untuk HRD
             $hrdUsers = User::where('role', 'hrd')->get();
             foreach ($hrdUsers as $hrd) {
                 Notification::create([
@@ -72,83 +96,72 @@ private function sendPerizinanNotification($perizinan, $action = 'diajukan')
                 ]);
             }
 
-            // PERBAIKAN: Notifikasi untuk Head yang dituju (to_uid specific)
+            // Notifikasi untuk user yang dituju - WAJIB APPROVE
             if ($perizinan->uid_diketahui) {
-                // Cek apakah Head ada
-                $head = User::find($perizinan->uid_diketahui);
+                $targetUser = User::find($perizinan->uid_diketahui);
                 
-                if ($head) {
+                if ($targetUser) {
                     Notification::create([
                         'user_id' => $perizinan->uid,
                         'to_uid' => $perizinan->uid_diketahui,
                         'title' => 'Pengajuan Izin Perlu Persetujuan',
                         'message' => "{$user->name} mengajukan {$typeName} pada tanggal {$tanggalFormatted} dan memerlukan persetujuan Anda",
-                        'link' => '/hrd/perizinan', // Gunakan path absolut jika route bermasalah
+                        'link' => '/hrd/perizinan',
                         'is_read' => false,
-                        'type' => 'head'
+                        'type' => 'all'
                     ]);
-                    
-                    \Log::info('Notification sent to Head', [
-                        'head_id' => $perizinan->uid_diketahui,
-                        'head_name' => $head->name,
-                        'perizinan_id' => $perizinan->id
-                    ]);
-                } else {
-                    \Log::warning('Head not found', ['uid_diketahui' => $perizinan->uid_diketahui]);
                 }
             }
         } 
-        elseif ($action === 'disetujui_head') {
-            // Notifikasi ke user bahwa Head sudah menyetujui
+        elseif ($action === 'disetujui_target') {
+            // Notifikasi ke user bahwa target user sudah approve
             Notification::create([
                 'user_id' => Auth::id(),
                 'to_uid' => $perizinan->uid,
-                'title' => 'Izin Disetujui oleh Atasan',
-                'message' => "{$typeName} Anda pada tanggal {$tanggalFormatted} telah disetujui oleh atasan. Menunggu persetujuan HRD.",
+                'title' => 'Izin Disetujui',
+                'message' => "{$typeName} Anda pada tanggal {$tanggalFormatted} telah disetujui oleh {$perizinan->diketahuiOleh->name}. Menunggu persetujuan HRD.",
                 'link' => route('pegawai.izin'),
                 'is_read' => false,
                 'type' => 'all'
             ]);
         }
         elseif ($action === 'disetujui_hrd') {
-            // Notifikasi ke user bahwa HRD sudah menyetujui
+            // Notifikasi ke user bahwa HRD sudah approve
             Notification::create([
                 'user_id' => Auth::id(),
                 'to_uid' => $perizinan->uid,
                 'title' => 'Izin Disetujui oleh HRD',
-                'message' => "{$typeName} Anda pada tanggal {$tanggalFormatted} telah disetujui oleh HRD. Menunggu persetujuan atasan.",
+                'message' => "{$typeName} Anda pada tanggal {$tanggalFormatted} telah disetujui oleh HRD.",
                 'link' => route('pegawai.izin'),
                 'is_read' => false,
                 'type' => 'all'
             ]);
         }
         elseif ($action === 'disetujui') {
-            // Notifikasi ke user bahwa izin FULLY approved
+            // Notifikasi FULLY approved
             Notification::create([
                 'user_id' => Auth::id(),
                 'to_uid' => $perizinan->uid,
                 'title' => 'Izin Disetujui Lengkap',
-                'message' => "{$typeName} Anda pada tanggal {$tanggalFormatted} telah disetujui sepenuhnya oleh atasan dan HRD",
+                'message' => "{$typeName} Anda pada tanggal {$tanggalFormatted} telah disetujui sepenuhnya",
                 'link' => route('pegawai.izin'),
                 'is_read' => false,
                 'type' => 'all'
             ]);
         } 
         elseif ($action === 'ditolak') {
-            // Notifikasi ke user yang mengajukan
-            $rejector = Auth::user()->role === 'hrd' ? 'HRD' : 'Atasan';
             Notification::create([
                 'user_id' => Auth::id(),
                 'to_uid' => $perizinan->uid,
                 'title' => 'Izin Ditolak',
-                'message' => "{$typeName} Anda pada tanggal {$tanggalFormatted} ditolak oleh {$rejector}. Catatan: {$perizinan->catatan}",
+                'message' => "{$typeName} Anda pada tanggal {$tanggalFormatted} ditolak. Catatan: {$perizinan->catatan}",
                 'link' => route('pegawai.izin'),
                 'is_read' => false,
                 'type' => 'all'
             ]);
         }
         elseif ($action === 'diajukan_oleh_admin') {
-            // Notifikasi ke user bahwa admin menambahkan izin untuk mereka
+            // Notifikasi ke user
             Notification::create([
                 'user_id' => Auth::id(),
                 'to_uid' => $perizinan->uid,
@@ -159,7 +172,7 @@ private function sendPerizinanNotification($perizinan, $action = 'diajukan')
                 'type' => 'all'
             ]);
 
-            // Notifikasi untuk HRD lainnya (kecuali yang membuat)
+            // Notifikasi untuk HRD lainnya
             $hrdUsers = User::where('role', 'hrd')
                 ->where('id', '!=', Auth::id())
                 ->get();
@@ -175,30 +188,19 @@ private function sendPerizinanNotification($perizinan, $action = 'diajukan')
                 ]);
             }
 
-            // PERBAIKAN: Notifikasi untuk Head yang dituju
+            // Notifikasi untuk target user
             if ($perizinan->uid_diketahui) {
-                $head = User::find($perizinan->uid_diketahui);
+                $targetUser = User::find($perizinan->uid_diketahui);
                 
-                if ($head) {
+                if ($targetUser) {
                     Notification::create([
                         'user_id' => Auth::id(),
                         'to_uid' => $perizinan->uid_diketahui,
                         'title' => 'Pengajuan Izin Perlu Persetujuan',
                         'message' => "Admin/HRD menambahkan {$typeName} untuk {$user->name} pada tanggal {$tanggalFormatted} dan memerlukan persetujuan Anda",
-                        'link' => '/hrd/perizinan', // Path absolut
+                        'link' => '/hrd/perizinan',
                         'is_read' => false,
-                        'type' => 'head'
-                    ]);
-                    
-                    \Log::info('Notification sent to Head (admin action)', [
-                        'head_id' => $perizinan->uid_diketahui,
-                        'head_name' => $head->name,
-                        'perizinan_id' => $perizinan->id,
-                        'created_by' => Auth::user()->name
-                    ]);
-                } else {
-                    \Log::warning('Head not found for admin action', [
-                        'uid_diketahui' => $perizinan->uid_diketahui
+                        'type' => 'all'
                     ]);
                 }
             }
@@ -209,9 +211,7 @@ private function sendPerizinanNotification($perizinan, $action = 'diajukan')
         \Log::error('Stack trace: ' . $e->getTraceAsString());
     }
 }
-    /**
-     * HRD: Display all perizinan with filters
-     */
+
     public function hrd(Request $request)
 {
     $query = Perizinan::with([
@@ -551,9 +551,6 @@ private function updateKehadiranIzin($perizinan)
     }
 }
 
-/**
- * HRD/Head: Approve perizinan
- */
 public function approve(Request $request, $id)
 {
     try {
@@ -561,47 +558,45 @@ public function approve(Request $request, $id)
         $currentUser = Auth::user();
         $oldStatus = $perizinan->status;
 
-        // Check authorization berdasarkan role
-        if ($currentUser->role === 'hrd') {
-            if ($perizinan->status_disetujui !== null) {
-                return back()->with('error', 'Perizinan ini sudah diproses oleh HRD sebelumnya');
-            }
+        $isHRD = $currentUser->role === 'hrd';
+        
+        $isTargetUser = $perizinan->uid_diketahui == $currentUser->id;
 
-            $perizinan->status_disetujui = 'Disetujui';
-            $perizinan->uid_disetujui = Auth::id();
+        if (!$isHRD && !$isTargetUser) {
+            return back()->with('error', 'Anda tidak memiliki akses untuk menyetujui perizinan ini');
+        }
+        // SCENARIO A: User yang dituju menyetujui (status_diketahui)
+        if ($isTargetUser && $perizinan->status_diketahui === null) {
+            $perizinan->status_diketahui = 'Disetujui';
+            // TIDAK perlu set uid_diketahui karena sudah ada dari awal pengajuan
             if ($request->catatan) {
                 $perizinan->catatan = $request->catatan;
+            }
+            $perizinan->save();
+            
+            $this->sendPerizinanNotification($perizinan, 'disetujui_target');
+        }
+
+        // SCENARIO B: HRD menyetujui (status_disetujui)
+        if ($isHRD && $perizinan->status_disetujui === null) {
+            $perizinan->status_disetujui = 'Disetujui';
+            $perizinan->uid_disetujui = $currentUser->id; // PERBAIKAN: Simpan ID HRD yang menyetujui
+            if ($request->catatan) {
+                $perizinan->catatan = ($perizinan->catatan ? $perizinan->catatan . "\n" : "") . $request->catatan;
             }
             $perizinan->save();
             
             $this->sendPerizinanNotification($perizinan, 'disetujui_hrd');
-
-        // UBAH: Dari hanya 'head' menjadi mencakup head, hrd, dan eksekutif
-        } elseif (in_array($currentUser->role, ['head', 'hrd', 'eksekutif'])) {
-            if ($perizinan->uid_diketahui != $currentUser->id) {
-                return back()->with('error', 'Anda tidak memiliki akses untuk menyetujui perizinan ini');
-            }
-
-            if ($perizinan->status_diketahui !== null) {
-                return back()->with('error', 'Perizinan ini sudah Anda proses sebelumnya');
-            }
-
-            $perizinan->status_diketahui = 'Disetujui';
-            if ($request->catatan) {
-                $perizinan->catatan = $request->catatan;
-            }
-            $perizinan->save();
-            
-            $this->sendPerizinanNotification($perizinan, 'disetujui_head');
-
-        } else {
-            return back()->with('error', 'Anda tidak memiliki akses untuk menyetujui perizinan');
         }
 
+        // Refresh data sebelum update overall status
         $perizinan->refresh();
         $this->updateOverallStatus($perizinan);
         
+        // Refresh lagi setelah update status untuk mendapatkan data terbaru
         $perizinan->refresh();
+        
+        // Jika status berubah menjadi Disetujui, update kehadiran dan kirim notifikasi
         if ($perizinan->status === 'Disetujui' && $oldStatus !== 'Disetujui') {
             $this->updateKehadiranIzin($perizinan);
             $this->sendPerizinanNotification($perizinan, 'disetujui');
@@ -611,7 +606,8 @@ public function approve(Request $request, $id)
         
     } catch (\Exception $e) {
         \Log::error('Error approving perizinan: ' . $e->getMessage());
-        return back()->with('error', 'Gagal menyetujui perizinan');
+        \Log::error('Stack trace: ' . $e->getTraceAsString());
+        return back()->with('error', 'Gagal menyetujui perizinan: ' . $e->getMessage());
     }
 }
 
@@ -627,30 +623,87 @@ public function generatePdf($id)
             'disetujuiOleh:id,name,email,jabatan,ttd'
         ])->findOrFail($id);
 
-        // Check authorization
-        if (Auth::user()->role !== 'hrd' && Auth::user()->role !== 'admin') {
-            if ($perizinan->uid !== Auth::id()) {
-                abort(403, 'Unauthorized');
+        // ✅ PERBAIKAN: Gunakan helper function Laravel untuk path yang benar
+        $getTtdPath = function($ttdFilename) {
+            if (!$ttdFilename) return null;
+            
+            // Path untuk storage (file system)
+            $storagePath = storage_path('app' . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'ttd' . DIRECTORY_SEPARATOR . $ttdFilename);
+            
+            // Path untuk public (URL)
+            $publicPath = public_path('storage' . DIRECTORY_SEPARATOR . 'ttd' . DIRECTORY_SEPARATOR . $ttdFilename);
+            
+            // Cek mana yang ada
+            if (file_exists($storagePath)) {
+                return $storagePath;
+            } elseif (file_exists($publicPath)) {
+                return $publicPath;
             }
-        }
+            
+            return null;
+        };
 
-        // Format data
+        // Get TTD paths
+        $userTtdPath = $getTtdPath($perizinan->user->ttd);
+        $diketahuiTtdPath = $getTtdPath($perizinan->diketahuiOleh->ttd ?? null);
+        $disetujuiTtdPath = $getTtdPath($perizinan->disetujuiOleh->ttd ?? null);
+
+        // ✅ LOG TTD dengan path yang sudah diperbaiki
+        \Log::info('TTD Data for PDF Generation', [
+            'perizinan_id' => $id,
+            'user_ttd' => $perizinan->user->ttd ?? 'NULL',
+            'user_ttd_path' => $userTtdPath ?? 'N/A',
+            'user_ttd_exists' => $userTtdPath ? file_exists($userTtdPath) : false,
+            
+            'diketahui_ttd' => $perizinan->diketahuiOleh->ttd ?? 'NULL',
+            'diketahui_ttd_path' => $diketahuiTtdPath ?? 'N/A',
+            'diketahui_ttd_exists' => $diketahuiTtdPath ? file_exists($diketahuiTtdPath) : false,
+            
+            'disetujui_ttd' => $perizinan->disetujuiOleh->ttd ?? 'NULL',
+            'disetujui_ttd_path' => $disetujuiTtdPath ?? 'N/A',
+            'disetujui_ttd_exists' => $disetujuiTtdPath ? file_exists($disetujuiTtdPath) : false,
+            
+            'directory_separator' => DIRECTORY_SEPARATOR,
+            'storage_base' => storage_path('app' . DIRECTORY_SEPARATOR . 'public' . DIRECTORY_SEPARATOR . 'ttd'),
+            'public_base' => public_path('storage' . DIRECTORY_SEPARATOR . 'ttd')
+        ]);
+
+        // Format data untuk PDF
         $data = [
             'perizinan' => $perizinan,
-            'tanggal_print' => Carbon::now()->format('d/m/Y H:i')
+            'tanggal_print' => Carbon::now()->format('d/m/Y H:i'),
+            // ✅ Kirim path TTD yang sudah benar ke view
+            'user_ttd_path' => $userTtdPath,
+            'diketahui_ttd_path' => $diketahuiTtdPath,
+            'disetujui_ttd_path' => $disetujuiTtdPath
         ];
-
+        
         // Generate PDF
         $pdf = Pdf::loadView('pdf.surat-izin', $data)
             ->setPaper('a5', 'portrait');
 
         // Download PDF
         $filename = 'Surat_Izin_' . str_replace(' ', '_', $perizinan->user->name) . '_' . date('Ymd') . '.pdf';
+        
+        \Log::info('PDF Generated Successfully', [
+            'perizinan_id' => $id,
+            'filename' => $filename,
+            'user' => Auth::user()->name ?? 'Unknown'
+        ]);
+        
         return $pdf->download($filename);
 
     } catch (\Exception $e) {
-        \Log::error('Error generating PDF: ' . $e->getMessage());
-        return back()->with('error', 'Gagal generate PDF');
+        \Log::error('Error generating PDF', [
+            'perizinan_id' => $id,
+            'error_message' => $e->getMessage(),
+            'error_file' => $e->getFile(),
+            'error_line' => $e->getLine(),
+            'trace' => $e->getTraceAsString(),
+            'user' => Auth::user()->name ?? 'Unknown'
+        ]);
+        
+        return back()->with('error', 'Gagal generate PDF: ' . $e->getMessage());
     }
 }
 
@@ -671,32 +724,27 @@ public function reject(Request $request, $id)
         $perizinan = Perizinan::with(['user', 'diketahuiOleh', 'disetujuiOleh'])->findOrFail($id);
         $currentUser = Auth::user();
 
-        if ($currentUser->role === 'hrd') {
-            if ($perizinan->status_disetujui !== null) {
-                return back()->with('error', 'Perizinan ini sudah diproses oleh HRD sebelumnya');
-            }
+        // Check authorization
+        $isHRD = $currentUser->role === 'hrd';
+        $isTargetUser = $perizinan->uid_diketahui == $currentUser->id;
 
-            $perizinan->status_disetujui = 'Ditolak';
-            $perizinan->uid_disetujui = Auth::id();
-            $perizinan->catatan = $request->catatan;
-            $perizinan->save();
+        if (!$isHRD && !$isTargetUser) {
+            return back()->with('error', 'Anda tidak memiliki akses untuk menolak perizinan ini');
+        }
 
-        // UBAH: Dari hanya 'head' menjadi mencakup head, hrd, dan eksekutif
-        } elseif (in_array($currentUser->role, ['head', 'hrd', 'eksekutif'])) {
-            if ($perizinan->uid_diketahui != $currentUser->id) {
-                return back()->with('error', 'Anda tidak memiliki akses untuk menolak perizinan ini');
-            }
-
-            if ($perizinan->status_diketahui !== null) {
-                return back()->with('error', 'Perizinan ini sudah Anda proses sebelumnya');
-            }
-
+        // Target user menolak
+        if ($isTargetUser && $perizinan->status_diketahui === null) {
             $perizinan->status_diketahui = 'Ditolak';
             $perizinan->catatan = $request->catatan;
             $perizinan->save();
+        }
 
-        } else {
-            return back()->with('error', 'Anda tidak memiliki akses untuk menolak perizinan');
+        // HRD menolak
+        if ($isHRD && $perizinan->status_disetujui === null) {
+            $perizinan->status_disetujui = 'Ditolak';
+            $perizinan->uid_disetujui = Auth::id();
+            $perizinan->catatan = ($perizinan->catatan ? $perizinan->catatan . "\n" : "") . $request->catatan;
+            $perizinan->save();
         }
 
         $perizinan->refresh();
@@ -712,6 +760,9 @@ public function reject(Request $request, $id)
         return back()->with('error', 'Gagal menolak perizinan');
     }
 }
+
+
+
 /**
  * Update overall status berdasarkan status_diketahui dan status_disetujui
  */
@@ -726,11 +777,11 @@ private function updateOverallStatus($perizinan)
         if ($statusDiketahui === 'Ditolak' || $statusDisetujui === 'Ditolak') {
             $perizinan->status = 'Ditolak';
         }
-        // Jika keduanya disetujui, maka status keseluruhan = Disetujui
+        // Jika KEDUANYA disetujui, maka status keseluruhan = Disetujui
         elseif ($statusDiketahui === 'Disetujui' && $statusDisetujui === 'Disetujui') {
             $perizinan->status = 'Disetujui';
             
-            // TAMBAHAN: Auto create kehadiran ketika fully approved
+            // Auto create kehadiran ketika fully approved
             if ($oldStatus !== 'Disetujui') {
                 $this->updateKehadiranIzin($perizinan);
             }
@@ -747,6 +798,7 @@ private function updateOverallStatus($perizinan)
         throw $e;
     }
 }
+
 
     /**
      * Get izin history for current user
@@ -841,7 +893,6 @@ private function updateOverallStatus($perizinan)
             'keperluan' => $request->keperluan,
             'status' => 'Diajukan'
         ]);
-
         $perizinan->load('user');
         $this->sendPerizinanNotification($perizinan, 'diajukan_oleh_admin');
 
@@ -873,21 +924,6 @@ private function updateOverallStatus($perizinan)
         ]);
     }
     
-    /**
-     * Get all heads (for dropdown)
-     */
-    public function getHeads()
-{
-    // UBAH: Dari hanya 'head' menjadi array role
-    $heads = User::whereIn('role', ['head', 'hrd', 'eksekutif'])
-        ->select('id', 'name', 'email', 'jabatan', 'role')
-        ->orderBy('name')
-        ->get();
     
-    return response()->json([
-        'success' => true,
-        'data' => $heads
-    ]);
-}
 
 }

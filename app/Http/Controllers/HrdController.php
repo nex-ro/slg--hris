@@ -552,20 +552,18 @@ private function getYearlyTableData($year, $tower, $divisi)
         // Tentukan apakah hari libur 
         $isHoliday = $isSaturdayOrSunday || $isNationalHoliday; 
          
-        // Ambil semua users yang aktif dengan filter TMK dan tanggal keluar
+        // ✅ PENTING: Tambahkan 'role' di SELECT
         $users = User::where('active', true) 
             ->where('role', '!=', 'eksekutif') 
             ->where(function ($query) use ($tanggal) {
-                // TMK harus <= tanggal yang dipilih ATAU TMK null
                 $query->where('tmk', '<=', $tanggal)
                       ->orWhereNull('tmk');
             })
             ->where(function ($query) use ($tanggal) {
-                // tanggal_keluar harus >= tanggal yang dipilih ATAU tanggal_keluar null
                 $query->where('tanggal_keluar', '>=', $tanggal)
                       ->orWhereNull('tanggal_keluar');
             })
-            ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk', 'tanggal_keluar') 
+            ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk', 'tanggal_keluar', 'role') // ✅ SUDAH ADA 'role'
             ->orderBy('tower', 'asc') 
             ->orderBy('name', 'asc') 
             ->get(); 
@@ -582,13 +580,35 @@ private function getYearlyTableData($year, $tower, $divisi)
             $jamPulang = null;
             $keterangan = null;
 
-            // Tentukan status, jam kedatangan, dan jam pulang 
-            if ($isHoliday) {
+            // ✅ CEK ROLE SITE TERLEBIH DAHULU (PRIORITAS TERTINGGI)
+            if (strtolower($user->role) === 'site') {
+                if ($attendance) {
+                    // Jika ada data kehadiran, gunakan data kehadiran
+                    $status = $attendance->status; 
+                    $jamKedatangan = $attendance->jam_kedatangan  
+                        ? Carbon::parse($attendance->jam_kedatangan)->format('H:i')  
+                        : null; 
+                    $jamPulang = $attendance->jam_pulang  
+                        ? Carbon::parse($attendance->jam_pulang)->format('H:i')  
+                        : null; 
+                    $keterangan = $attendance->keterangan ?? null;
+                } else {
+                    // Jika TIDAK ada data kehadiran, set status "Site"
+                    $status = 'Site';
+                    $jamKedatangan = null;
+                    $jamPulang = null;
+                    $keterangan = 'Site';
+                }
+            } 
+            // ✅ CEK HARI LIBUR (PRIORITAS KEDUA)
+            elseif ($isHoliday) {
                 $status = 'Libur Kerja';
                 $jamKedatangan = '00:00';
                 $jamPulang = '00:00';
                 $keterangan = 'Hari Libur';
-            } elseif ($attendance) { 
+            } 
+            // ✅ CEK DATA KEHADIRAN (PRIORITAS KETIGA)
+            elseif ($attendance) { 
                 $status = $attendance->status; 
                 $jamKedatangan = $attendance->jam_kedatangan  
                     ? Carbon::parse($attendance->jam_kedatangan)->format('H:i')  
@@ -598,6 +618,7 @@ private function getYearlyTableData($year, $tower, $divisi)
                     : null; 
                 $keterangan = $attendance->keterangan ?? null;
             }
+            // ELSE: tetap N/A (untuk user selain site yang tidak ada data kehadiran)
  
             return [ 
                 'id' => $attendance->id ?? null, 
@@ -614,7 +635,8 @@ private function getYearlyTableData($year, $tower, $divisi)
                     'jabatan' => $user->jabatan, 
                     'tmk' => $user->tmk, 
                     'tanggal_keluar' => $user->tanggal_keluar,
-                    'tower' => $user->tower ?? 'Tanpa Tower', 
+                    'tower' => $user->tower ?? 'Tanpa Tower',
+                    'role' => $user->role, // ✅ KIRIM ROLE KE FRONTEND
                 ] 
             ]; 
         }); 
@@ -751,17 +773,13 @@ public function getByDateAndDivisi(Request $request): JsonResponse
         $tanggal = $request->query('tanggal');
         $divisi = $request->query('divisi');
  
-        // Cek apakah hari Sabtu atau Minggu 
         $carbonDate = Carbon::parse($tanggal); 
         $isSaturdayOrSunday = $carbonDate->isSaturday() || $carbonDate->isSunday(); 
  
-        // Cek apakah libur nasional 
         $isNationalHoliday = Holiday::isHoliday($tanggal); 
  
-        // Tentukan apakah hari libur 
         $isHoliday = $isSaturdayOrSunday || $isNationalHoliday; 
          
-        // Ambil users yang aktif dengan filter divisi, TMK dan tanggal keluar
         $users = User::where('active', true) 
             ->where('role', '!=', 'eksekutif')
             ->where('divisi', $divisi) // Filter berdasarkan divisi
@@ -773,7 +791,7 @@ public function getByDateAndDivisi(Request $request): JsonResponse
                 $query->where('tanggal_keluar', '>=', $tanggal)
                       ->orWhereNull('tanggal_keluar');
             })
-            ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk', 'tanggal_keluar') 
+            ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk', 'tanggal_keluar', 'role') // ✅ TAMBAH 'role'
             ->orderBy('tower', 'asc') 
             ->orderBy('name', 'asc') 
             ->get(); 
@@ -785,12 +803,41 @@ public function getByDateAndDivisi(Request $request): JsonResponse
         $formattedData = $users->map(function ($user) use ($kehadiran, $tanggal, $isHoliday) { 
             $attendance = $kehadiran->get($user->id); 
  
-            if ($isHoliday) { 
+            // Inisialisasi variabel default
+            $status = 'N/A';
+            $jamKedatangan = null;
+            $jamPulang = null;
+            $keterangan = null;
+
+            // ✅ CEK ROLE SITE TERLEBIH DAHULU (PRIORITAS TERTINGGI)
+            if (strtolower($user->role) === 'site') {
+                if ($attendance) {
+                    // Jika ada data kehadiran, gunakan data kehadiran
+                    $status = $attendance->status; 
+                    $jamKedatangan = $attendance->jam_kedatangan  
+                        ? Carbon::parse($attendance->jam_kedatangan)->format('H:i')  
+                        : null; 
+                    $jamPulang = $attendance->jam_pulang  
+                        ? Carbon::parse($attendance->jam_pulang)->format('H:i')  
+                        : null; 
+                    $keterangan = $attendance->keterangan ?? null;
+                } else {
+                    // Jika TIDAK ada data kehadiran, set status "Site"
+                    $status = 'Site';
+                    $jamKedatangan = null;
+                    $jamPulang = null;
+                    $keterangan = 'Site';
+                }
+            } 
+            // ✅ CEK HARI LIBUR (PRIORITAS KEDUA)
+            elseif ($isHoliday) { 
                 $status = 'Libur Kerja'; 
                 $jamKedatangan = '00:00'; 
                 $jamPulang = '00:00'; 
-                $keterangan = null;
-            } elseif ($attendance) { 
+                $keterangan = 'Hari Libur';
+            } 
+            // ✅ CEK DATA KEHADIRAN (PRIORITAS KETIGA)
+            elseif ($attendance) { 
                 $status = $attendance->status; 
                 $jamKedatangan = $attendance->jam_kedatangan  
                     ? Carbon::parse($attendance->jam_kedatangan)->format('H:i')  
@@ -799,12 +846,8 @@ public function getByDateAndDivisi(Request $request): JsonResponse
                     ? Carbon::parse($attendance->jam_pulang)->format('H:i')  
                     : null; 
                 $keterangan = $attendance->keterangan ?? null;
-            } else { 
-                $status = 'N/A'; 
-                $jamKedatangan = null; 
-                $jamPulang = null; 
-                $keterangan = null;
-            } 
+            }
+            // ELSE: tetap N/A (untuk user selain site yang tidak ada data kehadiran)
  
             return [ 
                 'id' => $attendance->id ?? null, 
@@ -821,7 +864,8 @@ public function getByDateAndDivisi(Request $request): JsonResponse
                     'jabatan' => $user->jabatan, 
                     'tmk' => $user->tmk, 
                     'tanggal_keluar' => $user->tanggal_keluar,
-                    'tower' => $user->tower ?? 'Tanpa Tower', 
+                    'tower' => $user->tower ?? 'Tanpa Tower',
+                    'role' => $user->role, // ✅ KIRIM ROLE KE FRONTEND
                 ] 
             ]; 
         }); 
@@ -842,7 +886,7 @@ public function getByDateAndDivisi(Request $request): JsonResponse
         ], 500); 
     } 
 }
-    public function getByMonth(Request $request): JsonResponse
+public function getByMonth(Request $request): JsonResponse
 {
     try {
         $request->validate([
