@@ -296,7 +296,7 @@ class KateringExport implements FromCollection, WithHeadings, WithStyles, WithCo
             $eifelKeterangan[] = ['Tidak Makan', "0", ''];
         }
 
-        $eifelHadirTotals = $eifelAll->count() - ($sakitCount + $cutiCount + $wfhCount + $dinasCount + $keluarCount + $tidakMakanCount);
+        $eifelHadirTotals = $eifelTotal - ($sakitCount + $cutiCount + $wfhCount + $dinasCount + $keluarCount + $tidakMakanCount);
         $eifelKeterangan[] = ['', '', ''];
         if($eifelHadirTotals > 0){
             $eifelKeterangan[] = ['Total', $eifelHadirTotals, ''];
@@ -395,7 +395,7 @@ class KateringExport implements FromCollection, WithHeadings, WithStyles, WithCo
             $libertyKeterangan[] = ['Tidak Makan', "0", ''];
         }
 
-        $libertyHadirTotals = $libertyAll->count() - ($sakitCountL + $cutiCountL + $wfhCountL + $dinasCountL + $keluarCountL + $tidakMakanCountL);
+        $libertyHadirTotals = $libertyTotal - ($sakitCountL + $cutiCountL + $wfhCountL + $dinasCountL + $keluarCountL + $tidakMakanCountL);
         $libertyKeterangan[] = ['', '', ''];
         if($libertyHadirTotals > 0){
             $libertyKeterangan[] = ['Total', $libertyHadirTotals, ''];

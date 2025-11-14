@@ -187,7 +187,8 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/users', [UserController::class, 'getUsers']);
     Route::get('/kehadiran', [HrdController::class, 'getByDate']);
     Route::get('/api/holidays', [UserController::class, 'holiday']);
-    
+    Route::delete('/cuti/pengajuan/{id}', [CutiController::class, 'destroyPengajuan'])->name('cuti.destroyPengajuan');
+
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');

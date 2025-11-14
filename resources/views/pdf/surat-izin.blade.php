@@ -118,8 +118,6 @@
             border-bottom: 1px solid #000;
             font-size: 12px;
         }
-        
-        /* Signature Section */
         .signature-section {
             margin-top: auto;
             display: table;
@@ -127,7 +125,6 @@
             table-layout: fixed;
             padding-top: 10px;
         }
-        
         .signature-box {
             display: table-cell;
             width: 33.33%;
@@ -135,29 +132,25 @@
             vertical-align: top;
             padding: 0 3px;
         }
-        
         .signature-title {
             font-weight: bold;
             font-size: 11px;
             margin-bottom: 8px;
             text-align: center;
         }
-        
         .signature-space {
             height: 85px;
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
-            margin-bottom: 5px;
         }
-        
         .signature-image {
             max-width: 105px;
             max-height: 75px;
             object-fit: contain;
+            margin-top: 5px;
         }
-        
         .signature-line {
             position: absolute;
             bottom: 0;
@@ -179,7 +172,6 @@
             margin-top: 2px;
             text-align: center;
         }
-        
         /* Catatan Box */
         .catatan-box {
             margin: 10px 5px;
@@ -380,7 +372,6 @@
         <!-- Footer -->
         <div class="footer">
             <div>Dicetak pada: {{ $tanggal_print }}</div>
-            <div>Kota: 08/12/2024/01/2025</div>
         </div>
     </div>
 </body>

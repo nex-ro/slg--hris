@@ -48,8 +48,8 @@ function Cuti({ jatahCuti, users, tahunList, filters = {}, pemakaianCuti = [], a
     return () => clearInterval(interval);
   }, []);
 
-const formatCutiNumber = (num) => {
-  return Math.round(parseFloat(num || 0)); // Menampilkan 12
+const formatCutiNumber = (num) => { 
+  return Math.round(parseFloat(num || 0));
 };
   const openFormModalAdminFromPengajuan = () => {
   setShowSelectUserModal(true);
@@ -93,6 +93,10 @@ const handleDownloadPdf = (cutiId) => {
   window.open(route('cuti.download-pdf', cutiId), '_blank');
 };
 
+const getAvailableApprovers = (selectedUserId) => {
+  if (!selectedUserId) return users;
+  return users.filter(user => parseInt(user.id) !== parseInt(selectedUserId));
+};
 
 const [formData, setFormData] = useState({
   // ... state yang sudah ada ...
@@ -310,23 +314,35 @@ const calculateCuti = async () => {
     activePeriod--;
   }
   
-  const availableCuti = userGroup.cutiList.filter(item => {
-    if (item.tahun_ke === activePeriod) {
-      return item.sisa_cuti > 0;
-    }
-    if (item.tahun_ke === activePeriod + 1 && activePeriod > 0) {
-      return item.sisa_cuti > 0;
-    }
-    return false;
-  }).map(item => ({
-    ...item,
-    is_current: item.tahun_ke === activePeriod,
-    is_borrowable: item.tahun_ke === activePeriod + 1 && activePeriod > 0
-  }));
   
+const availableCuti = userGroup.cutiList.filter(item => {
+  const sisaCuti = parseFloat(item.sisa_cuti);
+  const tahunKe = parseInt(item.tahun_ke);
+  
+  // Izinkan semua periode yang masih punya sisa cuti
+  if (sisaCuti > 0) {
+    // Periode sebelumnya (jika ada sisa, boleh dipakai)
+    if (tahunKe < activePeriod) return true;
+    
+    // Periode aktif (selalu boleh)
+    if (tahunKe === activePeriod) return true;
+    
+    // Periode depan (pinjam cuti tahun depan, hanya jika sudah tahun ke-1 atau lebih)
+    if (tahunKe === activePeriod + 1 && activePeriod >= 1) return true;
+  }
+  
+  return false;
+}).map(item => ({
+  ...item,
+  is_current: parseInt(item.tahun_ke) === activePeriod,
+  is_previous: parseInt(item.tahun_ke) < activePeriod, 
+  is_borrowable: parseInt(item.tahun_ke) === activePeriod + 1 && activePeriod >= 1
+}));
+  
+  console.log(availableCuti)
+  console.log(userGroup)
+  console.log(activePeriod)
   setJatahCutiForUser(availableCuti);
-  
-  // ✅ PERBAIKAN: Reset form dengan struktur yang benar
   const initialFormData = {
     jatah_cuti_id: '',
     tanggal_mulai: '',
@@ -377,6 +393,7 @@ const closeFormModalAdmin = () => {
 const handleSubmitAdmin = (e) => {
   e.preventDefault();
   
+  
   // Validasi: Minimal satu approver harus dipilih
   if (!formData.diketahui_atasan && !formData.diketahui_hrd && !formData.disetujui) {
     alert('Pilih minimal satu approver (Atasan, HRD, atau Pimpinan)');
@@ -388,6 +405,35 @@ const handleSubmitAdmin = (e) => {
     alert('Tanggal selesai tidak boleh lebih awal dari tanggal mulai');
     return;
   }
+  
+  // ✅ PERBAIKAN: Validasi durasi cuti
+  if (workDays <= 0) {
+    alert('Durasi cuti tidak valid. Pastikan tanggal sudah dipilih dengan benar.');
+    return;
+  }
+    const selectedUserId = parseInt(selectedUserForCuti.user.id);
+  const atasanId = formData.diketahui_atasan ? parseInt(formData.diketahui_atasan) : null;
+  const hrdId = formData.diketahui_hrd ? parseInt(formData.diketahui_hrd) : null;
+  const pimpinanId = formData.disetujui ? parseInt(formData.disetujui) : null;
+
+    if (atasanId === selectedUserId || hrdId === selectedUserId || pimpinanId === selectedUserId) {
+    alert('User tidak dapat menjadi approver untuk pengajuan cutinya sendiri. Pilih approver yang berbeda.');
+    return;
+  }
+  
+  // Validasi: Tanggal selesai harus >= tanggal mulai
+  if (new Date(formData.tanggal_selesai) < new Date(formData.tanggal_mulai)) {
+    alert('Tanggal selesai tidak boleh lebih awal dari tanggal mulai');
+    return;
+  }
+
+  // ✅ PERBAIKAN: Validasi jatah cuti mencukupi
+  const selectedJatahCuti = jatahCutiForUser.find(j => j.id == formData.jatah_cuti_id);
+  if (selectedJatahCuti && parseFloat(selectedJatahCuti.sisa_cuti) < workDays) {
+    alert(`Sisa cuti tidak mencukupi. Sisa: ${selectedJatahCuti.sisa_cuti} hari, Dibutuhkan: ${workDays} hari`);
+    return;
+  }
+
   
   const submitData = {
     ...formData,
@@ -401,7 +447,6 @@ const handleSubmitAdmin = (e) => {
     },
     onError: (errors) => {
       console.error('Validation errors:', errors);
-      // Tampilkan error ke user
       if (errors.error) {
         alert(errors.error);
       } else {
@@ -410,6 +455,8 @@ const handleSubmitAdmin = (e) => {
     }
   });
 };
+
+
 
 
 const handleDelete = (id) => {
@@ -647,12 +694,14 @@ const handleInputChange = (e) => {
   setFormData(prev => {
     const updated = { ...prev, [name]: newValue };
     
-    // Handle cuti setengah hari
+    // ✅ PERBAIKAN: Handle cuti setengah hari
     if (name === 'cuti_setengah_hari') {
       if (checked && updated.tanggal_mulai) {
+        // Jika cuti setengah hari dicentang, tanggal selesai = tanggal mulai
         updated.tanggal_selesai = updated.tanggal_mulai;
         calculateWorkDays(updated.tanggal_mulai, updated.tanggal_mulai, true);
       } else if (!checked && updated.tanggal_mulai && updated.tanggal_selesai) {
+        // Jika cuti setengah hari tidak dicentang, hitung ulang hari kerja normal
         calculateWorkDays(updated.tanggal_mulai, updated.tanggal_selesai, false);
       }
     }
@@ -675,17 +724,24 @@ const handleInputChange = (e) => {
 };
 
 
+
+
 const calculateWorkDays = (startDate, endDate, isHalfDay) => {
+  console.log('🔍 calculateWorkDays dipanggil:', { startDate, endDate, isHalfDay });
+  
   if (!startDate || !endDate) {
     setWorkDays(0);
     return;
   }
 
+  // ✅ PERBAIKAN: Jika cuti setengah hari, langsung return 0.5
   if (isHalfDay) {
+    console.log('✅ Cuti setengah hari terdeteksi, set workDays = 0.5');
     setWorkDays(0.5);
     return;
   }
 
+  // Hitung hari kerja (Senin-Jumat) untuk cuti penuh
   const start = new Date(startDate);
   const end = new Date(endDate);
   let count = 0;
@@ -700,8 +756,10 @@ const calculateWorkDays = (startDate, endDate, isHalfDay) => {
     current.setDate(current.getDate() + 1);
   }
 
+  console.log('✅ Hari kerja dihitung:', count);
   setWorkDays(count);
 };
+
 
 // ========================================
 // FUNGSI OPEN FORM MODAL ADMIN (UPDATE)
@@ -1043,9 +1101,8 @@ const handlePageChangePengajuan = (page) => {
         {/* Tab Content: Pengajuan Cuti */}
         {activeTab === 'pengajuan' && (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-                <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
-
-        <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="bg-white rounded-lg shadow-sm p-6">
+        <div className="bg-white rounded-lg shadow-sm">
       <div className="flex flex-col md:flex-row gap-4 items-center">
         <div className="flex-1 relative w-full">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
@@ -2181,13 +2238,23 @@ const handlePageChangePengajuan = (page) => {
 
         {/* Info Durasi */}
         {workDays > 0 && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium text-blue-900">Durasi Cuti:</span>
-              <span className="text-lg font-bold text-blue-600">{formatCutiNumber(workDays)} hari</span>
-            </div>
-          </div>
+  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+    <div className="flex items-center justify-between">
+      <span className="text-sm font-medium text-blue-900">Durasi Cuti:</span>
+      <div className="flex items-center gap-2">
+        <span className="text-lg font-bold text-blue-600">
+          {workDays === 0.5 ? '0.5 hari' : `${Math.round(workDays)} hari`}
+        </span>
+        {workDays === 0.5 && (
+          <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded-full">
+            Setengah Hari
+          </span>
         )}
+      </div>
+    </div>
+  </div>
+)}
+
 
         {/* Alasan */}
         <div>
@@ -2207,69 +2274,87 @@ const handlePageChangePengajuan = (page) => {
         </div>
 
         {/* Alur Persetujuan */}
-        <div className="border-t pt-4">
-          <h4 className="text-sm font-semibold text-gray-700 mb-3">
-            Alur Persetujuan <span className="text-red-500 text-xs">(Minimal pilih 1)</span>
-          </h4>
-          <div className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Diketahui Atasan
-              </label>
-              <select
-                name="diketahui_atasan"
-                value={formData.diketahui_atasan}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-              >
-                <option value="">Pilih Atasan</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Diketahui HRD
-              </label>
-              <select
-                name="diketahui_hrd"
-                value={formData.diketahui_hrd}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-              >
-                <option value="">Pilih HRD</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Disetujui Pimpinan
-              </label>
-              <select
-                name="disetujui"
-                value={formData.disetujui}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-              >
-                <option value="">Pilih Pimpinan</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
+        {/* Alur Persetujuan */}
+<div className="border-t pt-4">
+  <h4 className="text-sm font-semibold text-gray-700 mb-3">
+    Alur Persetujuan <span className="text-red-500 text-xs">(Minimal pilih 1)</span>
+  </h4>
+  
+  {/* ✅ TAMBAHAN BARU: Info User Yang Dipilih */}
+  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+    <div className="flex items-center gap-2 text-sm">
+      <User className="w-4 h-4 text-blue-600" />
+      <span className="text-gray-700">
+        Pengajuan cuti untuk: <strong className="text-blue-700">{selectedUserForCuti.user.name}</strong>
+      </span>
+    </div>
+    <p className="text-xs text-gray-600 mt-1 ml-6">
+      * User ini tidak dapat menjadi approver untuk dirinya sendiri
+    </p>
+  </div>
+  
+  <div className="space-y-3">
+    {/* Diketahui Atasan */}
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        Diketahui Atasan
+      </label>
+      <select
+        name="diketahui_atasan"
+        value={formData.diketahui_atasan}
+        onChange={handleInputChange}
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+      >
+        <option value="">Pilih Atasan</option>
+        {getAvailableApprovers(selectedUserForCuti.user.id).map((user) => (
+          <option key={user.id} value={user.id}>
+            {user.name}
+          </option>
+        ))}
+      </select>
+    </div>
+    
+    {/* Diketahui HRD */}
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        Diketahui HRD
+      </label>
+      <select
+        name="diketahui_hrd"
+        value={formData.diketahui_hrd}
+        onChange={handleInputChange}
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+      >
+        <option value="">Pilih HRD</option>
+        {getAvailableApprovers(selectedUserForCuti.user.id).map((user) => (
+          <option key={user.id} value={user.id}>
+            {user.name}
+          </option>
+        ))}
+      </select>
+    </div>
+    
+    {/* Disetujui Pimpinan */}
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        Disetujui Pimpinan
+      </label>
+      <select
+        name="disetujui"
+        value={formData.disetujui}
+        onChange={handleInputChange}
+        className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+      >
+        <option value="">Pilih Pimpinan</option>
+        {getAvailableApprovers(selectedUserForCuti.user.id).map((user) => (
+          <option key={user.id} value={user.id}>
+            {user.name}
+          </option>
+        ))}
+      </select>
+    </div>
+  </div>
+</div>
 
         {/* Buttons */}
         <div className="flex gap-3 pt-4 border-t">
