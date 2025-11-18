@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Head, router } from '@inertiajs/react';
 import { Search, Plus, Edit2, Trash2, X, Calculator, CheckCircle, XCircle, Eye, Clock, User, Save, Download } from 'lucide-react';
 import LayoutTemplate from '@/Layouts/LayoutTemplate';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function Cuti({ jatahCuti, users, tahunList, filters = {}, pemakaianCuti = [], auth }) {
   const [showModal, setShowModal] = useState(false);
@@ -34,7 +36,7 @@ function Cuti({ jatahCuti, users, tahunList, filters = {}, pemakaianCuti = [], a
   const currentUserRole = auth?.user?.role;
   const isHeadRole = currentUserRole === 'head';
 
-
+  const [loadingOverlay, setLoadingOverlay] = useState(false);  
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -93,10 +95,78 @@ const handleDownloadPdf = (cutiId) => {
   window.open(route('cuti.download-pdf', cutiId), '_blank');
 };
 
+const showToast = (message, type) => {
+  const options = {
+    position: "top-right",
+    autoClose: 5000,
+    hideProgressBar: false,
+    closeOnClick: true,
+    pauseOnHover: true,
+    draggable: true,
+  };
+
+  switch(type) {
+    case 'success':
+      toast.success(message, options);
+      break;
+    case 'error':
+      toast.error(message, options);
+      break;
+    case 'warning':
+      toast.warning(message, options);
+      break;
+    default:
+      toast.info(message, options);
+  }
+};
+
+const handleDeletePengajuan = (cutiId) => {
+  const cuti = pemakaianCutiArray.find(c => c.id === cutiId);
+  
+  if (!cuti) {
+    showToast('Data pengajuan cuti tidak ditemukan', 'error'); // ← UBAH INI
+    return;
+  }
+
+  if (cuti.status_final === 'disetujui') {
+    showToast('Tidak dapat menghapus pengajuan cuti yang sudah disetujui', 'warning'); // ← UBAH INI
+    return;
+  }
+
+  const confirmMessage = `Apakah Anda yakin ingin menghapus pengajuan cuti ini?\n\n` +
+    `Karyawan: ${cuti.user?.name}\n` +
+    `Tanggal: ${formatDate(cuti.tanggal_mulai)} - ${formatDate(cuti.tanggal_selesai)}\n` +
+    `Status: ${cuti.status_final === 'ditolak' ? 'Ditolak' : 'Diproses'}`;
+
+  if (confirm(confirmMessage)) {
+    setLoadingOverlay(true); // ← TAMBAH INI
+    router.delete(route('cuti.destroy-pengajuan', cutiId), {
+      onSuccess: () => {
+        setLoadingOverlay(false); // ← TAMBAH INI
+        showToast('Pengajuan cuti berhasil dihapus!', 'success'); // ← TAMBAH INI
+        router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
+      },
+      onError: (errors) => {
+        console.error('Delete errors:', errors);
+        setLoadingOverlay(false); // ← TAMBAH INI
+        if (errors.error) {
+          showToast(errors.error, 'error'); // ← UBAH INI
+        } else {
+          showToast('Terjadi kesalahan saat menghapus pengajuan cuti', 'error'); // ← UBAH INI
+        }
+      }
+    });
+  }
+};
+
 const getAvailableApprovers = (selectedUserId) => {
   if (!selectedUserId) return users;
-  return users.filter(user => parseInt(user.id) !== parseInt(selectedUserId));
+  return users.filter(user => 
+    parseInt(user.id) !== parseInt(selectedUserId) &&
+    parseInt(user.id) !== parseInt(currentUserId)
+  );
 };
+
 
 const [formData, setFormData] = useState({
   // ... state yang sudah ada ...
@@ -174,12 +244,12 @@ const handlePageChangeJatah = (page) => {
 
 const calculateCuti = async () => {
   if (!formData.uid || !formData.tahun) {
-    alert('Pilih user dan tahun terlebih dahulu');
+    showToast('Pilih user dan tahun terlebih dahulu', 'warning'); // ← UBAH INI
     return;
   }
 
+  setLoadingOverlay(true); // ← TAMBAH INI
   try {
-    // ✅ GUNAKAN fetchWithCsrf (tidak perlu CSRF manual lagi)
     const response = await fetchWithCsrf(route('hrd.cuti.calculate'), {
       method: 'POST',
       body: JSON.stringify({
@@ -191,7 +261,8 @@ const calculateCuti = async () => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('Server error:', errorText);
-      alert(`Error ${response.status}: Gagal menghitung cuti.`);
+      showToast(`Error ${response.status}: Gagal menghitung cuti.`, 'error'); // ← UBAH INI
+      setLoadingOverlay(false); // ← TAMBAH INI
       return;
     }
 
@@ -199,21 +270,21 @@ const calculateCuti = async () => {
     if (!contentType || !contentType.includes('application/json')) {
       const errorText = await response.text();
       console.error('Not JSON response:', errorText);
-      alert('Server mengembalikan format yang salah.');
+      showToast('Server mengembalikan format yang salah.', 'error'); // ← UBAH INI
+      setLoadingOverlay(false); // ← TAMBAH INI
       return;
     }
 
-    const data = await response.json();
-    console.log('Response data:', data);
-    
+    const data = await response.json();    
     if (!data || !data.success) {
-      alert(data.error || 'Gagal mendapatkan data dari server');
+      showToast(data.error || 'Gagal mendapatkan data dari server', 'error'); // ← UBAH INI
+      setLoadingOverlay(false); // ← TAMBAH INI
       return;
     }
 
-    // ✅ CEK DUPLIKASI
     if (data.is_duplicate) {
-      alert(`Periode tahun ke-${data.tahun_ke} untuk karyawan ini sudah ada.`);
+      showToast(`Periode tahun ke-${data.tahun_ke} untuk karyawan ini sudah ada.`, 'warning'); // ← UBAH INI
+      setLoadingOverlay(false); // ← TAMBAH INI
       return;
     }
 
@@ -223,7 +294,8 @@ const calculateCuti = async () => {
     );
 
     if (isDuplicate) {
-      alert(`Periode tahun ke-${data.tahun_ke} untuk karyawan ini sudah ada.`);
+      showToast(`Periode tahun ke-${data.tahun_ke} untuk karyawan ini sudah ada.`, 'warning'); // ← UBAH INI
+      setLoadingOverlay(false); // ← TAMBAH INI
       return;
     }
 
@@ -235,69 +307,76 @@ const calculateCuti = async () => {
       cuti_dipakai: 0
     }));
 
-    alert('Jatah cuti berhasil dihitung!');
+    showToast('Jatah cuti berhasil dihitung!', 'success'); // ← UBAH INI
+    setLoadingOverlay(false); // ← TAMBAH INI
     
   } catch (error) {
     console.error('Error calculating cuti:', error);
-    alert('Terjadi kesalahan: ' + error.message);
+    showToast('Terjadi kesalahan: ' + error.message, 'error'); // ← UBAH INI
+    setLoadingOverlay(false); // ← TAMBAH INI
   }
 };
 
-  const handleSubmit = () => {
-    // Validasi form sebelum submit
-    if (!formData.uid) {
-      alert('Pilih karyawan terlebih dahulu');
-      return;
-    }
-    
-    if (!formData.tahun) {
-      alert('Masukkan tahun terlebih dahulu');
-      return;
-    }
-    
-    if (!formData.jumlah_cuti || parseFloat(formData.jumlah_cuti) <= 0) {
-      alert('Jumlah cuti harus lebih dari 0');
-      return;
-    }
+const handleSubmit = () => {
+  if (!formData.uid) {
+    showToast('Pilih karyawan terlebih dahulu', 'warning'); // ← UBAH INI
+    return;
+  }
+  
+  if (!formData.tahun) {
+    showToast('Masukkan tahun terlebih dahulu', 'warning'); // ← UBAH INI
+    return;
+  }
+  
+  if (!formData.jumlah_cuti || parseFloat(formData.jumlah_cuti) <= 0) {
+    showToast('Jumlah cuti harus lebih dari 0', 'warning'); // ← UBAH INI
+    return;
+  }
 
-    if (modalType === 'create') {
-      router.post(route('hrd.cuti.store'), formData, {
-        onSuccess: () => {
-          closeModal();
-          router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
-        },
-        onError: (errors) => {
-          console.error('Validation errors:', errors);
-          // Tampilkan pesan error ke user
-          if (errors.message) {
-            alert(errors.message);
-          } else if (errors.error) {
-            alert(errors.error);
-          } else {
-            alert('Terjadi kesalahan saat menyimpan data. Periksa console untuk detail.');
-          }
+  setLoadingOverlay(true); // ← TAMBAH INI
+
+  if (modalType === 'create') {
+    router.post(route('hrd.cuti.store'), formData, {
+      onSuccess: () => {
+        closeModal();
+        setLoadingOverlay(false); // ← TAMBAH INI
+        showToast('Jatah cuti berhasil disimpan!', 'success'); // ← TAMBAH INI
+        router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
+      },
+      onError: (errors) => {
+        console.error('Validation errors:', errors);
+        setLoadingOverlay(false); // ← TAMBAH INI
+        if (errors.message) {
+          showToast(errors.message, 'error'); // ← UBAH INI
+        } else if (errors.error) {
+          showToast(errors.error, 'error'); // ← UBAH INI
+        } else {
+          showToast('Terjadi kesalahan saat menyimpan data.', 'error'); // ← UBAH INI
         }
-      });
-    } else {
-      router.put(route('hrd.cuti.update', selectedData.id), formData, {
-        onSuccess: () => {
-          closeModal();
-          alert('Jatah cuti berhasil diupdate');
-          router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
-        },
-        onError: (errors) => {
-          console.error('Validation errors:', errors);
-          if (errors.message) {
-            alert(errors.message);
-          } else if (errors.error) {
-            alert(errors.error);
-          } else {
-            alert('Terjadi kesalahan saat mengupdate data. Periksa console untuk detail.');
-          }
+      }
+    });
+  } else {
+    router.put(route('hrd.cuti.update', selectedData.id), formData, {
+      onSuccess: () => {
+        closeModal();
+        setLoadingOverlay(false); // ← TAMBAH INI
+        showToast('Jatah cuti berhasil diupdate!', 'success'); // ← UBAH INI
+        router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
+      },
+      onError: (errors) => {
+        console.error('Validation errors:', errors);
+        setLoadingOverlay(false); // ← TAMBAH INI
+        if (errors.message) {
+          showToast(errors.message, 'error'); // ← UBAH INI
+        } else if (errors.error) {
+          showToast(errors.error, 'error'); // ← UBAH INI
+        } else {
+          showToast('Terjadi kesalahan saat mengupdate data.', 'error'); // ← UBAH INI
         }
-      });
-    }
-  };
+      }
+    });
+  }
+};
 
   const openFormModalAdmin = async (userGroup) => {
   setSelectedUserForCuti(userGroup);
@@ -339,9 +418,6 @@ const availableCuti = userGroup.cutiList.filter(item => {
   is_borrowable: parseInt(item.tahun_ke) === activePeriod + 1 && activePeriod >= 1
 }));
   
-  console.log(availableCuti)
-  console.log(userGroup)
-  console.log(activePeriod)
   setJatahCutiForUser(availableCuti);
   const initialFormData = {
     jatah_cuti_id: '',
@@ -393,47 +469,38 @@ const closeFormModalAdmin = () => {
 const handleSubmitAdmin = (e) => {
   e.preventDefault();
   
-  
-  // Validasi: Minimal satu approver harus dipilih
   if (!formData.diketahui_atasan && !formData.diketahui_hrd && !formData.disetujui) {
-    alert('Pilih minimal satu approver (Atasan, HRD, atau Pimpinan)');
+    showToast('Pilih minimal satu approver (Atasan, HRD, atau Pimpinan)', 'warning'); // ← UBAH INI
     return;
   }
   
-  // Validasi: Tanggal selesai harus >= tanggal mulai
   if (new Date(formData.tanggal_selesai) < new Date(formData.tanggal_mulai)) {
-    alert('Tanggal selesai tidak boleh lebih awal dari tanggal mulai');
+    showToast('Tanggal selesai tidak boleh lebih awal dari tanggal mulai', 'warning'); // ← UBAH INI
     return;
   }
   
-  // ✅ PERBAIKAN: Validasi durasi cuti
   if (workDays <= 0) {
-    alert('Durasi cuti tidak valid. Pastikan tanggal sudah dipilih dengan benar.');
+    showToast('Durasi cuti tidak valid. Pastikan tanggal sudah dipilih dengan benar.', 'warning'); // ← UBAH INI
     return;
   }
-    const selectedUserId = parseInt(selectedUserForCuti.user.id);
+
+  const selectedUserId = parseInt(selectedUserForCuti.user.id);
   const atasanId = formData.diketahui_atasan ? parseInt(formData.diketahui_atasan) : null;
   const hrdId = formData.diketahui_hrd ? parseInt(formData.diketahui_hrd) : null;
   const pimpinanId = formData.disetujui ? parseInt(formData.disetujui) : null;
 
-    if (atasanId === selectedUserId || hrdId === selectedUserId || pimpinanId === selectedUserId) {
-    alert('User tidak dapat menjadi approver untuk pengajuan cutinya sendiri. Pilih approver yang berbeda.');
+  if (atasanId === selectedUserId || hrdId === selectedUserId || pimpinanId === selectedUserId) {
+    showToast('User tidak dapat menjadi approver untuk pengajuan cutinya sendiri. Pilih approver yang berbeda.', 'warning'); // ← UBAH INI
     return;
   }
   
-  // Validasi: Tanggal selesai harus >= tanggal mulai
-  if (new Date(formData.tanggal_selesai) < new Date(formData.tanggal_mulai)) {
-    alert('Tanggal selesai tidak boleh lebih awal dari tanggal mulai');
-    return;
-  }
-
-  // ✅ PERBAIKAN: Validasi jatah cuti mencukupi
   const selectedJatahCuti = jatahCutiForUser.find(j => j.id == formData.jatah_cuti_id);
   if (selectedJatahCuti && parseFloat(selectedJatahCuti.sisa_cuti) < workDays) {
-    alert(`Sisa cuti tidak mencukupi. Sisa: ${selectedJatahCuti.sisa_cuti} hari, Dibutuhkan: ${workDays} hari`);
+    showToast(`Sisa cuti tidak mencukupi. Sisa: ${selectedJatahCuti.sisa_cuti} hari, Dibutuhkan: ${workDays} hari`, 'warning'); // ← UBAH INI
     return;
   }
 
+  setLoadingOverlay(true); // ← TAMBAH INI
   
   const submitData = {
     ...formData,
@@ -443,14 +510,17 @@ const handleSubmitAdmin = (e) => {
   router.post(route('hrd.cuti.storePengajuanAdmin'), submitData, {
     onSuccess: () => {
       closeFormModalAdmin();
+      setLoadingOverlay(false); // ← TAMBAH INI
+      showToast('Pengajuan cuti berhasil disimpan!', 'success'); // ← TAMBAH INI
       router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
     },
     onError: (errors) => {
       console.error('Validation errors:', errors);
+      setLoadingOverlay(false); // ← TAMBAH INI
       if (errors.error) {
-        alert(errors.error);
+        showToast(errors.error, 'error'); // ← UBAH INI
       } else {
-        alert('Terjadi kesalahan saat mengajukan cuti');
+        showToast('Terjadi kesalahan saat mengajukan cuti', 'error'); // ← UBAH INI
       }
     }
   });
@@ -460,18 +530,26 @@ const handleSubmitAdmin = (e) => {
 
 
 const handleDelete = (id) => {
-    if (confirm('Apakah Anda yakin ingin menghapus data ini?')) {
-      router.delete(route('hrd.cuti.destroy', id), {
-        onSuccess: () => {
-          router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
-        }
-      });
-    }
-  };
+  if (confirm('Apakah Anda yakin ingin menghapus data ini?')) {
+    setLoadingOverlay(true); // ← TAMBAH INI
+    router.delete(route('hrd.cuti.destroy', id), {
+      onSuccess: () => {
+        setLoadingOverlay(false); // ← TAMBAH INI
+        showToast('Data jatah cuti berhasil dihapus!', 'success'); // ← TAMBAH INI
+        router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
+      },
+      onError: (errors) => {
+        setLoadingOverlay(false); // ← TAMBAH INI
+        showToast('Terjadi kesalahan saat menghapus data', 'error'); // ← TAMBAH INI
+      }
+    });
+  }
+};
+
   const handleApproval = (cutiId, approvalType, status) => {
   const cuti = pemakaianCuti.find(c => c.id === cutiId);
   if (cuti && (cuti.status_final === 'ditolak' || cuti.status_final === 'disetujui')) {
-    alert('Status pengajuan ini sudah final dan tidak dapat diubah lagi.');
+    showToast('Status pengajuan ini sudah final dan tidak dapat diubah lagi.', 'warning'); // ← UBAH INI
     return;
   }
 
@@ -485,22 +563,14 @@ const handleDelete = (id) => {
   setShowConfirmModal(true);
 };
 
-const openUserDetailModal = (userGroup) => {
-  setSelectedUserGroup(userGroup);
-  setShowUserDetailModal(true);
-};
-
-const closeUserDetailModal = () => {
-  setShowUserDetailModal(false);
-  setSelectedUserGroup(null);
-};
 const submitApproval = () => {
   if (!confirmAction) return;
   if (confirmAction.status === 'ditolak' && !catatan.trim()) {
-    alert('Catatan wajib diisi saat menolak pengajuan cuti');
+    showToast('Catatan wajib diisi saat menolak pengajuan cuti', 'warning'); // ← UBAH INI
     return;
   }
 
+  setLoadingOverlay(true); // ← TAMBAH INI
   router.post(route('hrd.cuti.approval'), {
     pemakaian_cuti_id: confirmAction.cutiId,
     approval_type: confirmAction.approvalType,
@@ -513,12 +583,27 @@ const submitApproval = () => {
       setCatatan('');
       setShowDetailModal(false);
       setSelectedCuti(null);
-      // Refresh data setelah approval
+      setLoadingOverlay(false); // ← TAMBAH INI
+      showToast(`Pengajuan cuti berhasil ${confirmAction.status === 'disetujui' ? 'disetujui' : 'ditolak'}!`, 'success'); // ← TAMBAH INI
       router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
+    },
+    onError: (errors) => {
+      setLoadingOverlay(false); // ← TAMBAH INI
+      showToast('Terjadi kesalahan saat memproses persetujuan', 'error'); // ← TAMBAH INI
     }
   });
 };
-  
+
+const openUserDetailModal = (userGroup) => {
+  setSelectedUserGroup(userGroup);
+  setShowUserDetailModal(true);
+};
+
+const closeUserDetailModal = () => {
+  setShowUserDetailModal(false);
+  setSelectedUserGroup(null);
+};
+
   const getStatusBadge = (status) => {
     const statusConfig = {
       'diproses': { bg: 'bg-yellow-100', text: 'text-yellow-800', label: 'Menunggu' },
@@ -650,8 +735,6 @@ const fetchWithCsrf = async (url, options = {}, retries = 1) => {
     let response = await fetch(url, defaultOptions);
 
     if (response.status === 419 && retries > 0) {
-      console.log('419 Error detected, refreshing CSRF token...');
-      
       const newToken = await fetchFreshCsrfToken();
       
       if (newToken) {
@@ -696,25 +779,44 @@ const handleInputChange = (e) => {
     
     // ✅ PERBAIKAN: Handle cuti setengah hari
     if (name === 'cuti_setengah_hari') {
-      if (checked && updated.tanggal_mulai) {
-        // Jika cuti setengah hari dicentang, tanggal selesai = tanggal mulai
-        updated.tanggal_selesai = updated.tanggal_mulai;
-        calculateWorkDays(updated.tanggal_mulai, updated.tanggal_mulai, true);
-      } else if (!checked && updated.tanggal_mulai && updated.tanggal_selesai) {
-        // Jika cuti setengah hari tidak dicentang, hitung ulang hari kerja normal
-        calculateWorkDays(updated.tanggal_mulai, updated.tanggal_selesai, false);
+      if (checked) {
+        // Jika cuti setengah hari dicentang
+        if (updated.tanggal_mulai) {
+          // Jika tanggal mulai sudah ada, set tanggal selesai = tanggal mulai
+          updated.tanggal_selesai = updated.tanggal_mulai;
+          calculateWorkDays(updated.tanggal_mulai, updated.tanggal_mulai, true);
+        }
+        // Jika tanggal mulai belum ada, tidak perlu calculate (akan calculate nanti saat tanggal dipilih)
+      } else {
+        // Jika cuti setengah hari di-uncheck
+        if (updated.tanggal_mulai && updated.tanggal_selesai) {
+          calculateWorkDays(updated.tanggal_mulai, updated.tanggal_selesai, false);
+        }
       }
     }
     
     // Auto-calculate work days ketika tanggal berubah
-    if (name === 'tanggal_mulai' || name === 'tanggal_selesai') {
-      if (updated.tanggal_mulai && updated.tanggal_selesai) {
-        // Jika cuti setengah hari, gunakan tanggal yang sama
+    if (name === 'tanggal_mulai') {
+      if (value) { // ✅ TAMBAHAN: Pastikan value tidak kosong
         if (updated.cuti_setengah_hari) {
+          // Jika cuti setengah hari, set tanggal selesai = tanggal mulai
+          updated.tanggal_selesai = value;
+          calculateWorkDays(value, value, true);
+        } else if (updated.tanggal_selesai) {
+          // Jika tanggal selesai sudah ada, calculate
+          calculateWorkDays(value, updated.tanggal_selesai, false);
+        }
+      }
+    }
+    
+    if (name === 'tanggal_selesai') {
+      if (value && updated.tanggal_mulai) { // ✅ TAMBAHAN: Pastikan kedua tanggal ada
+        if (updated.cuti_setengah_hari) {
+          // Jika cuti setengah hari, tetap gunakan tanggal mulai
           updated.tanggal_selesai = updated.tanggal_mulai;
           calculateWorkDays(updated.tanggal_mulai, updated.tanggal_mulai, true);
         } else {
-          calculateWorkDays(updated.tanggal_mulai, updated.tanggal_selesai, false);
+          calculateWorkDays(updated.tanggal_mulai, value, false);
         }
       }
     }
@@ -727,8 +829,6 @@ const handleInputChange = (e) => {
 
 
 const calculateWorkDays = (startDate, endDate, isHalfDay) => {
-  console.log('🔍 calculateWorkDays dipanggil:', { startDate, endDate, isHalfDay });
-  
   if (!startDate || !endDate) {
     setWorkDays(0);
     return;
@@ -736,7 +836,6 @@ const calculateWorkDays = (startDate, endDate, isHalfDay) => {
 
   // ✅ PERBAIKAN: Jika cuti setengah hari, langsung return 0.5
   if (isHalfDay) {
-    console.log('✅ Cuti setengah hari terdeteksi, set workDays = 0.5');
     setWorkDays(0.5);
     return;
   }
@@ -755,8 +854,6 @@ const calculateWorkDays = (startDate, endDate, isHalfDay) => {
     }
     current.setDate(current.getDate() + 1);
   }
-
-  console.log('✅ Hari kerja dihitung:', count);
   setWorkDays(count);
 };
 
@@ -1261,13 +1358,20 @@ const handlePageChangePengajuan = (page) => {
             >
               <Eye className="w-4 h-4" />
             </button>
-            {cuti.status_final === 'disetujui' && (
+            <button
+              onClick={() => handleDownloadPdf(cuti.id)}
+              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+              title="Download PDF"
+            >
+              <Download className="w-4 h-4" />
+            </button>
+            {cuti.status_final === 'ditolak' && (
               <button
-                onClick={() => handleDownloadPdf(cuti.id)}
-                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                title="Download PDF"
+                onClick={() => handleDeletePengajuan(cuti.id)}
+                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                title="Hapus Pengajuan"
               >
-                <Download className="w-4 h-4" />
+                <Trash2 className="w-4 h-4" />
               </button>
             )}
           </div>
@@ -2013,13 +2117,25 @@ const handlePageChangePengajuan = (page) => {
                           <Eye className="w-3 h-3" />
                           Detail
                         </button>
-                        {cuti.status_final === 'disetujui' && (
+                        <button
+                          onClick={() => handleDownloadPdf(cuti.id)}
+                          className="flex items-center gap-1 px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                        >
+                          <Download className="w-3 h-3" />
+                          PDF
+                        </button>
+                        {(cuti.status_final === 'ditolak' || cuti.status_final ==='diproses')&& (
                           <button
-                            onClick={() => handleDownloadPdf(cuti.id)}
-                            className="flex items-center gap-1 px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+                            onClick={() => {
+                              if (confirm('Apakah Anda yakin ingin menghapus pengajuan cuti ini?')) {
+                                handleDeletePengajuan(cuti.id);
+                                closeUserDetailModal();
+                              }
+                            }}
+                            className="flex items-center gap-1 px-3 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
                           >
-                            <Download className="w-3 h-3" />
-                            PDF
+                            <Trash2 className="w-3 h-3" />
+                            Hapus
                           </button>
                         )}
                       </div>
@@ -2508,6 +2624,20 @@ const handlePageChangePengajuan = (page) => {
         >
           {modalType === 'create' ? 'Simpan' : 'Update'}
         </button>
+      </div>
+    </div>
+  </div>
+)}
+{loadingOverlay && (
+  <div style={{margin:"0px", padding:"0px"}} className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+    <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
+      <div className="relative">
+        <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
+        <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+      </div>
+      <div className="text-center">
+        <p className="text-lg font-semibold text-gray-800 mb-1">Memproses</p>
+        <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
       </div>
     </div>
   </div>

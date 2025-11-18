@@ -2,11 +2,14 @@ import { useState ,useEffect} from "react";
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
 import { Head, router, usePage } from '@inertiajs/react';
 import { Calendar, FileText,Plus, CheckCircle, XCircle, Clock, User, Mail, Check, X as XIcon, Edit2, Trash2, Upload, Eye } from "lucide-react";
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function SakitAdmin() {
   const { sakits, flash } = usePage().props;
   const [users, setUsers] = useState([]);
 const [loadingUsers, setLoadingUsers] = useState(false);
+const [loadingOverlay, setLoadingOverlay] = useState(false);
 
   const [showModal, setShowModal] = useState(false);
   const [editMode, setEditMode] = useState(false);
@@ -63,13 +66,36 @@ const fetchUsers = async () => {
     setUsers(data);
   } catch (error) {
     console.error('Error fetching users:', error);
-    alert('Gagal memuat data karyawan');
+    showToast('Gagal memuat data karyawan', 'error'); // ← UBAH INI
   } finally {
     setLoadingUsers(false);
   }
 };
 
+const showToast = (message, type) => {
+  const options = {
+    position: "top-right",
+    autoClose: 5000,
+    hideProgressBar: false,
+    closeOnClick: true,
+    pauseOnHover: true,
+    draggable: true,
+  };
 
+  switch(type) {
+    case 'success':
+      toast.success(message, options);
+      break;
+    case 'error':
+      toast.error(message, options);
+      break;
+    case 'warning':
+      toast.warning(message, options);
+      break;
+    default:
+      toast.info(message, options);
+  }
+};
   const handleOpenModal = (data = null) => {
   if (data) {
     // Mode Edit
@@ -123,23 +149,23 @@ const fetchUsers = async () => {
   const handleSubmit = (e) => {
   e.preventDefault();
   
-  // Validasi untuk mode create
   if (!editMode && !formData.uid) {
-    alert("Pilih karyawan terlebih dahulu!");
+    showToast("Pilih karyawan terlebih dahulu!", 'warning'); // ← UBAH INI
     return;
   }
   
   if (!formData.tanggal_mulai || !formData.tanggal_selesai) {
-    alert("Tanggal mulai dan selesai harus diisi!");
+    showToast("Tanggal mulai dan selesai harus diisi!", 'warning'); // ← UBAH INI
     return;
   }
   
   if (!formData.keterangan) {
-    alert("Keterangan harus diisi!");
+    showToast("Keterangan harus diisi!", 'warning'); // ← UBAH INI
     return;
   }
 
   setProcessing(true);
+  setLoadingOverlay(true); // ← TAMBAH INI
 
   const data = new FormData();
   data.append('tanggal_mulai', formData.tanggal_mulai);
@@ -152,99 +178,105 @@ const fetchUsers = async () => {
   }
 
   if (editMode) {
-    // Mode Edit
     data.append('_method', 'PUT');
     router.post(`/admin/sakit/${selectedId}`, data, {
       onSuccess: () => {
         handleCloseModal();
         setProcessing(false);
-          router.reload({ only: ['sakits'], preserveScroll: true });
-
+        setLoadingOverlay(false); // ← TAMBAH INI
+        showToast('Data berhasil diupdate!', 'success'); // ← TAMBAH INI
+        router.reload({ only: ['sakits'], preserveScroll: true });
       },
       onError: (errors) => {
         console.error(errors);
-        alert('Terjadi kesalahan saat mengupdate data');
+        showToast('Terjadi kesalahan saat mengupdate data', 'error'); // ← UBAH INI
         setProcessing(false);
+        setLoadingOverlay(false); // ← TAMBAH INI
       }
     });
   } else {
-    // Mode Create - TAMBAHAN INI
     data.append('uid', formData.uid);
     router.post('/admin/sakit', data, {
       onSuccess: () => {
         handleCloseModal();
         setProcessing(false);
-          router.reload({ only: ['sakits'], preserveScroll: true });
-
+        setLoadingOverlay(false); // ← TAMBAH INI
+        showToast('Data berhasil disimpan!', 'success'); // ← TAMBAH INI
+        router.reload({ only: ['sakits'], preserveScroll: true });
       },
       onError: (errors) => {
         console.error(errors);
-        alert('Terjadi kesalahan saat menyimpan data');
+        showToast('Terjadi kesalahan saat menyimpan data', 'error'); // ← UBAH INI
         setProcessing(false);
+        setLoadingOverlay(false); // ← TAMBAH INI
       }
     });
   }
 };
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 2048000) {
-        alert("Ukuran file maksimal 2MB!");
-        e.target.value = "";
-        return;
-      }
-      
-      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-      if (!allowedTypes.includes(file.type)) {
-        alert("Format file harus PDF, JPG, JPEG, atau PNG!");
-        e.target.value = "";
-        return;
-      }
-      
-      setFormData({ ...formData, bukti: file });
-      setFileName(file.name);
+ const handleFileChange = (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    if (file.size > 2048000) {
+      showToast("Ukuran file maksimal 2MB!", 'warning'); // ← UBAH INI
+      e.target.value = "";
+      return;
     }
-  };
-
-  const handleUpdateStatus = (id, newStatus) => {
-    const statusText = newStatus === 'Disetujui' ? 'menyetujui' : 'menolak';
-    if (window.confirm(`Apakah Anda yakin ingin ${statusText} izin sakit ini?`)) {
-      setProcessing(true);
-      
-      router.put(`/admin/sakit/${id}/status`, 
-        { status: newStatus },
-        {
-          onSuccess: () => {
-            setProcessing(false);
-              router.reload({ only: ['sakits'], preserveScroll: true });
-
-          },
-          onError: (errors) => {
-            console.error(errors);
-            alert('Terjadi kesalahan saat mengupdate status');
-            setProcessing(false);
-          }
-        }
-      );
+    
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowedTypes.includes(file.type)) {
+      showToast("Format file harus PDF, JPG, JPEG, atau PNG!", 'warning'); // ← UBAH INI
+      e.target.value = "";
+      return;
     }
-  };
+    
+    setFormData({ ...formData, bukti: file });
+    setFileName(file.name);
+  }
+};
 
-  const handleDelete = (id) => {
-    if (window.confirm("Apakah Anda yakin ingin menghapus data ini?")) {
-      router.delete(`/admin/sakit/${id}`, {
+const handleUpdateStatus = (id, newStatus) => {
+  const statusText = newStatus === 'Disetujui' ? 'menyetujui' : 'menolak';
+  if (window.confirm(`Apakah Anda yakin ingin ${statusText} izin sakit ini?`)) {
+    setProcessing(true);
+    setLoadingOverlay(true); // ← TAMBAH INI
+    
+    router.put(`/admin/sakit/${id}/status`, 
+      { status: newStatus },
+      {
         onSuccess: () => {
-          alert("Data berhasil dihapus!");
-            router.reload({ only: ['sakits'], preserveScroll: true });
-
+          setProcessing(false);
+          setLoadingOverlay(false); // ← TAMBAH INI
+          showToast(`Izin sakit berhasil ${newStatus.toLowerCase()}!`, 'success'); // ← TAMBAH INI
+          router.reload({ only: ['sakits'], preserveScroll: true });
         },
         onError: (errors) => {
           console.error(errors);
-          alert('Terjadi kesalahan saat menghapus data');
+          showToast('Terjadi kesalahan saat mengupdate status', 'error'); // ← UBAH INI
+          setProcessing(false);
+          setLoadingOverlay(false); // ← TAMBAH INI
         }
-      });
-    }
-  };
+      }
+    );
+  }
+};
+const handleDelete = (id) => {
+  if (window.confirm("Apakah Anda yakin ingin menghapus data ini?")) {
+    setLoadingOverlay(true); // ← TAMBAH INI
+    router.delete(`/admin/sakit/${id}`, {
+      onSuccess: () => {
+        setLoadingOverlay(false); // ← TAMBAH INI
+        showToast("Data berhasil dihapus!", 'success'); // ← UBAH INI
+        router.reload({ only: ['sakits'], preserveScroll: true });
+      },
+      onError: (errors) => {
+        console.error(errors);
+        setLoadingOverlay(false); // ← TAMBAH INI
+        showToast('Terjadi kesalahan saat menghapus data', 'error'); // ← UBAH INI
+      }
+    });
+  }
+};
 
   const handleViewBukti = (buktiPath) => {
     // Buka file dari storage Laravel
@@ -679,11 +711,22 @@ const fetchUsers = async () => {
       </div>
     </div>
   </div>
-)}
-
-        {/* Image Preview Modal */}
-       
+)}       
       </div>
+      {loadingOverlay && (
+  <div style={{margin:"0px", padding:"0px"}} className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+    <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
+      <div className="relative">
+        <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
+        <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+      </div>
+      <div className="text-center">
+        <p className="text-lg font-semibold text-gray-800 mb-1">Memproses</p>
+        <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
+      </div>
+    </div>
+  </div>
+)}
     </LayoutTemplate>
   );
 }

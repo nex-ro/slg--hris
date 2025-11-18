@@ -2,6 +2,9 @@ import { useState } from "react";
 import { Download, Calendar, FileText } from "lucide-react";
 import { Head, usePage } from "@inertiajs/react";
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
 function Dokumen() {
   const [activeTab, setActiveTab] = useState("absensi");
   const [selectedPeriod, setSelectedPeriod] = useState("monthly");
@@ -9,7 +12,8 @@ function Dokumen() {
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear().toString());
   const [customDate, setCustomDate] = useState({ start: "", end: "" });
   const [selectedTower, setSelectedTower] = useState("");
-  const [downloadLoading, setDownloadLoading] = useState(false);
+const [downloadLoading, setDownloadLoading] = useState(false);
+const [loadingOverlay, setLoadingOverlay] = useState(false); 
   const towers = ["Eiffel", "Liberty"];
 
   const months = [
@@ -22,8 +26,6 @@ function Dokumen() {
 
   // Function untuk download hari ini (khusus katering)
   const handleDownloadToday = (fileType) => {
-    console.log(`Download ${fileType} - Hari Ini`);
-    console.log("Tanggal:", new Date().toLocaleDateString('id-ID'));
   };
   // Fungsi untuk mendapatkan CSRF token fresh
 const fetchFreshCsrfToken = async () => {
@@ -58,6 +60,7 @@ const getCsrfToken = () => {
 };
 const downloadFileWithRetry = async (url) => {
   setDownloadLoading(true);
+  setLoadingOverlay(true);
   try {
     let csrfToken = getCsrfToken();
     
@@ -75,6 +78,10 @@ const downloadFileWithRetry = async (url) => {
       const newToken = await fetchFreshCsrfToken();
       
       if (!newToken) {
+        toast.error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.', {
+          position: "top-right",
+          autoClose: 4000,
+        });
         throw new Error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.');
       }
 
@@ -94,6 +101,10 @@ const downloadFileWithRetry = async (url) => {
 
       // Redirect ke URL download
       window.location.href = url;
+      toast.success('File berhasil diunduh!', {
+        position: "top-right",
+        autoClose: 3000,
+      });
       return;
     }
 
@@ -103,60 +114,83 @@ const downloadFileWithRetry = async (url) => {
 
     // Redirect ke URL download
     window.location.href = url;
+    toast.success('File berhasil diunduh!', {
+      position: "top-right",
+      autoClose: 3000,
+    });
     
   } catch (error) {
     console.error('Error downloading file:', error);
     if (error.message.includes('419') || error.message.includes('CSRF')) {
-      alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
-      window.location.reload();
+      toast.error('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.', {
+        position: "top-right",
+        autoClose: 4000,
+      });
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
     } else {
-      alert(`Error: ${error.message}`);
+      toast.error(`Error: ${error.message}`, {
+        position: "top-right",
+        autoClose: 4000,
+      });
     }
   } finally {
     setDownloadLoading(false);
+    setLoadingOverlay(false);
   }
 };
 
-  const handleDownloadPerTower = async (fileType) => {
+const handleDownloadPerTower = async (fileType) => {
   if (!selectedMonth) {
-    alert("Mohon pilih bulan terlebih dahulu");
+    toast.error("Mohon pilih bulan terlebih dahulu", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
   if (!selectedYear) {
-    alert("Mohon pilih tahun terlebih dahulu");
+    toast.error("Mohon pilih tahun terlebih dahulu", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
 
   const bulan = getMonthNumber(selectedMonth);
   const tahun = selectedYear;
 
-  // console.log(`Download ${fileType} - Per Divisi`);
-  // console.log("Bulan:", bulan);
-  // console.log("Tahun:", tahun);
-
   if (fileType === "Absensi") {
     await downloadFileWithRetry(`/absensi/export-tower-divisi?bulan=${bulan}&tahun=${tahun}`);
-  } else {
-    // console.log("Katering per divisi belum tersedia");
   }
 };
+
 
   const getMonthNumber = (monthName) => {
     const monthIndex = months.indexOf(monthName);
     return monthIndex + 1;
   };
 
-  const handleDownloadMonthly = async (fileType) => {
+const handleDownloadMonthly = async (fileType) => {
   if (!selectedMonth) {
-    alert("Mohon pilih bulan terlebih dahulu");
+    toast.error("Mohon pilih bulan terlebih dahulu", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
   if (!selectedYear) {
-    alert("Mohon pilih tahun terlebih dahulu");
+    toast.error("Mohon pilih tahun terlebih dahulu", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
   if (!selectedTower) {
-    alert("Mohon pilih tower terlebih dahulu");
+    toast.error("Mohon pilih tower terlebih dahulu", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
 
@@ -165,56 +199,71 @@ const downloadFileWithRetry = async (url) => {
 
   if (fileType === "Absensi") {
     await downloadFileWithRetry(`/kehadiran/print-monthly?bulan=${bulan}&tahun=${tahun}&tower=${selectedTower}`);
-  } else {
-    // console.log("Katering monthly belum tersedia");
   }
 };
 
-  const handleDownloadRekapAll = async (fileType) => {
+
+const handleDownloadRekapAll = async (fileType) => {
   if (!selectedMonth) {
-    alert("Mohon pilih bulan terlebih dahulu");
+    toast.error("Mohon pilih bulan terlebih dahulu", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
   if (!selectedYear) {
-    alert("Mohon pilih tahun terlebih dahulu");
+    toast.error("Mohon pilih tahun terlebih dahulu", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
 
-  
   if (fileType === "Absensi") {
     const bulan = getMonthNumber(selectedMonth);
     const tahun = selectedYear;
     await downloadFileWithRetry(`/kehadiran/print-rekapall?bulan=${bulan}&tahun=${tahun}`);
-  } else {
-    // console.log("Katering custom belum tersedia");
   }
 };
-  const handleDownloadCustom = async (fileType) => {
+
+const handleDownloadCustom = async (fileType) => {
   if (!customDate.start || !customDate.end) {
-    alert("Mohon isi tanggal mulai dan tanggal akhir");
+    toast.error("Mohon isi tanggal mulai dan tanggal akhir", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
   if (!selectedTower) {
-    alert("Mohon pilih tower terlebih dahulu");
+    toast.error("Mohon pilih tower terlebih dahulu", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
   
   const startDate = new Date(customDate.start);
   const endDate = new Date(customDate.end);
   if (endDate < startDate) {
-    alert("Tanggal akhir harus setelah atau sama dengan tanggal mulai");
+    toast.error("Tanggal akhir harus setelah atau sama dengan tanggal mulai", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
-
 
   if (fileType === "Absensi") {
     const tanggalMulai = customDate.start;
     const tanggalAkhir = customDate.end;
     await downloadFileWithRetry(`/kehadiran/print-custom?tanggal_mulai=${tanggalMulai}&tanggal_akhir=${tanggalAkhir}&tower=${selectedTower}`);
   } else {
-    console.log("Katering custom belum tersedia");
+    toast.info("Katering custom belum tersedia", {
+      position: "top-right",
+      autoClose: 3000,
+    });
   }
 };
+
 
   const handleCustomDateChange = (field, value) => {
     setCustomDate(prev => ({ ...prev, [field]: value }));
@@ -593,6 +642,21 @@ const downloadFileWithRetry = async (url) => {
         </div>
       </div>
     </div>
+      {loadingOverlay && (
+      <div style={{margin:"0px" ,padding:"0px"}}className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div  className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
+          <div className="relative">
+            <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
+            <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-semibold text-gray-800 mb-1">Loading</p>
+            <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
+          </div>
+        </div>
+      </div>
+    )}
+
     </LayoutTemplate>
 
   );

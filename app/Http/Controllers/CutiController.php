@@ -267,11 +267,12 @@ class CutiController extends Controller
         'disetujui' => 'nullable|exists:users,id',
     ]);
 
-    $user = auth()->user();
+        $user = auth()->user();
     $jatahCuti = JatahCuti::findOrFail($validated['jatah_cuti_id']);
     
-    $jatahCutiUid = (int) $jatahCuti->uid;
-    $currentUserId = (int) $user->id;
+    $jatahCutiUid = (string) trim($jatahCuti->uid); 
+    $currentUserId = (string) trim($user->id);
+
     
     \Log::info('Validasi Ownership Jatah Cuti', [
         'jatah_cuti_id' => $validated['jatah_cuti_id'],
@@ -948,14 +949,34 @@ public function storePengajuanAdmin(Request $request)
         'diketahui_hrd' => 'nullable|exists:users,id',
         'disetujui' => 'nullable|exists:users,id',
     ]);
-
     if (!$validated['diketahui_atasan'] && !$validated['diketahui_hrd'] && !$validated['disetujui']) {
         return back()->withErrors(['error' => 'Pilih minimal satu approver (Atasan, HRD, atau Pimpinan)']);
     }
-
-    
     $user = User::findOrFail($validated['uid']);
     $jatahCuti = JatahCuti::findOrFail($validated['jatah_cuti_id']);
+    
+    // ✅ PERBAIKAN KRITIS: Validasi ownership jatah cuti
+    $jatahCutiUid = (string) trim($jatahCuti->uid);
+    $selectedUserId = (string) trim($validated['uid']);
+    
+    \Log::info('Admin - Validasi Ownership Jatah Cuti', [
+        'jatah_cuti_id' => $validated['jatah_cuti_id'],
+        'jatah_cuti_uid' => $jatahCutiUid,
+        'selected_user_id' => $selectedUserId,
+        'is_match' => $jatahCutiUid == $selectedUserId
+    ]);
+    
+    // ✅ TAMBAHKAN VALIDASI INI (yang hilang di kode Anda)
+    if ($jatahCutiUid != $selectedUserId) {
+        \Log::warning('Admin - Jatah cuti tidak valid', [
+            'expected_uid' => $selectedUserId,
+            'jatah_cuti_uid' => $jatahCutiUid
+        ]);
+        
+        return back()->withErrors([
+            'error' => 'Jatah cuti tidak valid untuk karyawan ini. Silakan pilih periode cuti yang sesuai.'
+        ]);
+    }
     
     // Validasi periode
     $tmkDate = \Carbon\Carbon::parse($user->tmk);
@@ -975,9 +996,14 @@ public function storePengajuanAdmin(Request $request)
             'error' => 'Tidak dapat menggunakan cuti dari periode yang sudah lewat. Gunakan periode aktif atau periode masa depan.'
         ]);
     }
-        if (!$validated['diketahui_atasan'] && !$validated['diketahui_hrd'] && !$validated['disetujui']) {
-        return back()->withErrors(['error' => 'Pilih minimal satu approver (Atasan, HRD, atau Pimpinan)']);
+    
+    if ($jatahCuti->tahun_ke > $activePeriod && $activePeriod == 0) {
+        return back()->withErrors([
+            'error' => 'Karyawan masih dalam periode percobaan (belum 1 tahun). Tidak dapat meminjam cuti periode masa depan.'
+        ]);
     }
+
+    // Validasi approver tidak boleh sama dengan user
     $userId = $validated['uid'];
     if (
         ($validated['diketahui_atasan'] && $validated['diketahui_atasan'] == $userId) ||
@@ -989,28 +1015,15 @@ public function storePengajuanAdmin(Request $request)
         ]);
     }
 
-    
-    if ($jatahCuti->tahun_ke > $activePeriod && $activePeriod == 0) {
-        return back()->withErrors([
-            'error' => 'Karyawan masih dalam periode percobaan (belum 1 tahun). Tidak dapat meminjam cuti periode masa depan.'
-        ]);
-    }
-
-    if ($jatahCuti->uid !== $user->id) {
-        return back()->withErrors(['error' => 'Jatah cuti tidak valid untuk karyawan ini']);
-    }
-
     $tanggalMulai = \Carbon\Carbon::parse($validated['tanggal_mulai']);
     $tanggalSelesai = \Carbon\Carbon::parse($validated['tanggal_selesai']);
     
-    // ✅ PERBAIKAN: Hitung jumlah hari dengan benar
+    // Hitung jumlah hari
     $jumlahHari = 0;
     
     if ($request->cuti_setengah_hari) {
-        // ✅ Jika setengah hari, langsung set 0.5
         $jumlahHari = 0.5;
     } else {
-        // ✅ Hitung hari kerja (Senin-Jumat)
         $currentDate = $tanggalMulai->copy();
         
         while ($currentDate->lte($tanggalSelesai)) {
@@ -1075,7 +1088,7 @@ public function storePengajuanAdmin(Request $request)
         'tanggal_mulai' => $validated['tanggal_mulai'],
         'tanggal_selesai' => $validated['tanggal_selesai'],
         'cuti_setengah_hari' => $request->cuti_setengah_hari ?? false,
-        'jumlah_hari' => $jumlahHari, // ✅ Sudah benar (0.5 atau jumlah hari penuh)
+        'jumlah_hari' => $jumlahHari,
         'alasan' => $validated['alasan'],
         'tanggal_pengajuan' => now(),
         'id_penerima_tugas' => $validated['id_penerima_tugas'] ?? null,

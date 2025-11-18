@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { router } from '@inertiajs/react';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 const ModalResign = ({ onClose }) => {
   const [formData, setFormData] = useState({
@@ -24,43 +26,53 @@ const ModalResign = ({ onClose }) => {
     }
   };
 
-  const handleSubmit = () => {
-    // Validation
-    const newErrors = {};
-    if (!formData.tanggal_keluar) {
-      newErrors.tanggal_keluar = 'Tanggal keluar harus diisi';
-    }
-    if (!formData.alasan) {
-      newErrors.alasan = 'Alasan keluar harus diisi';
-    }
+const handleSubmit = () => {
+  // Validation
+  const newErrors = {};
+  if (!formData.tanggal_keluar) {
+    newErrors.tanggal_keluar = 'Tanggal keluar harus diisi';
+  }
+  if (!formData.alasan) {
+    newErrors.alasan = 'Alasan keluar harus diisi';
+  }
 
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
+  if (Object.keys(newErrors).length > 0) {
+    setErrors(newErrors);
+    return;
+  }
 
-    setIsSubmitting(true);
+  setIsSubmitting(true);
 
-    // Langsung POST ke server
-    router.post('/dokumen/resign', formData, {
-      onSuccess: () => {
-        alert('Pengajuan resign berhasil diajukan!');
-        onClose();
-      },
-      onError: (errors) => {
-        setIsSubmitting(false);
-        // Set errors dari server jika ada
-        if (errors) {
-          setErrors(errors);
-        } else {
-          alert('Terjadi kesalahan saat mengajukan resign');
-        }
-      },
-      onFinish: () => {
-        setIsSubmitting(false);
+  // Langsung POST ke server
+  router.post('/dokumen/resign', formData, {
+    onSuccess: () => {
+      toast.success('Pengajuan resign berhasil diajukan!', {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      onClose();
+    },
+    onError: (errors) => {
+      setIsSubmitting(false);
+      // Set errors dari server jika ada
+      if (errors) {
+        setErrors(errors);
+        toast.error('Terjadi kesalahan saat mengajukan resign. Periksa form Anda.', {
+          position: "top-right",
+          autoClose: 4000,
+        });
+      } else {
+        toast.error('Terjadi kesalahan saat mengajukan resign', {
+          position: "top-right",
+          autoClose: 4000,
+        });
       }
-    });
-  };
+    },
+    onFinish: () => {
+      setIsSubmitting(false);
+    }
+  });
+};
 
   return (
     <div className="px-6 py-2">

@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import {Plus, Calendar, Clock, User, FileText, Filter, CheckCircle, XCircle, Search, Check, X, Edit, Trash2, Eye, RefreshCw, Printer } from 'lucide-react';
 import LayoutTemplate from '@/Layouts/LayoutTemplate';
 import { usePage, router, Head } from '@inertiajs/react'; // Tambahkan router
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function KeluarKantor() {
   const [perizinans, setPerizinans] = useState([]);
@@ -19,8 +21,7 @@ function KeluarKantor() {
   const [heads, setHeads] = useState([]);
   const { auth } = usePage().props;
   const currentUser = auth?.user || auth; 
-  
-
+  const [loadingOverlay, setLoadingOverlay] = useState(false);
 
   const [formData, setFormData] = useState({
   uid: '',
@@ -49,7 +50,31 @@ const [formErrors, setFormErrors] = useState({});
     type: '',
     tanggal: ''
   });
-// Check apakah user bisa approve sebagai Target User (diketahui_oleh)
+const showToast = (message, type) => {
+  const options = {
+    position: "top-right",
+    autoClose: 5000,
+    hideProgressBar: false,
+    closeOnClick: true,
+    pauseOnHover: true,
+    draggable: true,
+  };
+
+  switch(type) {
+    case 'success':
+      toast.success(message, options);
+      break;
+    case 'error':
+      toast.error(message, options);
+      break;
+    case 'warning':
+      toast.warning(message, options);
+      break;
+    default:
+      toast.info(message, options);
+  }
+};
+
 const canApproveAsTarget = (item) => {
   if (!currentUser) return false;
   return String(currentUser.id) === String(item.uid_diketahui) && 
@@ -67,8 +92,6 @@ const canShowActionButtons = (item) => {
   return canApproveAsTarget(item) || canApproveAsHRD(item);
 };
 
-// HAPUS fungsi: isAuthorizedHead, getApprovalLabel (tidak dipakai lagi)
-
 const handlePrint = async (id) => {
   try {
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -81,12 +104,9 @@ const handlePrint = async (id) => {
     
   } catch (error) {
     console.error('Error printing perizinan:', error);
-    alert('Gagal generate PDF: ' + error.message);
+    showToast('Gagal generate PDF: ' + error.message, 'error'); // ← UBAH INI
   }
 };
-
-
-
 
   const getStatusIcon = (status) => {
   if (status === 'Disetujui') {
@@ -213,7 +233,6 @@ const getCsrfToken = () => {
   return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 };
 
-// Ganti handleSubmit dengan ini:
 const handleSubmit = async (e) => {
   e.preventDefault();
   
@@ -222,6 +241,7 @@ const handleSubmit = async (e) => {
   }
   
   setLoading(true);
+  setLoadingOverlay(true); // ← TAMBAH INI
   
   try {
     const submitData = { ...formData };
@@ -245,7 +265,6 @@ const handleSubmit = async (e) => {
       body: JSON.stringify(submitData)
     });
 
-    // Handle CSRF token mismatch (419)
     if (response.status === 419) {
       const newToken = await fetchFreshCsrfToken();
       
@@ -253,7 +272,6 @@ const handleSubmit = async (e) => {
         throw new Error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.');
       }
 
-      // Retry dengan token baru
       const retryResponse = await fetch('/hrd/perizinan/store', {
         method: 'POST',
         headers: {
@@ -277,10 +295,11 @@ const handleSubmit = async (e) => {
       const result = await retryResponse.json();
       
       if (result.success) {
-        alert('Perizinan berhasil ditambahkan!');
+        showToast('Perizinan berhasil ditambahkan!', 'success'); // ← UBAH INI
         setShowAddModal(false);
         resetForm();
         fetchPerizinans();
+        setLoadingOverlay(false); // ← TAMBAH INI
       }
       return;
     }
@@ -296,23 +315,27 @@ const handleSubmit = async (e) => {
     const result = await response.json();
 
     if (result.success) {
-      alert('Perizinan berhasil ditambahkan!');
+      showToast('Perizinan berhasil ditambahkan!', 'success'); 
       setShowAddModal(false);
       resetForm();
       fetchPerizinans();
+      setLoadingOverlay(false);
     }
   } catch (error) {
     console.error('Error adding perizinan:', error);
+    setLoadingOverlay(false); 
     if (error.message.includes('419') || error.message.includes('CSRF')) {
-      alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
-      window.location.reload();
+      showToast('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.', 'error'); 
+      setTimeout(() => window.location.reload(), 2000);
     } else {
-      alert('Gagal menambahkan perizinan: ' + error.message);
+      showToast('Gagal menambahkan perizinan: ' + error.message, 'error'); 
     }
   } finally {
     setLoading(false);
+    setLoadingOverlay(false); 
   }
 };
+
 const getStatusDisplay = (status) => {
   if (status === 'Disetujui') {
     return (
@@ -329,7 +352,13 @@ const getStatusDisplay = (status) => {
       </div>
     );
   } else {
-    return <span className="text-sm text-gray-400">Menunggu Persetujuan HRD</span>;
+    return (
+            <div className="flex items-center gap-1.5 text-yellow-600">
+        <Clock className="w-4 h-4" />
+        <span className="text-sm font-medium">Menunggu</span>
+      </div>
+
+    )
   }
 };
 
@@ -357,43 +386,47 @@ const getStatusDisplay = (status) => {
     });
   };
 
-  const fetchPerizinans = async () => {
-    setLoading(true);
-    try {
-      const params = new URLSearchParams();
-      if (filters.status) params.append('status', filters.status);
-      if (filters.type) params.append('type', filters.type);
-      if (filters.search) params.append('search', filters.search);
-      if (filters.tanggal) params.append('tanggal', filters.tanggal);
+// Tambahkan di akhir fungsi fetchPerizinans (opsional, jika ingin notifikasi saat refresh):
+const fetchPerizinans = async () => {
+  setLoading(true);
+  try {
+    const params = new URLSearchParams();
+    if (filters.status) params.append('status', filters.status);
+    if (filters.type) params.append('type', filters.type);
+    if (filters.search) params.append('search', filters.search);
+    if (filters.tanggal) params.append('tanggal', filters.tanggal);
 
-      const response = await fetch(`/hrd/perizinan?${params.toString()}`, {
-        headers: {
-          'Accept': 'application/json',
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include'
-      });
+    const response = await fetch(`/hrd/perizinan?${params.toString()}`, {
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+      },
+      credentials: 'include'
+    });
 
-      if (!response.ok) throw new Error('Gagal mengambil data');
+    if (!response.ok) throw new Error('Gagal mengambil data');
 
-      const result = await response.json();
+    const result = await response.json();
 
-      if (result && result.perizinans) {
-        const data = result.perizinans.data || result.perizinans;
-        setPerizinans(data);
-        setFilteredData(data);
-        
-        if (result.stats) {
-          setStats(result.stats);
-        }
+    if (result && result.perizinans) {
+      const data = result.perizinans.data || result.perizinans;
+      setPerizinans(data);
+      setFilteredData(data);
+      
+      if (result.stats) {
+        setStats(result.stats);
       }
-    } catch (error) {
-      console.error('Error fetching perizinans:', error);
-      alert('Gagal mengambil data perizinan');
-    } finally {
-      setLoading(false);
+      
+      // OPSIONAL: Toast saat data berhasil di-refresh
+      // showToast('Data berhasil diperbarui', 'info');
     }
-  };
+  } catch (error) {
+    console.error('Error fetching perizinans:', error);
+    showToast('Gagal mengambil data perizinan', 'error');
+  } finally {
+    setLoading(false);
+  }
+};
 
   // Re-fetch ketika filter berubah
   useEffect(() => {
@@ -408,6 +441,27 @@ const getStatusDisplay = (status) => {
   useEffect(() => {
     fetchPerizinans();
   }, []);
+useEffect(() => {
+  const handleInertiaFinish = (event) => {
+    // Cek apakah ada flash message dari server
+    const flashMessage = event.detail?.page?.props?.flash;
+    
+    if (flashMessage?.success) {
+      showToast(flashMessage.success, 'success');
+    }
+    
+    if (flashMessage?.error) {
+      showToast(flashMessage.error, 'error');
+    }
+  };
+
+  // Listen to Inertia finish event
+  document.addEventListener('inertia:finish', handleInertiaFinish);
+
+  return () => {
+    document.removeEventListener('inertia:finish', handleInertiaFinish);
+  };
+}, []);
 
   const getStatusBadge = (status) => {
     const styles = {
@@ -433,58 +487,72 @@ const getStatusDisplay = (status) => {
 
 
 // Ganti confirmApproval
+// Ganti confirmApproval dengan ini:
 const confirmApproval = () => {
+  setLoadingOverlay(true);
+  
+  const isHRD = currentUser.role === 'hrd';
+  const message = isHRD 
+    ? 'Perizinan berhasil disetujui!' 
+    : 'Perizinan berhasil diterima!';
+  
   router.post(`/hrd/perizinan/${selectedPerizinan.id}/approve`, {
     catatan: approvalNote
   }, {
     preserveState: false,
     preserveScroll: false,
     onSuccess: () => {
-      const message = 'Perizinan berhasil diketahui!' ;
-      alert(message);
+      showToast(message, 'success'); // ← Toast muncul di sini
       setShowApprovalModal(false);
       setSelectedPerizinan(null);
       setApprovalNote('');
+      setLoadingOverlay(false);
     },
     onError: (errors) => {
       console.error('Error approving perizinan:', errors);
-      alert('Gagal menyetujui perizinan');
+      showToast('Gagal memproses persetujuan', 'error');
+      setLoadingOverlay(false);
     }
   });
 };
 
-// Ganti confirmReject
+// Ganti confirmReject dengan ini:
 const confirmReject = () => {
   if (!rejectReason.trim()) {
-    alert('Catatan penolakan harus diisi');
+    showToast('Catatan penolakan harus diisi', 'warning');
     return;
   }
 
+  setLoadingOverlay(true);
+  
   router.post(`/hrd/perizinan/${selectedPerizinan.id}/reject`, {
     catatan: rejectReason
   }, {
     preserveState: false,
     preserveScroll: false,
     onSuccess: () => {
-      alert('Perizinan berhasil ditolak');
+      showToast('Perizinan berhasil ditolak', 'success'); // ← Toast muncul di sini
       setShowRejectModal(false);
       setSelectedPerizinan(null);
       setRejectReason('');
+      setLoadingOverlay(false);
     },
     onError: (errors) => {
       console.error('Error rejecting perizinan:', errors);
-      alert('Gagal menolak perizinan');
+      showToast('Gagal menolak perizinan', 'error');
+      setLoadingOverlay(false);
     }
   });
 };
 
-  const handleDelete = async (id) => {
+
+const handleDelete = async (id) => {
   if (!confirm('Apakah Anda yakin ingin menghapus data perizinan ini?')) {
     return;
   }
 
   try {
-    // PERBAIKAN: Ambil CSRF token dengan benar
+    setLoadingOverlay(true); // ← TAMBAH INI
     const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
     
     if (!csrfToken) {
@@ -497,18 +565,20 @@ const confirmReject = () => {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
         'X-CSRF-TOKEN': csrfToken,
-        'X-Requested-With': 'XMLHttpRequest' // Tambahkan ini
+        'X-Requested-With': 'XMLHttpRequest'
       },
       credentials: 'include'
     });
 
     if (!response.ok) throw new Error('Gagal menghapus perizinan');
 
-    alert('Data perizinan berhasil dihapus');
+    showToast('Data perizinan berhasil dihapus', 'success'); // ← UBAH INI
     fetchPerizinans();
+    setLoadingOverlay(false); // ← TAMBAH INI
   } catch (error) {
     console.error('Error deleting perizinan:', error);
-    alert('Gagal menghapus perizinan: ' + error.message);
+    showToast('Gagal menghapus perizinan: ' + error.message, 'error'); // ← UBAH INI
+    setLoadingOverlay(false); // ← TAMBAH INI
   }
 };
 
@@ -754,15 +824,7 @@ const confirmReject = () => {
                         {/* Diketahui Oleh - UBAH: Hanya tampilkan nama, tanpa status */}
                         <td className="px-6 py-4">
   <div className="space-y-2">
-    {/* Nama & Jabatan */}
-    <div>
-      <div className="text-sm font-medium text-gray-900">
-        {item.diketahui_oleh?.name || '-'}
-      </div>
-      <div className="text-xs text-gray-500">
-        {item.diketahui_oleh?.jabatan || ''}
-      </div>
-    </div>
+   
     
     {/* Status - BARU */}
     <div className="mt-2">
@@ -949,8 +1011,8 @@ const confirmReject = () => {
                   <label className="text-sm font-medium text-gray-500">Disetujui Oleh</label>
                   <p className="mt-1 text-gray-900">{selectedPerizinan?.disetujui_oleh?.name || "Belum disetujui"}</p>
                 </div>
-                  {console.log(selectedPerizinan.di)}
                 <div>
+                  
                   <label className="text-sm font-medium text-gray-500">Status Keseluruhan</label>
                   <p className="mt-1">
                     <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${getStatusBadge(selectedPerizinan.status)}`}>
@@ -1308,6 +1370,20 @@ const confirmReject = () => {
 
 </div>
     </div>
+    {loadingOverlay && (
+  <div style={{margin:"0px", padding:"0px"}} className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+    <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
+      <div className="relative">
+        <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
+        <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+      </div>
+      <div className="text-center">
+        <p className="text-lg font-semibold text-gray-800 mb-1">Memproses</p>
+        <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
+      </div>
+    </div>
+  </div>
+)}
     </LayoutTemplate>
   );
 }

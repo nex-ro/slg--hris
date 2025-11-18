@@ -69,8 +69,7 @@ Route::middleware('pegawai')->group(function () {
     Route::delete('/sakit/{id}', [SakitController::class, 'destroy'])->name('sakit.destroy');
     Route::get('/sakit/{id}/download', [SakitController::class, 'downloadBukti'])->name('sakit.download');
 
-
-    Route::get('/pegawai/izin', [IzinController::class, 'index'])->middleware(['auth', 'verified'])->name('pegawai.izin');
+    Route::get('/pegawai/izin', [IzinController::class, 'index'])->name('pegawai.izin');
     Route::post('/izin', [IzinController::class, 'store'])->name('izin.store');
     Route::delete('/izin/{id}', [IzinController::class, 'destroy'])->name('izin.destroy');
 
@@ -173,6 +172,7 @@ Route::middleware('hrd')->group(function () {
     Route::post('/hrd/cuti/store-pengajuan-admin', [CutiController::class, 'storePengajuanAdmin'])
     ->name('hrd.cuti.storePengajuanAdmin');
 
+    
 });
 Route::middleware('head')->group(function () {
     Route::get('/HEAD/dashboard', [HrdController::class, 'index'])->middleware(['auth', 'verified'])->name('head.dashboard');

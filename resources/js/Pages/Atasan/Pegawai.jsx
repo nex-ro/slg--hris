@@ -2,13 +2,12 @@ import { useState, useEffect } from 'react';
 import { Head, router } from '@inertiajs/react';
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
 import { Pencil, Trash2, Plus, X, Upload, Search, Filter, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
-
+import { toast } from 'react-toastify';
 
 function Pegawai({ flash, filterDivisi }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  console.log(filterDivisi)
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [users, setUsers] = useState({ data: [], links: [], total: 0, from: 0, to: 0, last_page: 1 });
 const [divisiList, setDivisiList] = useState([]);
@@ -30,6 +29,22 @@ useEffect(() => {
   
   return () => clearInterval(interval);
 }, []);
+useEffect(() => {
+  if (flash?.success) {
+    toast.success(flash.success, {
+      position: "top-right",
+      autoClose: 3000,
+    });
+  }
+  
+  if (flash?.error) {
+    toast.error(flash.error, {
+      position: "top-right",
+      autoClose: 4000,
+    });
+  }
+}, [flash]);
+
 
   const [formData, setFormData] = useState({
   id: '',  // ✅ TAMBAHKAN INI
@@ -58,11 +73,14 @@ useEffect(() => {
 
 const resetFilters = () => {
   setSearchTerm('');
-  setSelectedDivisi(''); // Ini tetap direset
+  setSelectedDivisi('');
   setSelectedJabatan('');
   setSelectedTower('');
+  toast.info('Filter telah direset', {
+    position: "top-right",
+    autoClose: 2000,
+  });
 };
-
 
 const fetchData = async (page = 1) => {
   setLoading(true);
@@ -72,14 +90,11 @@ const fetchData = async (page = 1) => {
     if (filterDivisi) {
       params.append('filterDivisi', filterDivisi);
     }
-    if (selectedDivisi && !filterDivisi) {  // ✅ PERBAIKI INI (sebelumnya divisiFilter)
-  params.append('divisi', selectedDivisi);
-}
     
     if (searchTerm) params.append('search', searchTerm);
     
-    // Hanya kirim selectedDivisi jika tidak ada divisiFilter
-    if (selectedDivisi && !divisiFilter) {
+    // ✅ GANTI divisiFilter jadi filterDivisi
+    if (selectedDivisi && !filterDivisi) {
       params.append('divisi', selectedDivisi);
     }
     
@@ -103,7 +118,10 @@ const fetchData = async (page = 1) => {
     setCurrentPage(page);
   } catch (error) {
     console.error('Error fetching data:', error);
-    alert('Gagal memuat data. Silakan refresh halaman.');
+    toast.error('Gagal memuat data. Silakan refresh halaman.', {
+      position: "top-right",
+      autoClose: 4000,
+    });
   } finally {
     setLoading(false);
   }
@@ -161,7 +179,7 @@ const fetchData = async (page = 1) => {
     resetForm();
   };
 
- const handleSubmit = async (e) => {
+const handleSubmit = async (e) => {
   e.preventDefault();
   
   const submitData = new FormData();
@@ -175,43 +193,131 @@ const fetchData = async (page = 1) => {
     }
   });
 
+  const toastId = toast.loading(isEditing ? 'Memperbarui data...' : 'Menyimpan data...', {
+    position: "top-right"
+
+  });
+
   if (isEditing) {
     submitData.append('_method', 'PUT');
     router.post(`/pegawai/${currentUser.id}`, submitData, {
       onSuccess: () => {
+        toast.update(toastId, {
+          render: 'Data pegawai berhasil diperbarui!',
+          type: 'success',
+          isLoading: false,
+          autoClose: 3000,
+        });
         closeModal();
-        fetchData(currentPage); 
+        fetchData(currentPage);
       },
       onError: (errors) => {
-        const errorMessages = Object.values(errors).flat().join('\n');
-        alert('Validasi Gagal:\n\n' + errorMessages);
+        const errorMessages = Object.values(errors).flat();
+        toast.update(toastId, {
+          render: 'Validasi gagal!',
+          type: 'error',
+          isLoading: false,
+          autoClose: 4000,
+        });
+        errorMessages.forEach((msg, idx) => {
+          setTimeout(() => {
+            toast.error(msg, {
+              position: "top-right",
+              autoClose: 3000,
+            });
+          }, idx * 100);
+        });
       },
       forceFormData: true
     });
   } else {
     router.post('/pegawai', submitData, {
       onSuccess: () => {
+        toast.update(toastId, {
+          render: 'Pegawai baru berhasil ditambahkan!',
+          type: 'success',
+          isLoading: false,
+          autoClose: 3000,
+        });
         closeModal();
-        fetchData(1); // ✅ TAMBAHKAN INI
+        fetchData(1);
       },
       onError: (errors) => {
-        const errorMessages = Object.values(errors).flat().join('\n');
-        alert('Validasi Gagal:\n\n' + errorMessages);
+        const errorMessages = Object.values(errors).flat();
+        toast.update(toastId, {
+          render: 'Validasi gagal!',
+          type: 'error',
+          isLoading: false,
+          autoClose: 4000,
+        });
+        errorMessages.forEach((msg, idx) => {
+          setTimeout(() => {
+            toast.error(msg, {
+              position: "top-right",
+              autoClose: 3000,
+            });
+          }, idx * 100);
+        });
       },
       forceFormData: true
     });
   }
 };
 
-  const handleDelete = (id) => {
-  if (confirm('Apakah Anda yakin ingin menghapus pegawai ini?')) {
-    router.delete(`/pegawai/${id}`, {
-      onSuccess: () => {
-        fetchData(currentPage); 
-      }
-    });
-  }
+
+ const handleDelete = (id) => {
+  toast.warning(
+    <div>
+      <p className="mb-3 font-semibold">Apakah Anda yakin ingin menghapus pegawai ini?</p>
+      <div className="flex gap-2 justify-end">
+        <button
+          onClick={() => {
+            toast.dismiss();
+            const deleteToast = toast.loading('Menghapus data...', {
+              position: "top-right"
+            });
+            
+            router.delete(`/pegawai/${id}`, {
+              onSuccess: () => {
+                toast.update(deleteToast, {
+                  render: 'Pegawai berhasil dihapus!',
+                  type: 'success',
+                  isLoading: false,
+                  autoClose: 3000,
+                });
+                fetchData(currentPage);
+              },
+              onError: () => {
+                toast.update(deleteToast, {
+                  render: 'Gagal menghapus pegawai!',
+                  type: 'error',
+                  isLoading: false,
+                  autoClose: 3000,
+                });
+              }
+            });
+          }}
+          className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 text-sm font-medium"
+        >
+          Ya, Hapus
+        </button>
+        <button
+          onClick={() => toast.dismiss()}
+          className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 text-sm font-medium"
+        >
+          Batal
+        </button>
+      </div>
+    </div>,
+    {
+      position: "top-right",
+      autoClose: false,
+      closeButton: false,
+      closeOnClick: false,
+    }
+  );
 };
+
 
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target;
@@ -222,31 +328,48 @@ const fetchData = async (page = 1) => {
   };
 
   const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      if (file.size > 2048000) {
-        alert('Ukuran file maksimal 2MB');
-        e.target.value = '';
-        return;
-      }
-      if (!file.type.startsWith('image/')) {
-        alert('File harus berupa gambar');
-        e.target.value = '';
-        return;
-      }
-      setFormData(prev => ({ ...prev, ttd: file }));
-      setTtdPreview(URL.createObjectURL(file));
+  const file = e.target.files[0];
+  if (file) {
+    if (file.size > 2048000) {
+      toast.error('Ukuran file maksimal 2MB', {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      e.target.value = '';
+      return;
     }
-  };
+    if (!file.type.startsWith('image/')) {
+      toast.error('File harus berupa gambar', {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      e.target.value = '';
+      return;
+    }
+    setFormData(prev => ({ ...prev, ttd: file }));
+    setTtdPreview(URL.createObjectURL(file));
+    toast.success('File berhasil dipilih', {
+      position: "top-right",
+      autoClose: 2000,
+    });
+  }
+};
+
+
 
   const handlePageChange = (page) => {
   fetchData(page);
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
   const removeTtd = () => {
-    setFormData(prev => ({ ...prev, ttd: null }));
-    setTtdPreview(null);
-  };
+  setFormData(prev => ({ ...prev, ttd: null }));
+  setTtdPreview(null);
+  toast.info('Tanda tangan dihapus', {
+    position: "top-right",
+    autoClose: 2000,
+  });
+};
+
 
   const userData = users.data || [];
   const activeFilters = [searchTerm, selectedDivisi, selectedJabatan, selectedTower].filter(Boolean).length;
@@ -259,8 +382,14 @@ const fetchData = async (page = 1) => {
   <div className="flex items-center gap-4">
     <h1 className="text-2xl font-bold text-gray-800">Data Pegawai</h1>
     {/* ✅ TAMBAHKAN INI */}
-    <button
-      onClick={() => fetchData(currentPage)}
+   <button
+      onClick={() => {
+        fetchData(currentPage);
+        toast.info('Data diperbarui', {
+          position: "top-right",
+          autoClose: 2000,
+        });
+      }}
       disabled={loading}
       className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-lg transition"
       title="Refresh data"
@@ -268,27 +397,10 @@ const fetchData = async (page = 1) => {
       <RefreshCw size={18} className={loading ? 'animate-spin' : ''} />
       Refresh
     </button>
+
   </div>
-  <button
-    onClick={openAddModal}
-    className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition"
-  >
-    <Plus size={20} />
-    Tambah Pegawai
-  </button>
+ 
 </div>
-
-        {flash?.success && (
-          <div className="mb-4 p-4 bg-green-100 text-green-700 rounded-lg">
-            {flash.success}
-          </div>
-        )}
-
-        {flash?.error && (
-          <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg">
-            {flash.error}
-          </div>
-        )}
 
         {/* Search & Filter Section */}
         <div className="bg-white rounded-lg shadow p-4 mb-4">
@@ -328,7 +440,7 @@ const fetchData = async (page = 1) => {
 <select
   value={selectedDivisi}
   onChange={(e) => setSelectedDivisi(e.target.value)}
-  disabled={divisiFilter} // Tambahkan ini
+  disabled={filterDivisi} // ✅ GANTI divisiFilter jadi filterDivisi
   className={`w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${
     filterDivisi ? 'bg-gray-100 cursor-not-allowed' : ''
   }`}
@@ -396,7 +508,6 @@ const fetchData = async (page = 1) => {
       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jabatan</th>
       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tower</th>
       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-      <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
     </tr>
   </thead>
   <tbody className="bg-white divide-y divide-gray-200">
@@ -431,24 +542,7 @@ const fetchData = async (page = 1) => {
             {user.active ? 'Aktif' : 'Nonaktif'}
           </span>
         </td>
-        <td className="px-6 py-4 whitespace-nowrap text-center text-sm font-medium">
-          <div className="flex items-center justify-center gap-3">
-            <button
-              onClick={() => openEditModal(user)}
-              className="text-blue-600 hover:text-blue-900 transition"
-              title="Edit Pegawai"
-            >
-              <Pencil size={18} />
-            </button>
-            <button
-              onClick={() => handleDelete(user.id)}
-              className="text-red-600 hover:text-red-900 transition"
-              title="Hapus Pegawai"
-            >
-              <Trash2 size={18} />
-            </button>
-          </div>
-        </td>
+        
       </tr>
     ))}
   </tbody>

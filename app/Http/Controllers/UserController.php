@@ -54,11 +54,20 @@ class UserController extends Controller
 }
 
 
-       public function getPegawai(Request $request)
+    public function getPegawai(Request $request)
 {
     $query = User::query();
 
-    // ✅ TAMBAHKAN: Filter Divisi dari params (prioritas tertinggi)
+    // ✅ TAMBAHAN: Filter berdasarkan status (active/resign)
+    if ($request->has('status')) {
+        if ($request->status === 'resign') {
+            $query->whereNotNull('tanggal_keluar');
+        } else {
+            $query->whereNull('tanggal_keluar');
+        }
+    }
+
+    // Filter Divisi dari params
     if ($request->has('filterDivisi') && $request->filterDivisi != '') {
         $query->where('divisi', $request->filterDivisi);
     }
@@ -74,7 +83,6 @@ class UserController extends Controller
     }
 
     // Filter Divisi (dari dropdown filter biasa)
-    // ✅ PERBAIKI: Hanya apply jika tidak ada filterDivisi
     if ($request->has('divisi') && $request->divisi != '' && !$request->has('filterDivisi')) {
         $query->where('divisi', $request->divisi);
     }
@@ -92,14 +100,12 @@ class UserController extends Controller
     // Paginate dengan 15 item per page
     $users = $query->orderBy('id', 'asc')->paginate(15);
 
-    // ✅ PERBAIKI: Get divisi list berdasarkan filterDivisi jika ada
     $divisiQuery = User::select('divisi')
         ->distinct()
         ->whereNotNull('divisi')
         ->where('active', 1)
         ->where('divisi', '!=', '');
     
-    // Jika ada filterDivisi, hanya ambil divisi tersebut
     if ($request->has('filterDivisi') && $request->filterDivisi != '') {
         $divisiQuery->where('divisi', $request->filterDivisi);
     }
@@ -113,7 +119,6 @@ class UserController extends Controller
         ->orderBy('jabatan')
         ->pluck('jabatan');
 
-    // Return JSON response
     return response()->json([
         'users' => [
             'data' => $users->items(),
@@ -128,7 +133,6 @@ class UserController extends Controller
         'jabatanList' => $jabatanList,
     ], 200);
 }
-
 
     public function getUsers()
     {
@@ -166,6 +170,8 @@ class UserController extends Controller
             'role' => 'required|string',
             'active' => 'boolean',
             'tmk' => 'nullable|date',
+            'tanggal_keluar' => 'nullable|date|after_or_equal:tmk',
+
             'divisi' => 'required|string|max:255',
             'jabatan' => 'required|string|max:255',
             'tower' => 'required|string',
@@ -198,6 +204,8 @@ class UserController extends Controller
             'role' => 'required|string',
             'active' => 'boolean',
             'tmk' => 'nullable|date',
+            'tanggal_keluar' => 'nullable|date|after_or_equal:tmk',
+
             'divisi' => 'required|string|max:255',
             'jabatan' => 'required|string|max:255',
             'keterangan' => 'nullable|string',

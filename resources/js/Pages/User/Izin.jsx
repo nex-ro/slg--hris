@@ -3,6 +3,8 @@ import { useForm, router, Head } from "@inertiajs/react";
 import { FileText, Clock, CheckCircle, XCircle, AlertCircle, Plus ,UserCheck } from "lucide-react";
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
 import { usePage } from '@inertiajs/react';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function Izin({ heads, perizinans, pendingApprovals }) {
   const [activeTab, setActiveTab] = useState('my-izin'); 
@@ -15,6 +17,7 @@ function Izin({ heads, perizinans, pendingApprovals }) {
   const [selectedApproval, setSelectedApproval] = useState(null);
   const [approvalAction, setApprovalAction] = useState(null);
   const [catatan, setCatatan] = useState('');
+const [loadingOverlay, setLoadingOverlay] = useState(false);
 
 
   const { data, setData, post, processing, errors, reset } = useForm({
@@ -27,23 +30,43 @@ function Izin({ heads, perizinans, pendingApprovals }) {
   });
 
   useEffect(() => {
-    if (flash?.success) {
-      alert(flash.success);
-    }
-    if (flash?.error) {
-      alert(flash.error);
-    }
-  }, [flash]);
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    post(route('izin.store'), {
-      onSuccess: () => {
-        reset();
-        setIsCreateModalOpen(false);
-      }
+  if (flash?.success) {
+    toast.success(flash.success, {
+      position: "top-right",
+      autoClose: 3000,
     });
-  };
+  }
+  if (flash?.error) {
+    toast.error(flash.error, {
+      position: "top-right",
+      autoClose: 4000,
+    });
+  }
+}, [flash]);
+
+ const handleSubmit = (e) => {
+  e.preventDefault();
+  setLoadingOverlay(true);
+  
+  post(route('izin.store'), {
+    onSuccess: () => {
+      toast.success('Pengajuan izin berhasil diajukan!', {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      reset();
+      setIsCreateModalOpen(false);
+      setLoadingOverlay(false);
+    },
+    onError: (errors) => {
+      toast.error('Gagal mengajukan izin. Periksa kembali form Anda.', {
+        position: "top-right",
+        autoClose: 4000,
+      });
+      setLoadingOverlay(false);
+    }
+  });
+};
 
   const getStatusIcon = (status) => {
     switch(status) {
@@ -98,38 +121,50 @@ function Izin({ heads, perizinans, pendingApprovals }) {
     keperluan: ''
   });
 
-  const handleEditSubmit = (e) => {
-    e.preventDefault();
-    
-    const submitData = {
-      type_perizinan: editData.type_perizinan,
-      tanggal: editData.tanggal,
-      uid_diketahui: editData.uid_diketahui,
-      keperluan: editData.keperluan,
-    };
-
-    if (editData.type_perizinan !== 'p1') {
-      if (editData.jam_keluar && editData.jam_keluar.trim() !== '') {
-        submitData.jam_keluar = editData.jam_keluar;
-      }
-      if (editData.jam_kembali && editData.jam_kembali.trim() !== '') {
-        submitData.jam_kembali = editData.jam_kembali;
-      }
-    }
-
-    put(route('izin.update', editingIzin.id), {
-      data: submitData,
-      preserveScroll: true,
-      onSuccess: () => {
-        setIsEditModalOpen(false);
-        setEditingIzin(null);
-        router.reload({ only: ['perizinans'] });
-      },
-      onError: (errors) => {
-        console.error('Error updating:', errors);
-      }
-    });
+ const handleEditSubmit = (e) => {
+  e.preventDefault();
+  
+  const submitData = {
+    type_perizinan: editData.type_perizinan,
+    tanggal: editData.tanggal,
+    uid_diketahui: editData.uid_diketahui,
+    keperluan: editData.keperluan,
   };
+
+  if (editData.type_perizinan !== 'p1') {
+    if (editData.jam_keluar && editData.jam_keluar.trim() !== '') {
+      submitData.jam_keluar = editData.jam_keluar;
+    }
+    if (editData.jam_kembali && editData.jam_kembali.trim() !== '') {
+      submitData.jam_kembali = editData.jam_kembali;
+    }
+  }
+
+  setLoadingOverlay(true);
+
+  put(route('izin.update', editingIzin.id), {
+    data: submitData,
+    preserveScroll: true,
+    onSuccess: () => {
+      toast.success('Data izin berhasil diupdate!', {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      setIsEditModalOpen(false);
+      setEditingIzin(null);
+      setLoadingOverlay(false);
+      router.reload({ only: ['perizinans'] });
+    },
+    onError: (errors) => {
+      console.error('Error updating:', errors);
+      toast.error('Gagal mengupdate data izin.', {
+        position: "top-right",
+        autoClose: 4000,
+      });
+      setLoadingOverlay(false);
+    }
+  });
+};  
 
   const handlePrint = (izin) => {
     window.location.href = route('izin.pdf', izin.id);
@@ -143,15 +178,29 @@ function Izin({ heads, perizinans, pendingApprovals }) {
     });
   };
 
-  const handleDelete = (id) => {
-    if (confirm('Yakin ingin membatalkan pengajuan ini?')) {
-      router.delete(route('izin.destroy', id), {
-        onSuccess: () => {
-          router.reload({ only: ['perizinans'] });
-        }
-      });
-    }
-  };
+const handleDelete = (id) => {
+  if (confirm('Yakin ingin membatalkan pengajuan ini?')) {
+    setLoadingOverlay(true);
+    
+    router.delete(route('izin.destroy', id), {
+      onSuccess: () => {
+        toast.success('Pengajuan berhasil dibatalkan!', {
+          position: "top-right",
+          autoClose: 3000,
+        });
+        setLoadingOverlay(false);
+        router.reload({ only: ['perizinans'] });
+      },
+      onError: (errors) => {
+        toast.error('Gagal membatalkan pengajuan.', {
+          position: "top-right",
+          autoClose: 4000,
+        });
+        setLoadingOverlay(false);
+      }
+    });
+  }
+};
 
     const handleApprovalAction = (izin, action) => {
     setSelectedApproval(izin);
@@ -159,24 +208,50 @@ function Izin({ heads, perizinans, pendingApprovals }) {
     setIsApprovalModalOpen(true);
   };
     const submitApproval = () => {
-    if (!selectedApproval) return;
+  if (!selectedApproval) return;
 
-    const endpoint = approvalAction === 'approve' 
-      ? route('izin.approve', selectedApproval.id)
-      : route('izin.reject', selectedApproval.id);
-
-    router.post(endpoint, {
-      catatan: catatan
-    }, {
-      onSuccess: () => {
-        setIsApprovalModalOpen(false);
-        setSelectedApproval(null);
-        setCatatan('');
-        router.reload({ only: ['pendingApprovals'] });
-      }
+  if (approvalAction === 'reject' && !catatan.trim()) {
+    toast.error('Catatan alasan penolakan harus diisi!', {
+      position: "top-right",
+      autoClose: 3000,
     });
-  };
+    return;
+  }
 
+  setLoadingOverlay(true);
+
+  const endpoint = approvalAction === 'approve' 
+    ? route('izin.approve', selectedApproval.id)
+    : route('izin.reject', selectedApproval.id);
+
+  router.post(endpoint, {
+    catatan: catatan
+  }, {
+    onSuccess: () => {
+      toast.success(
+        approvalAction === 'approve' 
+          ? 'Perizinan berhasil disetujui!' 
+          : 'Perizinan berhasil ditolak!',
+        {
+          position: "top-right",
+          autoClose: 3000,
+        }
+      );
+      setIsApprovalModalOpen(false);
+      setSelectedApproval(null);
+      setCatatan('');
+      setLoadingOverlay(false);
+      router.reload({ only: ['pendingApprovals'] });
+    },
+    onError: (errors) => {
+      toast.error('Gagal memproses persetujuan.', {
+        position: "top-right",
+        autoClose: 4000,
+      });
+      setLoadingOverlay(false);
+    }
+  });
+};
 
   const showTimeFields = data.type_perizinan === 'p2' || data.type_perizinan === 'p3';
 
@@ -892,6 +967,20 @@ function Izin({ heads, perizinans, pendingApprovals }) {
             {approvalAction === 'approve' ? 'Setujui' : 'Tolak'}
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+)}
+{loadingOverlay && (
+  <div style={{margin:"0px", padding:"0px"}} className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+    <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
+      <div className="relative">
+        <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
+        <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+      </div>
+      <div className="text-center">
+        <p className="text-lg font-semibold text-gray-800 mb-1">Loading</p>
+        <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
       </div>
     </div>
   </div>

@@ -130,7 +130,7 @@ function Absensi({ divisi }) {
 
     } catch (error) {
       console.error('Error fetching kehadiran:', error);
-      alert(`Error: ${error.message}\n\nPastikan:\n1. Route /kehadiran/divisi sudah terdaftar\n2. Controller sudah dibuat\n3. Database terkoneksi`);
+      // alert(`Error: ${error.message}\n\nPastikan:\n1. Route /kehadiran/divisi sudah terdaftar\n2. Controller sudah dibuat\n3. Database terkoneksi`);
     } finally {
       setLoading(false);
     }

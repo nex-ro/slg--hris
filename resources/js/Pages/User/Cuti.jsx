@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Calendar, Eye, Plus, Clock, AlertCircle, FileText,Download, User, X, Save, ChevronLeft ,ChevronRight ,CheckCircle } from 'lucide-react';
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
 import { Head, router } from '@inertiajs/react';
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
 function UserCuti({ jatahCuti = [], pemakaianCuti = {}, paginationLinks = [] }) {
   const cutiList = pemakaianCuti?.data || [];
@@ -23,14 +25,26 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = {}, paginationLinks = [] }) 
   diketahui_hrd: '',
   disetujui: ''
   });
+  const [loadingOverlay, setLoadingOverlay] = useState(false);
   const handlePageChange = (url) => {
-    if (url) {
-      router.get(url, {}, {
-        preserveState: true,
-        preserveScroll: true,
-      });
-    }
-  };
+  if (url) {
+    setLoadingOverlay(true);
+    router.get(url, {}, {
+      preserveState: true,
+      preserveScroll: true,
+      onSuccess: () => {
+        setLoadingOverlay(false);
+      },
+      onError: () => {
+        toast.error('Gagal memuat data.', {
+          position: "top-right",
+          autoClose: 3000,
+        });
+        setLoadingOverlay(false);
+      }
+    });
+  }
+};
   const MAX_PINJAM_HARI = 4;
 
   const [errors, setErrors] = useState({});
@@ -44,23 +58,31 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = {}, paginationLinks = [] }) 
   
 
    const fetchRekanKerja = async () => {
-    try {
-      const response = await fetch('/cuti/rekan-kerja');
-      const data = await response.json();
-      setRekanKerja(data);
-    } catch (error) {
-      console.error('Error fetching rekan kerja:', error);
-    }
-  };
-  const fetchApprovers = async () => {
-    try {
-      const response = await fetch('/cuti/approvers');
-      const data = await response.json();
-      setApprovers(data);
-    } catch (error) {
-      console.error('Error fetching approvers:', error);
-    }
-  };
+  try {
+    const response = await fetch('/cuti/rekan-kerja');
+    const data = await response.json();
+    setRekanKerja(data);
+  } catch (error) {
+    console.error('Error fetching rekan kerja:', error);
+    toast.error('Gagal memuat data rekan kerja.', {
+      position: "top-right",
+      autoClose: 3000,
+    });
+  }
+};
+ const fetchApprovers = async () => {
+  try {
+    const response = await fetch('/cuti/approvers');
+    const data = await response.json();
+    setApprovers(data);
+  } catch (error) {
+    console.error('Error fetching approvers:', error);
+    toast.error('Gagal memuat data approver.', {
+      position: "top-right",
+      autoClose: 3000,
+    });
+  }
+};  
 
 const openFormModal = () => {
   // Cari periode aktif
@@ -153,6 +175,10 @@ const formatHari = (hari) => {
   e.preventDefault();
   
   if (!formData.diketahui_atasan && !formData.diketahui_hrd && !formData.disetujui) {
+    toast.error('Minimal pilih satu jalur persetujuan (Atasan, HRD, atau Pimpinan)', {
+      position: "top-right",
+      autoClose: 3000,
+    });
     setErrors({
       error: 'Minimal pilih satu jalur persetujuan (Atasan, HRD, atau Pimpinan)'
     });
@@ -163,6 +189,10 @@ const formatHari = (hari) => {
   const selectedJatah = jatahCuti.find(j => j.id === parseInt(formData.jatah_cuti_id));
   if (selectedJatah && !selectedJatah.is_current && selectedJatah.is_borrowable) {
     if (workDays > MAX_PINJAM_HARI) {
+      toast.error(`Maksimal peminjaman cuti dari periode depan adalah ${MAX_PINJAM_HARI} hari`, {
+        position: "top-right",
+        autoClose: 3000,
+      });
       setErrors({
         error: `Maksimal peminjaman cuti dari periode depan adalah ${MAX_PINJAM_HARI} hari`
       });
@@ -171,15 +201,27 @@ const formatHari = (hari) => {
   }
 
   setProcessing(true);
+  setLoadingOverlay(true);
   
   router.post('/cuti/store', formData, {
     onSuccess: () => {
+      toast.success('Pengajuan cuti berhasil diajukan!', {
+        position: "top-right",
+        autoClose: 3000,
+      });
       closeFormModal();
       setProcessing(false);
+      setLoadingOverlay(false);
     },
     onError: (errors) => {
+      console.error(errors);
+      toast.error('Gagal mengajukan cuti. Periksa kembali form Anda.', {
+        position: "top-right",
+        autoClose: 4000,
+      });
       setErrors(errors);
       setProcessing(false);
+      setLoadingOverlay(false);
     }
   });
 };
@@ -1015,6 +1057,20 @@ const formatHari = (hari) => {
           </div>
         )}
       </div>
+      {loadingOverlay && (
+  <div style={{margin:"0px", padding:"0px"}} className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+    <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
+      <div className="relative">
+        <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
+        <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+      </div>
+      <div className="text-center">
+        <p className="text-lg font-semibold text-gray-800 mb-1">Loading</p>
+        <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
+      </div>
+    </div>
+  </div>
+)}
     </LayoutTemplate>
   );
 }

@@ -2,11 +2,9 @@ import { useState, useEffect } from "react";
 import { Upload, FileSpreadsheet, CheckCircle, ChevronDown, AlertCircle, X, Save, Loader, UserPlus, Trash2, Layout } from "lucide-react";
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
 import { Head, router } from "@inertiajs/react";
-// Toast Component
 function Toast({ message, type, onClose }) {
   const bgColor = type === 'success' ? 'bg-green-500' : type === 'error' ? 'bg-red-500' : 'bg-yellow-500';
-  const icon = type === 'success' ? <CheckCircle className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />;
-  
+  const icon = type === 'success' ? <CheckCircle className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />;  
   return (
     <div className={`fixed top-4 right-4 ${bgColor} text-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-3 animate-slide-in z-50`}>
       {icon}
@@ -27,6 +25,7 @@ function Input_Absen() {
   const [error, setError] = useState("");
   const [toast, setToast] = useState(null);
   const [isDragging, setIsDragging] = useState(false);
+const [loadingOverlay, setLoadingOverlay] = useState(false);
 
   const showToast = (message, type) => {
     setToast({ message, type });
@@ -270,6 +269,8 @@ function Input_Absen() {
     }
     
     setSaving(true);
+    setLoadingOverlay(true); // TAMBAH ini
+
     setError("");
     
     try {
@@ -339,6 +340,8 @@ function Input_Absen() {
           preserveScroll: true,
           onSuccess: () => {
             setSaving(false);
+              setLoadingOverlay(false); // TAMBAH ini
+
             setFile(null);
             setData([]);
             setGroupedData({});
@@ -346,6 +349,8 @@ function Input_Absen() {
           },
           onError: (errors) => {
             setSaving(false);
+              setLoadingOverlay(false); // TAMBAH ini
+
             let errorMessage = "Gagal menyimpan data";
             
             if (errors.error) {
@@ -362,6 +367,8 @@ function Input_Absen() {
           },
           onFinish: () => {
             setSaving(false);
+              setLoadingOverlay(false); // TAMBAH ini
+
           }
         }
       );
@@ -597,6 +604,21 @@ function Input_Absen() {
         )}
       </div>
     </div>
+        {loadingOverlay && (
+      <div style={{margin:"0px", padding:"0px"}} className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
+          <div className="relative">
+            <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
+            <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-semibold text-gray-800 mb-1">Loading</p>
+            <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
+          </div>
+        </div>
+      </div>
+    )}
+
     </LayoutTemplate>
     
   );

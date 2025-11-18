@@ -7,6 +7,7 @@ import {
   Umbrella,
   UmbrellaIcon
 } from 'lucide-react';
+import { toast, ToastContainer } from 'react-toastify';
 
 const DashboardLayouts = ({ children }) => {
   const { auth = {}, url } = usePage().props;
@@ -284,6 +285,8 @@ const DashboardLayouts = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
+            <ToastContainer />
+
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
@@ -510,9 +513,6 @@ const DashboardLayouts = ({ children }) => {
                   )}
                 </div>
 
-                <button className="p-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl">
-                  <Settings className="w-5 h-5" />
-                </button>
 
                 <div className="relative" ref={dropdownRef}>
                   <button onClick={() => setDropdownOpen(!dropdownOpen)}
@@ -540,10 +540,7 @@ const DashboardLayouts = ({ children }) => {
                               {badge.label}
                             </span>
                           </div>
-                          <Link href="/profile/edit" className="flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                            <User className="w-4 h-4" />
-                            <span>Profile Settings</span>
-                          </Link>
+                         
                           <Link href="/logout" method="post" as="button"
                             className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
                             <LogOut className="w-4 h-4" />

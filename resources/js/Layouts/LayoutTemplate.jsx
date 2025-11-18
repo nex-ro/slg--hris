@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Link, usePage } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { 
   Search, User, Settings, Bell, LayoutDashboard, Users, Calendar, LogOut, LogIn,
   Menu, X, Home, ChevronRight, ChevronDown, Activity, BarChart3, FileText,
@@ -7,6 +7,7 @@ import {
   Umbrella,
   UmbrellaIcon
 } from 'lucide-react';
+import { toast, ToastContainer } from 'react-toastify';
 
 const LayoutTemplate = ({ children }) => {
   const { auth = {}, url } = usePage().props;
@@ -20,7 +21,8 @@ const LayoutTemplate = ({ children }) => {
   const [notificationOpen, setNotificationOpen] = useState(false);
   const notificationRef = useRef(null);
   const dropdownRef = useRef(null);
-  
+  const [loadingOverlay, setLoadingOverlay] = useState(false);
+
   const currentPath = usePage().url;
   const userRole = auth?.user?.role;
   const userId = auth?.user?.id;
@@ -47,6 +49,23 @@ const LayoutTemplate = ({ children }) => {
   const getCsrfToken = () => {
     return document.querySelector('meta[name="csrf-token"]')?.content || '';
   };
+
+  useEffect(() => {
+  if (!auth?.user) {
+    window.location.href = '/login';
+  }
+}, [auth]);
+useEffect(() => {
+  const handleStart = () => setLoadingOverlay(true);
+  const handleFinish = () => setLoadingOverlay(false);
+
+  router.on('start', handleStart);
+  router.on('finish', handleFinish);
+  router.on('error', handleFinish);
+
+  // Inertia router doesn't support removing listeners
+  // These are global events and won't cause memory leaks
+}, []);
 
   const fetchNotifications = async () => {
     if (!auth?.user) return;
@@ -173,12 +192,7 @@ const LayoutTemplate = ({ children }) => {
 
     const headMenu = [
       { icon: LayoutDashboard, label: 'Dashboard', href: '/HEAD/dashboard' },
-      { icon: Users, label: 'Pegawai', href: '/pegawai',
-        subItems: [
-          { icon: List, label: 'Daftar Pegawai', href: '/pegawai/list' },
-          { icon: LogOutIcon, label: 'Resign', href: '/pegawai/resign' },
-        ]
-      },
+      { icon: Users, label: 'Anggota', href: '/pegawai/list'},
       { icon: Calendar, label: 'List Absensi', href: userDivisi ? `/absensi/list/${userDivisi.toLowerCase().replace(/\s+/g, '-')}` : '/absensi/list'},
       {
         icon: FileText,
@@ -289,6 +303,22 @@ const LayoutTemplate = ({ children }) => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex relative">
+      <ToastContainer />
+      {loadingOverlay && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+    <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
+      <div className="relative">
+        <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
+        <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+      </div>
+      <div className="text-center">
+        <p className="text-lg font-semibold text-gray-800 mb-1">Loading</p>
+        <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
+      </div>
+    </div>
+  </div>
+)}
+
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
@@ -515,10 +545,6 @@ const LayoutTemplate = ({ children }) => {
                   )}
                 </div>
 
-                <button className="p-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl">
-                  <Settings className="w-5 h-5" />
-                </button>
-
                 <div className="relative" ref={dropdownRef}>
                   <button onClick={() => setDropdownOpen(!dropdownOpen)}
                     className="flex items-center space-x-2 p-2 text-gray-600 hover:bg-gray-100 rounded-xl">
@@ -545,10 +571,7 @@ const LayoutTemplate = ({ children }) => {
                               {badge.label}
                             </span>
                           </div>
-                          <Link href="/profile/edit" className="flex items-center space-x-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">
-                            <User className="w-4 h-4" />
-                            <span>Profile Settings</span>
-                          </Link>
+                          
                           <Link href="/logout" method="post" as="button"
                             className="w-full flex items-center space-x-3 px-4 py-2 text-sm text-red-600 hover:bg-red-50">
                             <LogOut className="w-4 h-4" />

@@ -3,7 +3,8 @@ import { Calendar, Users,FileSpreadsheet,ChevronDown,FileText, Clock, CheckCircl
 import LayoutTemplate from '@/Layouts/LayoutTemplate';
 import ManualInputModal from '@/Layouts/ManualInputModal';
 import { Head } from '@inertiajs/react';
-
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 function Absensi() {
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [kehadiranData, setKehadiranData] = useState({});
@@ -31,7 +32,8 @@ function Absensi() {
   const [tempSelectedYangMakan, setTempSelectedYangMakan] = useState([]); // ubah nama
   const [searchYangMakan, setSearchYangMakan] = useState(''); // ubah nama
   const [exportFormat, setExportFormat] = useState(null);
-const [statusDropdownPosition, setStatusDropdownPosition] = useState({});
+  const [statusDropdownPosition, setStatusDropdownPosition] = useState({});
+  const [loadingOverlay, setLoadingOverlay] = useState(false);
 
   const getAllKaryawanHadir = () => {
   return rawKehadiranData.filter(item => {
@@ -161,6 +163,32 @@ useEffect(() => {
   };
 }, [selectedDate]);
 
+// TAMBAH fungsi ini setelah deklarasi state
+const showToast = (message, type) => {
+  const options = {
+    position: "top-right",
+    autoClose: 5000,
+    hideProgressBar: false,
+    closeOnClick: true,
+    pauseOnHover: true,
+    draggable: true,
+  };
+
+  switch(type) {
+    case 'success':
+      toast.success(message, options);
+      break;
+    case 'error':
+      toast.error(message, options);
+      break;
+    case 'warning':
+      toast.warning(message, options);
+      break;
+    default:
+      toast.info(message, options);
+  }
+};
+
   const fetchHolidays = async (year) => {
   try {
     const response = await fetch(`/api/holidays?year=${year}`, {
@@ -282,6 +310,7 @@ const fetchWithCsrf = async (url, options = {}) => {
 };
 const handleStatusChange = async (kehadiranId, newStatus, userData = null, tanggal = null) => {
   setUpdatingStatus(true);
+  setLoadingOverlay(true); 
   try {
     let csrfToken = getCsrfToken();
     
@@ -291,16 +320,13 @@ const handleStatusChange = async (kehadiranId, newStatus, userData = null, tangg
       jam_pulang: '00:00'
     };
 
-    // Jika ID null, berarti create new
     if (kehadiranId) {
       payload.id = kehadiranId;
     } else {
-      // Data untuk create new
       payload.tanggal = tanggal || formatDateForAPI(selectedDate);
       payload.uid = userData?.id;
     }
     
-
     const response = await fetch('/kehadiran/update-status', {
       method: 'POST',
       headers: {
@@ -337,36 +363,60 @@ const handleStatusChange = async (kehadiranId, newStatus, userData = null, tangg
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    // Refresh data setelah berhasil update
     await fetchKehadiranData(selectedDate);
     setOpenStatusDropdown(null);
+    showToast('Status kehadiran berhasil diperbarui!', 'success'); // TAMBAH ini
     
   } catch (error) {
     console.error('Error updating status:', error);
     if (error.message.includes('419') || error.message.includes('CSRF')) {
-      alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
-      window.location.reload();
+      showToast('Session Anda telah berakhir. Halaman akan di-refresh.', 'error'); // TAMBAH ini
+      setTimeout(() => window.location.reload(), 2000);
     } else {
-      alert(`Error: ${error.message}`);
+      showToast(`Error: ${error.message}`, 'error'); // TAMBAH ini
     }
   } finally {
     setUpdatingStatus(false);
+    setLoadingOverlay(false); // TAMBAH ini
   }
 };
 
-  const handlePrintAbsensiFormat = async (format) => {
-    try {
-      setShowAbsensiModal(false);
-      let csrfToken = getCsrfToken();
+ const handlePrintAbsensiFormat = async (format) => {
+  try {
+    setShowAbsensiModal(false);
+    setLoadingOverlay(true); // TAMBAH ini
+    
+    let csrfToken = getCsrfToken();
+    const endpoint = format === 'pdf' ? '/print-absensi-pdf' : '/print-absensi';
+    const fileExtension = format === 'pdf' ? 'pdf' : 'xlsx';
+    
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRF-TOKEN': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        tanggal: formatDateForAPI(selectedDate),
+        tower: activeTower,
+        kehadiran: currentKehadiran
+      })
+    });
+
+    if (response.status === 419) {
+      const newToken = await fetchFreshCsrfToken();
       
-      const endpoint = format === 'pdf' ? '/print-absensi-pdf' : '/print-absensi';
-      const fileExtension = format === 'pdf' ? 'pdf' : 'xlsx';
-      
-      const response = await fetch(endpoint, {
+      if (!newToken) {
+        throw new Error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.');
+      }
+
+      const retryResponse = await fetch(endpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
+          'X-CSRF-TOKEN': newToken,
           'X-Requested-With': 'XMLHttpRequest'
         },
         credentials: 'same-origin',
@@ -377,54 +427,38 @@ const handleStatusChange = async (kehadiranId, newStatus, userData = null, tangg
         })
       });
 
-      if (response.status === 419) {
-        const newToken = await fetchFreshCsrfToken();
-        
-        if (!newToken) {
-          throw new Error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.');
-        }
-
-        const retryResponse = await fetch(endpoint, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': newToken,
-            'X-Requested-With': 'XMLHttpRequest'
-          },
-          credentials: 'same-origin',
-          body: JSON.stringify({
-            tanggal: formatDateForAPI(selectedDate),
-            tower: activeTower,
-            kehadiran: currentKehadiran
-          })
-        });
-
-        if (!retryResponse.ok) {
-          throw new Error(`HTTP error! status: ${retryResponse.status}`);
-        }
-
-        const blob = await retryResponse.blob();
-        downloadFile(blob, `Absensi_${activeTower}_${formatDateForAPI(selectedDate)}.${fileExtension}`);
-        return;
+      if (!retryResponse.ok) {
+        throw new Error(`HTTP error! status: ${retryResponse.status}`);
       }
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const blob = await response.blob();
+      const blob = await retryResponse.blob();
       downloadFile(blob, `Absensi_${activeTower}_${formatDateForAPI(selectedDate)}.${fileExtension}`);
-      
-    } catch (error) {
-      console.error('Error print absensi:', error);
-      if (error.message.includes('419') || error.message.includes('CSRF')) {
-        alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
-        window.location.reload();
-      } else {
-        alert(`Error: ${error.message}`);
-      }
+      setLoadingOverlay(false); // TAMBAH ini
+      showToast('Laporan absensi berhasil diunduh!', 'success'); // TAMBAH ini
+      return;
     }
-  };
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    downloadFile(blob, `Absensi_${activeTower}_${formatDateForAPI(selectedDate)}.${fileExtension}`);
+    setLoadingOverlay(false); // TAMBAH ini
+    showToast('Laporan absensi berhasil diunduh!', 'success'); // TAMBAH ini
+    
+  } catch (error) {
+    console.error('Error print absensi:', error);
+    setLoadingOverlay(false); // TAMBAH ini
+    
+    if (error.message.includes('419') || error.message.includes('CSRF')) {
+      showToast('Session Anda telah berakhir. Halaman akan di-refresh.', 'error');
+      setTimeout(() => window.location.reload(), 2000);
+    } else {
+      showToast(`Error: ${error.message}`, 'error');
+    }
+  }
+};
 
   const handlePrintKatering = () => {
     setShowKateringModal(true);
@@ -450,11 +484,12 @@ const handleStatusChange = async (kehadiranId, newStatus, userData = null, tangg
 
 const handlePrintKateringFormatFinal = async (format, yangMakanIds) => {
   try {
+    setLoadingOverlay(true); // TAMBAH ini
     let csrfToken = getCsrfToken();
     
     const endpoint = format === 'pdf' ? '/print-katering-pdf' : '/print-katering';
     const fileExtension = format === 'pdf' ? 'pdf' : 'xlsx';
-    console.log(yangMakanIds)
+    
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -467,7 +502,7 @@ const handlePrintKateringFormatFinal = async (format, yangMakanIds) => {
         tanggal: formatDateForAPI(selectedDate),
         tower: activeTower,
         kehadiran: rawKehadiranData,
-        yang_makan: yangMakanIds // KIRIM DATA YANG MAKAN (bukan tidak_makan)
+        yang_makan: yangMakanIds
       })
     });
 
@@ -500,6 +535,8 @@ const handlePrintKateringFormatFinal = async (format, yangMakanIds) => {
 
       const blob = await retryResponse.blob();
       downloadFile(blob, `Katering_${formatDateForAPI(selectedDate)}.${fileExtension}`);
+      setLoadingOverlay(false); // TAMBAH ini
+      showToast('Laporan katering berhasil diunduh!', 'success'); // TAMBAH ini
       return;
     }
 
@@ -509,14 +546,18 @@ const handlePrintKateringFormatFinal = async (format, yangMakanIds) => {
 
     const blob = await response.blob();
     downloadFile(blob, `Katering_${formatDateForAPI(selectedDate)}.${fileExtension}`);
+    setLoadingOverlay(false); // TAMBAH ini
+    showToast('Laporan katering berhasil diunduh!', 'success'); // TAMBAH ini
     
   } catch (error) {
     console.error('Error print katering:', error);
+    setLoadingOverlay(false); // TAMBAH ini
+    
     if (error.message.includes('419') || error.message.includes('CSRF')) {
-      alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
-      window.location.reload();
+      showToast('Session Anda telah berakhir. Halaman akan di-refresh.', 'error');
+      setTimeout(() => window.location.reload(), 2000);
     } else {
-      alert(`Error: ${error.message}`);
+      showToast(`Error: ${error.message}`, 'error');
     }
   }
 };
@@ -778,7 +819,6 @@ const ModalYangMakan = () => {
       }
     } catch (error) {
       console.error('Error fetching kehadiran:', error);
-      alert(`Error: ${error.message}\n\nPastikan:\n1. Route /api/kehadiran sudah terdaftar\n2. Controller sudah dibuat\n3. Database terkoneksi`);
     } finally {
       setLoading(false);
     }
@@ -800,13 +840,15 @@ const ModalYangMakan = () => {
     });
   };
 
-  const handleUpdateKeterangan = async () => {
+const handleUpdateKeterangan = async () => {
   if (!selectedKehadiran || !keteranganText.trim()) {
-    alert('Keterangan tidak boleh kosong!');
+    showToast('Keterangan tidak boleh kosong!', 'warning'); // TAMBAH ini
     return;
   }
 
   setUpdatingStatus(true);
+  setLoadingOverlay(true); // TAMBAH ini
+  
   try {
     let csrfToken = getCsrfToken();
     
@@ -852,22 +894,26 @@ const ModalYangMakan = () => {
       throw new Error(`HTTP error! status: ${response.status}`);
     }
 
-    // Refresh data setelah berhasil update
     await fetchKehadiranData(selectedDate);
     setShowKeteranganModal(false);
     setKeteranganText('');
     setSelectedKehadiran(null);
+    setLoadingOverlay(false); // TAMBAH ini
+    showToast('Keterangan berhasil disimpan!', 'success'); // TAMBAH ini
     
   } catch (error) {
     console.error('Error updating keterangan:', error);
+    setLoadingOverlay(false); // TAMBAH ini
+    
     if (error.message.includes('419') || error.message.includes('CSRF')) {
-      alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
-      window.location.reload();
+      showToast('Session Anda telah berakhir. Halaman akan di-refresh.', 'error');
+      setTimeout(() => window.location.reload(), 2000);
     } else {
-      alert(`Error: ${error.message}`);
+      showToast(`Error: ${error.message}`, 'error');
     }
   } finally {
     setUpdatingStatus(false);
+    setLoadingOverlay(false);
   }
 };
 
@@ -1704,6 +1750,22 @@ const getStatusBadge = (item, idx) => {
           </div>
         </div>
       </div>
+
+    {/* Loading Overlay */}
+    {loadingOverlay && (
+      <div style={{margin:"0px", padding:"0px"}} className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
+          <div className="relative">
+            <div className="w-20 h-20 border-4 border-indigo-200 rounded-full"></div>
+            <div className="w-20 h-20 border-4 border-indigo-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-semibold text-gray-800 mb-1">Memproses</p>
+            <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
+          </div>
+        </div>
+      </div>
+    )}
     </LayoutTemplate>
   );
 }

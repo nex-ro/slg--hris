@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { X, ChevronDown, Search } from 'lucide-react';
+import { toast } from 'react-toastify';
 function formatDateLocal(dateObj) {
   const year = dateObj.getFullYear();
   const month = String(dateObj.getMonth() + 1).padStart(2, '0'); // bulan 0-11
@@ -27,6 +28,30 @@ function ManualInputModal({ isOpen, kalender, onClose, onSave, getCsrfToken, fet
   const userDropdownRef = useRef(null);
   const statusDropdownRef = useRef(null);
   
+  const showToast = (message, type) => {
+  const options = {
+    position: "top-right",
+    autoClose: 5000,
+    hideProgressBar: false,
+    closeOnClick: true,
+    pauseOnHover: true,
+    draggable: true,
+  };
+
+  switch(type) {
+    case 'success':
+      toast.success(message, options);
+      break;
+    case 'error':
+      toast.error(message, options);
+      break;
+    case 'warning':
+      toast.warning(message, options);
+      break;
+    default:
+      toast.info(message, options);
+  }
+};
 useEffect(() => {
   if (isOpen && kalender) {
     const dateObj = new Date(kalender);
@@ -77,18 +102,18 @@ useEffect(() => {
   }, []);
 
   const fetchUsers = async () => {
-    setLoadingUsers(true);
-    try {
-      const response = await fetch('/api/users');
-      const data = await response.json();
-      setUsers(data);
-    } catch (error) {
-      console.error('Error fetching users:', error);
-      alert('Gagal memuat data users');
-    } finally {
-      setLoadingUsers(false);
-    }
-  };
+  setLoadingUsers(true);
+  try {
+    const response = await fetch('/api/users');
+    const data = await response.json();
+    setUsers(data);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    showToast('Gagal memuat data users', 'error'); // ← UBAH INI
+  } finally {
+    setLoadingUsers(false);
+  }
+};
   const selectedStatus = statusOptions.find(opt => opt.value === formData.status);
   const selectedUser = users.find(user => user.id === formData.userId);
   
@@ -99,22 +124,21 @@ useEffect(() => {
     user.id.toString().includes(searchUser)
   );
 
-  const handleSubmit = async () => {
+const handleSubmit = async () => {
   // Validasi
   if (!formData.tanggal || !formData.userId || !formData.status) {
-    alert('Harap isi Tanggal, Nama Karyawan, dan Status');
+    showToast('Harap isi Tanggal, Nama Karyawan, dan Status', 'warning'); // ← UBAH INI
     return;
   }
 
   if (formData.status === 'Hadir' && !formData.jam_kedatangan) {
-    alert('Jam Kedatangan wajib diisi untuk status Hadir');
+    showToast('Jam Kedatangan wajib diisi untuk status Hadir', 'warning'); // ← UBAH INI
     return;
   }
 
   setSubmitting(true);
 
   try {
-    // Gunakan fetchWithCsrf dari parent
     const response = await fetchWithCsrf('/kehadiran/manual', {
       method: 'POST',
       body: JSON.stringify({
@@ -143,7 +167,7 @@ useEffect(() => {
     });
     setSearchUser('');
     
-    alert('Data berhasil disimpan!');
+    showToast('Data berhasil disimpan!', 'success'); // ← UBAH INI
     
     // Tutup modal
     onClose();
@@ -157,10 +181,10 @@ useEffect(() => {
     console.error('Error saving data:', error);
     
     if (error.message.includes('CSRF') || error.message.includes('419')) {
-      alert('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.');
-      window.location.reload();
+      showToast('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.', 'error'); // ← UBAH INI
+      setTimeout(() => window.location.reload(), 2000);
     } else {
-      alert(error.message || 'Terjadi kesalahan saat menyimpan data');
+      showToast(error.message || 'Terjadi kesalahan saat menyimpan data', 'error'); // ← UBAH INI
     }
   } finally {
     setSubmitting(false);

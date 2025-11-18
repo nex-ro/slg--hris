@@ -2,13 +2,14 @@ import React, { useState } from 'react';
 import { X, FileText, ChevronDown ,AlertCircle } from 'lucide-react';
 import LayoutTemplate from '@/Layouts/LayoutTemplate';
 import ModalResign from './Modal/ModalResign';
-import { usePage } from '@inertiajs/react';
+import { Head, usePage } from '@inertiajs/react';
 import { useEffect } from 'react';
 import { router } from '@inertiajs/react';
 const ModalSuratKelakuanBaik = ({ onClose, onSubmit }) => {
   return (
     
     <div className="p-6">
+
       <h3 className="text-lg font-semibold mb-4">Ini Modal Custom untuk Surat Kelakuan Baik</h3>
       <div className="space-y-4">
         <div>
@@ -210,7 +211,6 @@ const Dokumen = () => {
     // }
   ];
 
-  console.log(riwayatResign)
     const riwayatData = [
     ...riwayatResign.map(resign => ({
       ...resign,
@@ -275,6 +275,7 @@ const Dokumen = () => {
 
   return (
         <LayoutTemplate>
+                 <Head title="Dokumen" />
 
     <div className="">
       <h1 className="text-2xl font-bold text-gray-900 mb-6">Daftar Layanan Akademik</h1>

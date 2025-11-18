@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState,useEffect} from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
 import LayoutTemplates from '@/Layouts/LayoutTemplate';
-export default function Index({ auth, holidays, allHolidays }) {
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
+export default function Index({flash, auth, holidays, allHolidays }) {
     const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
     const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
@@ -9,7 +12,7 @@ export default function Index({ auth, holidays, allHolidays }) {
     const [editModalOpen, setEditModalOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [editName, setEditName] = useState('');
-
+    const [loadingOverlay, setLoadingOverlay] = useState(false);
     const monthNames = [
         'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
         'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
@@ -23,6 +26,39 @@ export default function Index({ auth, holidays, allHolidays }) {
         start_date: new Date().toISOString().split('T')[0],
         end_date: new Date().toISOString().split('T')[0],
     });
+    useEffect(() => {
+        if (flash?.success) {
+            showToast(flash.success, 'success');
+        }
+        if (flash?.error) {
+            showToast(flash.error, 'error');
+        }
+    }, [flash]);
+
+    const showToast = (message, type) => {
+        const options = {
+            position: "top-right",
+            autoClose: 5000,
+            hideProgressBar: false,
+            closeOnClick: true,
+            pauseOnHover: true,
+            draggable: true,
+        };
+    
+        switch(type) {
+            case 'success':
+                toast.success(message, options);
+                break;
+            case 'error':
+                toast.error(message, options);
+                break;
+            case 'warning':
+                toast.warning(message, options);
+                break;
+            default:
+                toast.info(message, options);
+        }
+    };
 
     const changeMonth = (delta) => {
         let newMonth = currentMonth + delta;
@@ -112,12 +148,32 @@ export default function Index({ auth, holidays, allHolidays }) {
 
     const handleSubmit = (e) => {
         e.preventDefault();
+        setLoadingOverlay(true); 
+
         post('/holidays', {
             preserveScroll: true,
             onSuccess: () => {
                 reset();
                 setShowAddModal(false);
+                setLoadingOverlay(false); // TAMBAH ini
+                showToast('Hari libur berhasil ditambahkan!', 'success'); // TAMBAH ini
             },
+            onError: (errors) => {
+                setLoadingOverlay(false); // TAMBAH ini
+                let errorMessage = "Gagal menambahkan hari libur";
+                
+                if (errors.message) {
+                    errorMessage = errors.message;
+                } else if (typeof errors === 'object') {
+                    const errorArray = Object.values(errors).flat();
+                    errorMessage = errorArray.join(', ');
+                }
+                
+                showToast(errorMessage, 'error'); // TAMBAH ini
+            },
+            onFinish: () => {
+                setLoadingOverlay(false); // TAMBAH ini
+            }
         });
     };
 
@@ -128,23 +184,67 @@ export default function Index({ auth, holidays, allHolidays }) {
     };
 
     const handleSaveEdit = () => {
-        router.put(`/holidays/${editingId}`, 
-            { name: editName },
-            {
-                preserveScroll: true,
-                onSuccess: () => {
-                    setEditModalOpen(false);
-                    setEditingId(null);
-                    setEditName('');
+    if (!editName.trim()) {
+        showToast('Nama libur tidak boleh kosong', 'warning'); // TAMBAH ini
+        return;
+    }
+    
+    setLoadingOverlay(true); // TAMBAH ini
+    
+    router.put(`/holidays/${editingId}`, 
+        { name: editName },
+        {
+            preserveScroll: true,
+            onSuccess: () => {
+                setEditModalOpen(false);
+                setEditingId(null);
+                setEditName('');
+                setLoadingOverlay(false); // TAMBAH ini
+                showToast('Hari libur berhasil diperbarui!', 'success'); // TAMBAH ini
+            },
+            onError: (errors) => {
+                setLoadingOverlay(false); // TAMBAH ini
+                let errorMessage = "Gagal memperbarui hari libur";
+                
+                if (errors.message) {
+                    errorMessage = errors.message;
+                } else if (typeof errors === 'object') {
+                    const errorArray = Object.values(errors).flat();
+                    errorMessage = errorArray.join(', ');
                 }
+                
+                showToast(errorMessage, 'error'); // TAMBAH ini
+            },
+            onFinish: () => {
+                setLoadingOverlay(false); // TAMBAH ini
             }
-        );
-    };
+        }
+    );
+};
 
     const handleDelete = (id) => {
         if (confirm('Hapus hari libur ini?')) {
+            setLoadingOverlay(true); 
+
             router.delete(`/holidays/${id}`, {
                 preserveScroll: true,
+                onSuccess: () => {
+                    setLoadingOverlay(false); 
+                    showToast('Hari libur berhasil dihapus!', 'success'); 
+                },
+                onError: (errors) => {
+                    setLoadingOverlay(false); 
+                    let errorMessage = "Gagal menghapus hari libur";
+
+                    if (errors.message) {
+                        errorMessage = errors.message;
+                    }
+
+                    showToast(errorMessage, 'error'); // TAMBAH ini
+                },
+                onFinish: () => {
+                    setLoadingOverlay(false); // TAMBAH ini
+                }
             });
         }
     };
@@ -357,7 +457,7 @@ export default function Index({ auth, holidays, allHolidays }) {
 
             {/* Modal Add Holiday */}
             {showAddModal && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+                <div style={{margin:"0px",padding:"0px"}}  className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
                     <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md transform transition-all animate-scaleIn">
                         <div className="bg-gradient-to-r from-green-500 to-emerald-500 p-6 rounded-t-3xl">
                             <h3 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -441,7 +541,7 @@ export default function Index({ auth, holidays, allHolidays }) {
 
             {/* Modal Edit */}
             {editModalOpen && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
+                <div style={{padding:"0px",margin:"0px"}} className="fixed inset-0 bg-black bg-opacity-50 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fadeIn">
                     <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md transform transition-all animate-scaleIn">
                         <div className="bg-gradient-to-r from-blue-500 to-indigo-500 p-6 rounded-t-3xl">
                             <h3 className="text-2xl font-bold text-white flex items-center gap-3">
@@ -519,6 +619,21 @@ export default function Index({ auth, holidays, allHolidays }) {
                     background: #94a3b8;
                 }
             `}</style>
+              {loadingOverlay && (
+      <div style={{margin:"0px" ,padding:"0px"}}className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div  className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
+          <div className="relative">
+            <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
+            <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-semibold text-gray-800 mb-1">Loading</p>
+            <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
+          </div>
+        </div>
+      </div>
+    )}
+
         </LayoutTemplates>
     );
 }

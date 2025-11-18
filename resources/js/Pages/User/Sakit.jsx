@@ -2,7 +2,8 @@ import { useState } from "react";
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
 import { Head, router, usePage } from '@inertiajs/react';
 import { Plus, Edit2, Trash2, Calendar, FileText, CheckCircle, XCircle, Clock, Upload, X } from "lucide-react";
-
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 function Sakit() {
   const { sakits, flash } = usePage().props; // Ambil data dari backend
   const [dateError, setDateError] = useState("");
@@ -18,10 +19,10 @@ function Sakit() {
   });
   const [fileName, setFileName] = useState("");
   const [processing, setProcessing] = useState(false);
+  const [loadingOverlay, setLoadingOverlay] = useState(false);
 
    const handleView = (bukti) => {
     // Akses langsung via storage URL
-    console.log(bukti)
     const url = `/storage/${bukti}`;
     window.open(url, '_blank');
   };
@@ -114,22 +115,32 @@ const validateDateRange = (startDate, endDate) => {
     setFileName("");
   };
 
-  const handleSubmit = (e) => {
+const handleSubmit = (e) => {
   e.preventDefault();
   
   // Validasi
   if (!formData.tanggal_mulai || !formData.tanggal_selesai) {
-    alert("Tanggal mulai dan selesai harus diisi!");
+    toast.error("Tanggal mulai dan selesai harus diisi!", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
+  
   // Validasi weekend
   if (isWeekend(formData.tanggal_mulai)) {
-    alert("Tanggal mulai tidak boleh di hari Sabtu atau Minggu!");
+    toast.error("Tanggal mulai tidak boleh di hari Sabtu atau Minggu!", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
   
   if (isWeekend(formData.tanggal_selesai)) {
-    alert("Tanggal selesai tidak boleh di hari Sabtu atau Minggu!");
+    toast.error("Tanggal selesai tidak boleh di hari Sabtu atau Minggu!", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
   
@@ -138,97 +149,140 @@ const validateDateRange = (startDate, endDate) => {
   const selectedDate = new Date(formData.tanggal_mulai);
   
   if (selectedDate < minDate) {
-    alert("Tanggal mulai tidak boleh lebih dari H-3 hari kerja!");
+    toast.error("Tanggal mulai tidak boleh lebih dari H-3 hari kerja!", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
   
   if (!formData.keterangan) {
-    alert("Keterangan harus diisi!");
+    toast.error("Keterangan harus diisi!", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
   
   if (!editMode && !formData.bukti) {
-    alert("Bukti surat dokter harus diupload!");
+    toast.error("Bukti surat dokter harus diupload!", {
+      position: "top-right",
+      autoClose: 3000,
+    });
     return;
   }
 
-    setProcessing(true);
+  setProcessing(true);
+  setLoadingOverlay(true);
 
-    // Buat FormData untuk upload file
-    const data = new FormData();
-    data.append('tanggal_mulai', formData.tanggal_mulai);
-    data.append('tanggal_selesai', formData.tanggal_selesai);
-    data.append('keterangan', formData.keterangan);
-    if (formData.bukti) {
-      data.append('bukti', formData.bukti);
-    }
+  // Buat FormData untuk upload file
+  const data = new FormData();
+  data.append('tanggal_mulai', formData.tanggal_mulai);
+  data.append('tanggal_selesai', formData.tanggal_selesai);
+  data.append('keterangan', formData.keterangan);
+  if (formData.bukti) {
+    data.append('bukti', formData.bukti);
+  }
 
-    if (editMode) {
-      // Update data
-      data.append('_method', 'PUT');
-      router.post(`/sakit/${selectedId}`, data, {
-        onSuccess: () => {
-          handleCloseModal();
-          setProcessing(false);
-        },
-        onError: (errors) => {
-          console.error(errors);
-          alert('Terjadi kesalahan saat mengupdate data');
-          setProcessing(false);
-        }
-      });
-    } else {
-      // Create data baru
-      router.post('/sakit', data, {
-        onSuccess: () => {
-          handleCloseModal();
-          setProcessing(false);
-        },
-        onError: (errors) => {
-          console.error(errors);
-          alert('Terjadi kesalahan saat mengirim data');
-          setProcessing(false);
-        }
-      });
-    }
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      // Validasi ukuran file (max 2MB)
-      if (file.size > 2048000) {
-        alert("Ukuran file maksimal 2MB!");
-        e.target.value = "";
-        return;
+  if (editMode) {
+    // Update data
+    data.append('_method', 'PUT');
+    router.post(`/sakit/${selectedId}`, data, {
+      onSuccess: () => {
+        toast.success('Data berhasil diupdate!', {
+          position: "top-right",
+          autoClose: 3000,
+        });
+        handleCloseModal();
+        setProcessing(false);
+        setLoadingOverlay(false);
+      },
+      onError: (errors) => {
+        console.error(errors);
+        toast.error('Terjadi kesalahan saat mengupdate data', {
+          position: "top-right",
+          autoClose: 4000,
+        });
+        setProcessing(false);
+        setLoadingOverlay(false);
       }
-      
-      // Validasi format file
-      const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-      if (!allowedTypes.includes(file.type)) {
-        alert("Format file harus PDF, JPG, JPEG, atau PNG!");
-        e.target.value = "";
-        return;
+    });
+  } else {
+    // Create data baru
+    router.post('/sakit', data, {
+      onSuccess: () => {
+        toast.success('Pengajuan izin sakit berhasil diajukan!', {
+          position: "top-right",
+          autoClose: 3000,
+        });
+        handleCloseModal();
+        setProcessing(false);
+        setLoadingOverlay(false);
+      },
+      onError: (errors) => {
+        console.error(errors);
+        toast.error('Terjadi kesalahan saat mengirim data', {
+          position: "top-right",
+          autoClose: 4000,
+        });
+        setProcessing(false);
+        setLoadingOverlay(false);
       }
-      
-      setFormData({ ...formData, bukti: file });
-      setFileName(file.name);
-    }
-  };
+    });
+  }
+};
 
-  const handleDelete = (id) => {
-    if (window.confirm("Apakah Anda yakin ingin menghapus data ini?")) {
-      router.delete(`/sakit/${id}`, {
-        onSuccess: () => {
-          alert("Data berhasil dihapus!");
-        },
-        onError: (errors) => {
-          console.error(errors);
-          alert('Terjadi kesalahan saat menghapus data');
-        }
+const handleFileChange = (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    // Validasi ukuran file (max 2MB)
+    if (file.size > 2048000) {
+      toast.error("Ukuran file maksimal 2MB!", {
+        position: "top-right",
+        autoClose: 3000,
       });
+      e.target.value = "";
+      return;
     }
-  };
+    
+    // Validasi format file
+    const allowedTypes = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Format file harus PDF, JPG, JPEG, atau PNG!", {
+        position: "top-right",
+        autoClose: 3000,
+      });
+      e.target.value = "";
+      return;
+    }
+    
+    setFormData({ ...formData, bukti: file });
+    setFileName(file.name);
+  }
+};
+
+const handleDelete = (id) => {
+  if (window.confirm("Apakah Anda yakin ingin menghapus data ini?")) {
+    setLoadingOverlay(true);
+    router.delete(`/sakit/${id}`, {
+      onSuccess: () => {
+        toast.success("Data berhasil dihapus!", {
+          position: "top-right",
+          autoClose: 3000,
+        });
+        setLoadingOverlay(false);
+      },
+      onError: (errors) => {
+        console.error(errors);
+        toast.error('Terjadi kesalahan saat menghapus data', {
+          position: "top-right",
+          autoClose: 4000,
+        });
+        setLoadingOverlay(false);
+      }
+    });
+  }
+};
 
   const handleDownload = (id, bukti) => {
   window.open(`/sakit/${id}/download`, '_blank');
@@ -679,6 +733,20 @@ const validateDateRange = (startDate, endDate) => {
           </div>
         )}
       </div>
+      {loadingOverlay && (
+  <div style={{margin:"0px", padding:"0px"}} className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+    <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
+      <div className="relative">
+        <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
+        <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+      </div>
+      <div className="text-center">
+        <p className="text-lg font-semibold text-gray-800 mb-1">Loading</p>
+        <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
+      </div>
+    </div>
+  </div>
+)}
     </LayoutTemplate>
   );
 }

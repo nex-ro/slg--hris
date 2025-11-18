@@ -5,7 +5,7 @@ import { Head, Link, useForm } from '@inertiajs/react';
 
 export default function Login({ status, canResetPassword }) {
     const [showPassword, setShowPassword] = useState(false);
-    
+    const [isLoading, setIsLoading] = useState(false);
     const { data, setData, post, processing, errors, reset } = useForm({
         email: '',
         password: '',
@@ -13,12 +13,19 @@ export default function Login({ status, canResetPassword }) {
     });
 
     const submit = (e) => {
-        e.preventDefault();
-
-        post(route('login'), {
-            onFinish: () => reset('password'),
-        });
-    };
+    e.preventDefault();
+    
+    setIsLoading(true); 
+    post(route('login'), {
+        onFinish: () => {
+            reset('password');
+            setIsLoading(false); 
+        },
+        onError: () => {
+            setIsLoading(false); 
+        }
+    });
+};
 
     return (
         <>
@@ -364,6 +371,21 @@ export default function Login({ status, canResetPassword }) {
                     </div>
                 </div>
             </div>
+                        {isLoading && (
+                <div style={{margin:"0px", padding:"0px"}} className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+                    <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
+                        <div className="relative">
+                            <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
+                            <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+                        </div>
+                        <div className="text-center">
+                            <p className="text-lg font-semibold text-gray-800 mb-1">Memproses Login</p>
+                            <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
         </>
     );
 }

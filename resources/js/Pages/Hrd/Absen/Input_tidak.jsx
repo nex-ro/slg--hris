@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Calendar, Users, FileText, Search, X, Check, Save, AlertCircle } from 'lucide-react';
 import { Head, router } from '@inertiajs/react';
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
-
+import { toast } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+import { useEffect } from 'react';
 function InputTidak({ users = [], flash }) {
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedDoneDate, setselectedDoneDate] = useState('');
@@ -11,6 +13,16 @@ function InputTidak({ users = [], flash }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedUsers, setSelectedUsers] = useState([]);
   const [processing, setProcessing] = useState(false);
+  const [loadingOverlay, setLoadingOverlay] = useState(false); // TAMBAH ini
+
+  useEffect(() => {
+  if (flash?.success) {
+    showToast(flash.success, 'success');
+  }
+  if (flash?.error) {
+    showToast(flash.error, 'error');
+  }
+}, [flash]);
 
   const statusOptions = [
     { value: 'Sakit', label: 'Sakit', desc: 'Tidak Masuk kerja', color: 'bg-red-400', textColor: 'text-white', borderColor: 'border-blue-500' },
@@ -53,37 +65,91 @@ function InputTidak({ users = [], flash }) {
       setSelectedUsers(filteredUsers);
     }
   };
-
-  const handleSubmit = () => {
-    if (!isFormValid) return;
-    if (selectedDoneDate && new Date(selectedDoneDate) < new Date(selectedDate)) {
-  setDateError('Tanggal selesai tidak boleh lebih kecil dari tanggal mulai.');
-  return;
-} else {
-  setDateError('');
-}
-
-    setProcessing(true);
-    
-    router.post('/hrd/absen/input-tidak', {
-      tanggal: selectedDate,
-      tanggalSelesai: selectedDoneDate,
-      status: selectedStatus,
-      users: selectedUsers.map(u => u.id)
-    }, {
-      onSuccess: () => {
-        setSelectedDate('');
-        setselectedDoneDate('');
-        setSelectedStatus('');
-        setSelectedUsers([]);
-        setSearchTerm('');
-        setProcessing(false);
-      },
-      onError: () => {
-        setProcessing(false);
-      }
-    });
+  // TAMBAH setelah deklarasi state
+const showToast = (message, type) => {
+  const options = {
+    position: "top-right",
+    autoClose: 5000,
+    hideProgressBar: false,
+    closeOnClick: true,
+    pauseOnHover: true,
+    draggable: true,
   };
+
+  switch(type) {
+    case 'success':
+      toast.success(message, options);
+      break;
+    case 'error':
+      toast.error(message, options);
+      break;
+    case 'warning':
+      toast.warning(message, options);
+      break;
+    default:
+      toast.info(message, options);
+  }
+};
+
+ const handleSubmit = () => {
+  if (!isFormValid) {
+    showToast('Mohon lengkapi semua data yang diperlukan', 'warning'); // TAMBAH ini
+    return;
+  }
+  
+  if (selectedDoneDate && new Date(selectedDoneDate) < new Date(selectedDate)) {
+    setDateError('Tanggal selesai tidak boleh lebih kecil dari tanggal mulai.');
+    showToast('Tanggal selesai tidak boleh lebih kecil dari tanggal mulai.', 'error');
+    return;
+  } else {
+    setDateError('');
+  }
+
+  setProcessing(true);
+  setLoadingOverlay(true);
+  
+  router.post('/hrd/absen/input-tidak', {
+    tanggal: selectedDate,
+    tanggalSelesai: selectedDoneDate,
+    status: selectedStatus,
+    users: selectedUsers.map(u => u.id)
+  }, {
+    onSuccess: (response) => {
+      setSelectedDate('');
+      setselectedDoneDate('');
+      setSelectedStatus('');
+      setSelectedUsers([]);
+      setSearchTerm('');
+      setProcessing(false);
+      setLoadingOverlay(false);
+      
+      // TAMBAH toast sukses
+      showToast('Data kehadiran berhasil disimpan!', 'success');
+    },
+    onError: (errors) => {
+      setProcessing(false);
+      setLoadingOverlay(false);
+      
+      // TAMBAH error handling dengan toast
+      let errorMessage = "Gagal menyimpan data kehadiran";
+      
+      if (errors.error) {
+        errorMessage = errors.error;
+      } else if (errors.message) {
+        errorMessage = errors.message;
+      } else if (typeof errors === 'object') {
+        const errorArray = Object.values(errors).flat();
+        errorMessage = errorArray.join(', ');
+      }
+      
+      showToast(errorMessage, 'error');
+    },
+    onFinish: () => {
+      setProcessing(false);
+      setLoadingOverlay(false);
+    }
+  });
+};
 
   const isFormValid = selectedDate && selectedStatus && selectedUsers.length > 0;
 
@@ -105,26 +171,6 @@ function InputTidak({ users = [], flash }) {
               </div>
             </div>
           </div>
-
-          {/* Success Message */}
-          {flash?.success && (
-            <div className="mb-6 p-4 bg-green-50 border-l-4 border-green-500 rounded-lg shadow-sm">
-              <div className="flex items-center gap-3">
-                <Check className="w-5 h-5 text-green-600" />
-                <p className="text-green-800 font-medium">{flash.success}</p>
-              </div>
-            </div>
-          )}
-
-          {/* Error Message */}
-          {flash?.error && (
-            <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-500 rounded-lg shadow-sm">
-              <div className="flex items-center gap-3">
-                <AlertCircle className="w-5 h-5 text-red-600" />
-                <p className="text-red-800 font-medium">{flash.error}</p>
-              </div>
-            </div>
-          )}
 
           {/* Main Content Card */}
           <div className="bg-white rounded-2xl shadow-xl border border-slate-200 overflow-hidden">
@@ -352,6 +398,21 @@ function InputTidak({ users = [], flash }) {
           </div>
         </div>
       </div>
+          {loadingOverlay && (
+      <div style={{margin:"0px", padding:"0px"}} className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+        <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
+          <div className="relative">
+            <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
+            <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+          </div>
+          <div className="text-center">
+            <p className="text-lg font-semibold text-gray-800 mb-1">Menyimpan Data</p>
+            <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
+          </div>
+        </div>
+      </div>
+    )}
+
     </LayoutTemplate>
   );
 }
