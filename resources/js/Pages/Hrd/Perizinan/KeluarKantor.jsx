@@ -1,152 +1,29 @@
-import { useState, useEffect } from 'react';
-import {Plus, Calendar, Clock, User, FileText, Filter, CheckCircle, XCircle, Search, Check, X, Edit, Trash2, Eye, RefreshCw, Printer } from 'lucide-react';
-import LayoutTemplate from '@/Layouts/LayoutTemplate';
-import { usePage, router, Head } from '@inertiajs/react'; // Tambahkan router
-import { toast } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+  import { useState, useEffect } from 'react';
+  import {Plus, Calendar, Clock, User, FileText, Filter, CheckCircle, XCircle, Search, Check, X, Edit, Trash2, Eye, RefreshCw, Printer } from 'lucide-react';
+  import LayoutTemplate from '@/Layouts/LayoutTemplate';
+  import { usePage, router, Head } from '@inertiajs/react'; // Tambahkan router
+  import { toast } from 'react-toastify';
+  import 'react-toastify/dist/ReactToastify.css';
 
-function KeluarKantor() {
-  const [perizinans, setPerizinans] = useState([]);
-  const [filteredData, setFilteredData] = useState([]);
-  const [selectedPerizinan, setSelectedPerizinan] = useState(null);
-  const [showDetailModal, setShowDetailModal] = useState(false);
-  const [showApprovalModal, setShowApprovalModal] = useState(false);
-  const [showRejectModal, setShowRejectModal] = useState(false);
-  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
-  const [approvalAction, setApprovalAction] = useState(null);
-  const [rejectReason, setRejectReason] = useState('');
-  const [approvalNote, setApprovalNote] = useState('');
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [users, setUsers] = useState([]);
-  const [heads, setHeads] = useState([]);
-  const { auth } = usePage().props;
-  const currentUser = auth?.user || auth; 
-  const [loadingOverlay, setLoadingOverlay] = useState(false);
+  function KeluarKantor() {
+    const [perizinans, setPerizinans] = useState([]);
+    const [filteredData, setFilteredData] = useState([]);
+    const [selectedPerizinan, setSelectedPerizinan] = useState(null);
+    const [showDetailModal, setShowDetailModal] = useState(false);
+    const [showApprovalModal, setShowApprovalModal] = useState(false);
+    const [showRejectModal, setShowRejectModal] = useState(false);
+    const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+    const [approvalAction, setApprovalAction] = useState(null);
+    const [rejectReason, setRejectReason] = useState('');
+    const [approvalNote, setApprovalNote] = useState('');
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [users, setUsers] = useState([]);
+    const [heads, setHeads] = useState([]);
+    const { auth } = usePage().props;
+    const currentUser = auth?.user || auth; 
+    const [loadingOverlay, setLoadingOverlay] = useState(false);
 
-  const [formData, setFormData] = useState({
-  uid: '',
-  uid_diketahui: '',
-  type_perizinan: '',
-  tanggal: '',
-  jam_keluar: '',
-  jam_kembali: '',
-  keperluan: ''
-});
-
-const [formErrors, setFormErrors] = useState({});
-  
-  const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState({
-    total: 0,
-    diajukan: 0,
-    disetujui: 0,
-    ditolak: 0
-  });
-
-  // Filter states
-  const [filters, setFilters] = useState({
-    search: '',
-    status: '',
-    type: '',
-    tanggal: ''
-  });
-const showToast = (message, type) => {
-  const options = {
-    position: "top-right",
-    autoClose: 5000,
-    hideProgressBar: false,
-    closeOnClick: true,
-    pauseOnHover: true,
-    draggable: true,
-  };
-
-  switch(type) {
-    case 'success':
-      toast.success(message, options);
-      break;
-    case 'error':
-      toast.error(message, options);
-      break;
-    case 'warning':
-      toast.warning(message, options);
-      break;
-    default:
-      toast.info(message, options);
-  }
-};
-
-const canApproveAsTarget = (item) => {
-  if (!currentUser) return false;
-  return String(currentUser.id) === String(item.uid_diketahui) && 
-         item.status_diketahui === null;
-};
-
-// Check apakah user bisa approve sebagai HRD
-const canApproveAsHRD = (item) => {
-  if (!currentUser) return false;
-  return currentUser.role === 'hrd' && item.status_disetujui === null;
-};
-
-// Check apakah bisa tampilkan tombol aksi
-const canShowActionButtons = (item) => {
-  return canApproveAsTarget(item) || canApproveAsHRD(item);
-};
-
-const handlePrint = async (id) => {
-  try {
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-    
-    if (!csrfToken) {
-      throw new Error('CSRF token tidak ditemukan');
-    }
-
-    window.open(`/izin/${id}/pdf`, '_blank');
-    
-  } catch (error) {
-    console.error('Error printing perizinan:', error);
-    showToast('Gagal generate PDF: ' + error.message, 'error'); // ← UBAH INI
-  }
-};
-
-  const getStatusIcon = (status) => {
-  if (status === 'Disetujui') {
-    return <CheckCircle className="w-5 h-5 text-green-600" />;
-  } else if (status === 'Ditolak') {
-    return <XCircle className="w-5 h-5 text-red-600" />;
-  } else {
-    return <span className="text-gray-400">-</span>;
-  }
-  };
-
-  // Fetch users dan heads untuk dropdown
-const fetchUsersAndHeads = async () => {
-  try {
-    const [usersRes, headsRes] = await Promise.all([
-      fetch('/api/userss', { credentials: 'include' }),
-      fetch('/api/heads', { credentials: 'include' })
-    ]);
-    
-    if (usersRes.ok) {
-      const usersData = await usersRes.json();
-      setUsers(usersData.data || usersData);
-    }
-    
-    if (headsRes.ok) {
-      const headsData = await headsRes.json();
-      setHeads(headsData.data || headsData);
-    }
-  } catch (error) {
-    console.error('Error fetching users/heads:', error);
-  }
-};
-
-useEffect(() => {
-  fetchUsersAndHeads();
-}, []);
-
-// Reset form
-const resetForm = () => {
-  setFormData({
+    const [formData, setFormData] = useState({
     uid: '',
     uid_diketahui: '',
     type_perizinan: '',
@@ -155,37 +32,144 @@ const resetForm = () => {
     jam_kembali: '',
     keperluan: ''
   });
-  setFormErrors({});
-};
 
-// Handle form change
-const handleFormChange = (field, value) => {
-  setFormData(prev => ({
-    ...prev,
-    [field]: value
-  }));
-  
-  // Clear error untuk field yang diubah
-  if (formErrors[field]) {
-    setFormErrors(prev => ({
-      ...prev,
-      [field]: ''
-    }));
-  }
-};
+  const [formErrors, setFormErrors] = useState({});
+    
+    const [loading, setLoading] = useState(false);
+    const [stats, setStats] = useState({
+      total: 0,
+      diajukan: 0,
+      disetujui: 0,
+      ditolak: 0
+    });
 
-// Validate form
-const validateForm = () => {
-  const errors = {};
-  
-  if (!formData.uid) errors.uid = 'Karyawan harus dipilih';
-  if (!formData.uid_diketahui) errors.uid_diketahui = 'Head yang mengetahui harus dipilih';
-  if (!formData.type_perizinan) errors.type_perizinan = 'Tipe perizinan harus dipilih';
-  if (!formData.tanggal) errors.tanggal = 'Tanggal harus diisi';
-  if (!formData.keperluan) errors.keperluan = 'Keperluan harus diisi';
-  
-  // Validasi jam untuk type p2 dan p3
-  if (formData.type_perizinan === 'p2' || formData.type_perizinan === 'p3') {
+    // Filter states
+    const [filters, setFilters] = useState({
+      search: '',
+      status: '',
+      type: '',
+      tanggal: ''
+    });
+  const showToast = (message, type) => {
+    const options = {
+      position: "top-right",
+      autoClose: 5000,
+      hideProgressBar: false,
+      closeOnClick: true,
+      pauseOnHover: true,
+      draggable: true,
+    };
+
+    switch(type) {
+      case 'success':
+        toast.success(message, options);
+        break;
+      case 'error':
+        toast.error(message, options);
+        break;
+      case 'warning':
+        toast.warning(message, options);
+        break;
+      default:
+        toast.info(message, options);
+    }
+  };
+
+  const canApproveAsTarget = (item) => {
+    if (!currentUser) return false;
+    return String(currentUser.id) === String(item.uid_diketahui) && 
+          item.status_diketahui === null;
+  };
+
+  // Check apakah user bisa approve sebagai HRD
+  const canApproveAsHRD = (item) => {
+    if (!currentUser) return false;
+    return currentUser.role === 'hrd' && 
+          item.status_disetujui === null &&
+          item.status_diketahui === 'Disetujui'; 
+  };
+
+  // Check apakah bisa tampilkan tombol aksi
+  const canShowActionButtons = (item) => {
+    return canApproveAsTarget(item) || canApproveAsHRD(item);
+  };
+
+  const handlePrint = async (id) => {
+    try {
+      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      
+      if (!csrfToken) {
+        throw new Error('CSRF token tidak ditemukan');
+      }
+
+      window.open(`/izin/${id}/pdf`, '_blank');
+      
+    } catch (error) {
+      console.error('Error printing perizinan:', error);
+      showToast('Gagal generate PDF: ' + error.message, 'error'); // ← UBAH INI
+    }
+  };
+
+    const getStatusIcon = (status) => {
+    if (status === 'Disetujui') {
+      return <CheckCircle className="w-5 h-5 text-green-600" />;
+    } else if (status === 'Ditolak') {
+      return <XCircle className="w-5 h-5 text-red-600" />;
+    } else {
+      return <span className="text-gray-400">-</span>;
+    }
+    };
+
+    // Fetch users dan heads untuk dropdown
+  const fetchUsersAndHeads = async () => {
+    try {
+      const [usersRes, headsRes] = await Promise.all([
+        fetch('/api/userss', { credentials: 'include' }),
+        fetch('/api/heads', { credentials: 'include' })
+      ]);
+      
+      if (usersRes.ok) {
+        const usersData = await usersRes.json();
+        setUsers(usersData.data || usersData);
+      }
+      
+      if (headsRes.ok) {
+        const headsData = await headsRes.json();
+        setHeads(headsData.data || headsData);
+      }
+    } catch (error) {
+      console.error('Error fetching users/heads:', error);
+    }
+  };
+
+  useEffect(() => {
+    fetchUsersAndHeads();
+  }, []);
+
+  // Reset form
+  const resetForm = () => {
+    setFormData({
+      uid: '',
+      uid_diketahui: '',
+      type_perizinan: '',
+      tanggal: '',
+      jam_keluar: '',
+      jam_kembali: '',
+      keperluan: ''
+    });
+    setFormErrors({});
+  };
+
+  // Update validateForm untuk tidak require type_perizinan jika ada jam
+  const validateForm = () => {
+    const errors = {};
+    
+    if (!formData.uid) errors.uid = 'Karyawan harus dipilih';
+    if (!formData.uid_diketahui) errors.uid_diketahui = 'Head yang mengetahui harus dipilih';
+    if (!formData.tanggal) errors.tanggal = 'Tanggal harus diisi';
+    if (!formData.keperluan) errors.keperluan = 'Keperluan harus diisi';
+    
+    // PERUBAHAN: Validasi jam
     if (!formData.jam_keluar) errors.jam_keluar = 'Jam keluar harus diisi';
     if (!formData.jam_kembali) errors.jam_kembali = 'Jam kembali harus diisi';
     
@@ -193,90 +177,137 @@ const validateForm = () => {
       if (formData.jam_keluar >= formData.jam_kembali) {
         errors.jam_kembali = 'Jam kembali harus lebih dari jam keluar';
       }
-    }
-  }
-  
-  setFormErrors(errors);
-  return Object.keys(errors).length === 0;
-};
-
-// Tambahkan helper function untuk fresh CSRF token
-const fetchFreshCsrfToken = async () => {
-  try {
-    const response = await fetch(window.location.href, {
-      method: 'GET',
-      credentials: 'same-origin'
-    });
-    
-    if (response.ok) {
-      const html = await response.text();
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(html, 'text/html');
-      const newToken = doc.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
       
-      if (newToken) {
-        const metaTag = document.querySelector('meta[name="csrf-token"]');
-        if (metaTag) {
-          metaTag.setAttribute('content', newToken);
+      // Auto-set type_perizinan jika belum ada
+      if (!formData.type_perizinan) {
+        const autoType = determinePermissionType(formData.jam_keluar, formData.jam_kembali);
+        if (autoType) {
+          setFormData(prev => ({ ...prev, type_perizinan: autoType }));
+        } else {
+          errors.jam_keluar = 'Durasi waktu tidak valid';
         }
-        return newToken;
       }
     }
-  } catch (error) {
-    console.error('Error fetching fresh CSRF token:', error);
-  }
-  return null;
-};
-
-// Ubah getCsrfToken menjadi arrow function biasa
-const getCsrfToken = () => {
-  return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
-};
-
-const handleSubmit = async (e) => {
-  e.preventDefault();
-  
-  if (!validateForm()) {
-    return;
-  }
-  
-  setLoading(true);
-  setLoadingOverlay(true); // ← TAMBAH INI
-  
-  try {
-    const submitData = { ...formData };
     
-    if (formData.type_perizinan === 'p1') {
-      submitData.jam_keluar = '00:00';
-      submitData.jam_kembali = '00:00';
-    }
-    
-    let csrfToken = getCsrfToken();
-    
-    const response = await fetch('/hrd/perizinan/store', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': csrfToken,
-        'X-Requested-With': 'XMLHttpRequest',
-        'Accept': 'application/json'
-      },
-      credentials: 'same-origin',
-      body: JSON.stringify(submitData)
-    });
+    setFormErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
 
-    if (response.status === 419) {
-      const newToken = await fetchFreshCsrfToken();
+  const fetchFreshCsrfToken = async () => {
+    try {
+      const response = await fetch(window.location.href, {
+        method: 'GET',
+        credentials: 'same-origin'
+      });
       
-      if (!newToken) {
-        throw new Error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.');
+      if (response.ok) {
+        const html = await response.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(html, 'text/html');
+        const newToken = doc.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        
+        if (newToken) {
+          const metaTag = document.querySelector('meta[name="csrf-token"]');
+          if (metaTag) {
+            metaTag.setAttribute('content', newToken);
+          }
+          return newToken;
+        }
       }
+    } catch (error) {
+      console.error('Error fetching fresh CSRF token:', error);
+    }
+    return null;
+  };
 
-      const retryResponse = await fetch('/hrd/perizinan/store', {
+  // Tambahkan setelah fungsi validateForm()
+
+  // Fungsi untuk menghitung durasi dalam jam
+  const calculateDuration = (jamKeluar, jamKembali) => {
+    if (!jamKeluar || !jamKembali) return 0;
+    
+    const [hourOut, minuteOut] = jamKeluar.split(':').map(Number);
+    const [hourIn, minuteIn] = jamKembali.split(':').map(Number);
+    
+    const totalMinutesOut = hourOut * 60 + minuteOut;
+    const totalMinutesIn = hourIn * 60 + minuteIn;
+    
+    const durationMinutes = totalMinutesIn - totalMinutesOut;
+    const durationHours = durationMinutes / 60;
+    
+    return durationHours;
+  };
+
+  // Fungsi untuk menentukan tipe perizinan otomatis
+  const determinePermissionType = (jamKeluar, jamKembali) => {
+    const duration = calculateDuration(jamKeluar, jamKembali);
+    
+    if (duration <= 0) return '';
+    
+    if (duration < 2) {
+      return 'p3'; // Izin Keluar Sementara (< 3 jam)
+    } else if (duration <= 6) {
+      return 'p2'; // Izin Setengah Hari (3-6 jam)
+    } else {
+      return 'p1'; // Izin Seharian (> 6 jam)
+    }
+  };
+
+  // Fungsi untuk mendapatkan label durasi
+  const getDurationLabel = (jamKeluar, jamKembali) => {
+    const duration = calculateDuration(jamKeluar, jamKembali);
+    
+    if (duration <= 0) return '';
+    
+    const hours = Math.floor(duration);
+    const minutes = Math.round((duration - hours) * 60);
+    
+    if (hours === 0) {
+      return `${minutes} menit`;
+    } else if (minutes === 0) {
+      return `${hours} jam`;
+    } else {
+      return `${hours} jam ${minutes} menit`;
+    }
+  };
+
+  const getCsrfToken = () => {
+    return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!validateForm()) {
+      return;
+    }
+    
+    setLoading(true);
+    setLoadingOverlay(true);
+    
+    try {
+      const submitData = { ...formData };
+      
+      // Pastikan type_perizinan sudah terisi (dari auto-detect)
+      if (!submitData.type_perizinan && submitData.jam_keluar && submitData.jam_kembali) {
+        submitData.type_perizinan = determinePermissionType(submitData.jam_keluar, submitData.jam_kembali);
+      }
+      
+      // Validasi final: pastikan type_perizinan ada
+      if (!submitData.type_perizinan) {
+        showToast('Tipe perizinan tidak valid. Mohon periksa kembali jam keluar dan jam kembali.', 'error');
+        setLoading(false);
+        setLoadingOverlay(false);
+        return;
+      }
+      
+      let csrfToken = getCsrfToken();
+      
+      const response = await fetch('/hrd/perizinan/store', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': newToken,
+          'X-CSRF-TOKEN': csrfToken,
           'X-Requested-With': 'XMLHttpRequest',
           'Accept': 'application/json'
         },
@@ -284,985 +315,1071 @@ const handleSubmit = async (e) => {
         body: JSON.stringify(submitData)
       });
 
-      if (!retryResponse.ok) {
-        const errorData = await retryResponse.json();
+      // Handle CSRF token expired (419)
+      if (response.status === 419) {
+        const newToken = await fetchFreshCsrfToken();
+        
+        if (!newToken) {
+          throw new Error('Gagal mendapatkan CSRF token baru. Silakan refresh halaman.');
+        }
+
+        // Retry request dengan token baru
+        const retryResponse = await fetch('/hrd/perizinan/store', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRF-TOKEN': newToken,
+            'X-Requested-With': 'XMLHttpRequest',
+            'Accept': 'application/json'
+          },
+          credentials: 'same-origin',
+          body: JSON.stringify(submitData)
+        });
+
+        if (!retryResponse.ok) {
+          const errorData = await retryResponse.json();
+          if (errorData.errors) {
+            setFormErrors(errorData.errors);
+          }
+          throw new Error(errorData.message || `HTTP error! status: ${retryResponse.status}`);
+        }
+
+        const result = await retryResponse.json();
+        
+        if (result.success) {
+          showToast('Perizinan berhasil ditambahkan!', 'success');
+          setShowAddModal(false);
+          resetForm();
+          fetchPerizinans();
+          setLoadingOverlay(false);
+        }
+        return;
+      }
+
+      // Handle response errors
+      if (!response.ok) {
+        const errorData = await response.json();
         if (errorData.errors) {
           setFormErrors(errorData.errors);
         }
-        throw new Error(errorData.message || `HTTP error! status: ${retryResponse.status}`);
+        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
       }
 
-      const result = await retryResponse.json();
-      
+      // Success response
+      const result = await response.json();
+
       if (result.success) {
-        showToast('Perizinan berhasil ditambahkan!', 'success'); // ← UBAH INI
+        showToast('Perizinan berhasil ditambahkan!', 'success'); 
         setShowAddModal(false);
         resetForm();
         fetchPerizinans();
-        setLoadingOverlay(false); // ← TAMBAH INI
+        setLoadingOverlay(false);
       }
+    } catch (error) {
+      console.error('Error adding perizinan:', error);
+      setLoadingOverlay(false); 
+      
+      if (error.message.includes('419') || error.message.includes('CSRF')) {
+        showToast('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.', 'error'); 
+        setTimeout(() => window.location.reload(), 2000);
+      } else {
+        showToast('Gagal menambahkan perizinan: ' + error.message, 'error'); 
+      }
+    } finally {
+      setLoading(false);
+      setLoadingOverlay(false); 
+    }
+  };
+  const getStatusDisplay = (status) => {
+    if (status === 'Disetujui') {
+      return (
+        <div className="flex items-center gap-1.5 text-green-700">
+          <CheckCircle className="w-4 h-4" />
+          <span className="text-sm font-medium">Disetujui</span>
+        </div>
+      );
+    } else if (status === 'Ditolak') {
+      return (
+        <div className="flex items-center gap-1.5 text-red-700">
+          <XCircle className="w-4 h-4" />
+          <span className="text-sm font-medium">Ditolak</span>
+        </div>
+      );
+    } else {
+      return (
+              <div className="flex items-center gap-1.5 text-yellow-600">
+          <Clock className="w-4 h-4" />
+          <span className="text-sm font-medium">Menunggu</span>
+        </div>
+
+      )
+    }
+  };
+
+
+
+    // Hitung filter aktif
+    const activeFiltersCount = Object.values(filters).filter(v => v !== '').length;
+
+    const getTypeLabel = (type) => {
+      const types = {
+      'p1': 'P1',
+      'p2': 'P2',
+      'p3': 'P3'
+      };
+
+      return types[type] || type;
+    };
+
+    // Handle form change - DENGAN AUTO-DETECT
+  const handleFormChange = (field, value) => {
+    setFormData(prev => {
+      const newData = {
+        ...prev,
+        [field]: value
+      };
+      
+      // AUTO-DETECT TIPE PERIZINAN berdasarkan jam
+      if (field === 'jam_keluar' || field === 'jam_kembali') {
+        const jamKeluar = field === 'jam_keluar' ? value : prev.jam_keluar;
+        const jamKembali = field === 'jam_kembali' ? value : prev.jam_kembali;
+        
+        if (jamKeluar && jamKembali) {
+          const autoType = determinePermissionType(jamKeluar, jamKembali);
+          if (autoType) {
+            newData.type_perizinan = autoType;
+          }
+        }
+      }
+      
+      return newData;
+    });
+    
+    // Clear error untuk field yang diubah
+    if (formErrors[field]) {
+      setFormErrors(prev => ({
+        ...prev,
+        [field]: ''
+      }));
+    }
+  };
+    const resetFilters = () => {
+      setFilters({
+        search: '',
+        status: '',
+        type: '',
+        tanggal: ''
+      });
+    };
+
+  // Tambahkan di akhir fungsi fetchPerizinans (opsional, jika ingin notifikasi saat refresh):
+  const fetchPerizinans = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.status) params.append('status', filters.status);
+      if (filters.type) params.append('type', filters.type);
+      if (filters.search) params.append('search', filters.search);
+      if (filters.tanggal) params.append('tanggal', filters.tanggal);
+
+      const response = await fetch(`/hrd/perizinan?${params.toString()}`, {
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include'
+      });
+
+      if (!response.ok) throw new Error('Gagal mengambil data');
+
+      const result = await response.json();
+
+      if (result && result.perizinans) {
+        const data = result.perizinans.data || result.perizinans;
+        setPerizinans(data);
+        setFilteredData(data);
+        
+        if (result.stats) {
+          setStats(result.stats);
+        }
+        
+        // OPSIONAL: Toast saat data berhasil di-refresh
+        // showToast('Data berhasil diperbarui', 'info');
+      }
+    } catch (error) {
+      console.error('Error fetching perizinans:', error);
+      showToast('Gagal mengambil data perizinan', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+    // Re-fetch ketika filter berubah
+    useEffect(() => {
+      const timer = setTimeout(() => {
+        fetchPerizinans();
+      }, 500);
+
+      return () => clearTimeout(timer);
+    }, [filters.search, filters.status, filters.type, filters.tanggal]);
+
+    // Initial fetch
+    useEffect(() => {
+      fetchPerizinans();
+    }, []);
+  useEffect(() => {
+    const handleInertiaFinish = (event) => {
+      // Cek apakah ada flash message dari server
+      const flashMessage = event.detail?.page?.props?.flash;
+      
+      if (flashMessage?.success) {
+        showToast(flashMessage.success, 'success');
+      }
+      
+      if (flashMessage?.error) {
+        showToast(flashMessage.error, 'error');
+      }
+    };
+
+    // Listen to Inertia finish event
+    document.addEventListener('inertia:finish', handleInertiaFinish);
+
+    return () => {
+      document.removeEventListener('inertia:finish', handleInertiaFinish);
+    };
+  }, []);
+
+    const getStatusBadge = (status) => {
+      const styles = {
+        'Diajukan': 'bg-yellow-100 text-yellow-800 border-yellow-300',
+        'Disetujui': 'bg-green-100 text-green-800 border-green-300',
+        'Ditolak': 'bg-red-100 text-red-800 border-red-300'
+      };
+      return styles[status] || 'bg-gray-100 text-gray-800 border-gray-300';
+    };
+
+    const handleApprove = (perizinan) => {
+      setSelectedPerizinan(perizinan);
+      setShowApprovalModal(true);
+      setApprovalAction('approve');
+      setApprovalNote('');
+    };
+
+    const handleReject = (perizinan) => {
+      setSelectedPerizinan(perizinan);
+      setShowRejectModal(true);
+    };
+
+
+
+  // Ganti confirmApproval
+  // Ganti confirmApproval dengan ini:
+  const confirmApproval = () => {
+    setLoadingOverlay(true);
+    
+    const isHRD = currentUser.role === 'hrd';
+    const message = isHRD 
+      ? 'Perizinan berhasil disetujui!' 
+      : 'Perizinan berhasil diterima!';
+    
+    router.post(`/hrd/perizinan/${selectedPerizinan.id}/approve`, {
+      catatan: approvalNote
+    }, {
+      preserveState: false,
+      preserveScroll: false,
+      onSuccess: () => {
+        showToast(message, 'success'); // ← Toast muncul di sini
+        setShowApprovalModal(false);
+        setSelectedPerizinan(null);
+        setApprovalNote('');
+        setLoadingOverlay(false);
+      },
+      onError: (errors) => {
+        console.error('Error approving perizinan:', errors);
+        showToast('Gagal memproses persetujuan', 'error');
+        setLoadingOverlay(false);
+      }
+    });
+  };
+
+  // Ganti confirmReject dengan ini:
+  const confirmReject = () => {
+    if (!rejectReason.trim()) {
+      showToast('Catatan penolakan harus diisi', 'warning');
       return;
     }
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      if (errorData.errors) {
-        setFormErrors(errorData.errors);
-      }
-      throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-
-    if (result.success) {
-      showToast('Perizinan berhasil ditambahkan!', 'success'); 
-      setShowAddModal(false);
-      resetForm();
-      fetchPerizinans();
-      setLoadingOverlay(false);
-    }
-  } catch (error) {
-    console.error('Error adding perizinan:', error);
-    setLoadingOverlay(false); 
-    if (error.message.includes('419') || error.message.includes('CSRF')) {
-      showToast('Session Anda telah berakhir. Halaman akan di-refresh untuk memperbarui session.', 'error'); 
-      setTimeout(() => window.location.reload(), 2000);
-    } else {
-      showToast('Gagal menambahkan perizinan: ' + error.message, 'error'); 
-    }
-  } finally {
-    setLoading(false);
-    setLoadingOverlay(false); 
-  }
-};
-
-const getStatusDisplay = (status) => {
-  if (status === 'Disetujui') {
-    return (
-      <div className="flex items-center gap-1.5 text-green-700">
-        <CheckCircle className="w-4 h-4" />
-        <span className="text-sm font-medium">Disetujui</span>
-      </div>
-    );
-  } else if (status === 'Ditolak') {
-    return (
-      <div className="flex items-center gap-1.5 text-red-700">
-        <XCircle className="w-4 h-4" />
-        <span className="text-sm font-medium">Ditolak</span>
-      </div>
-    );
-  } else {
-    return (
-            <div className="flex items-center gap-1.5 text-yellow-600">
-        <Clock className="w-4 h-4" />
-        <span className="text-sm font-medium">Menunggu</span>
-      </div>
-
-    )
-  }
-};
-
-
-
-  // Hitung filter aktif
-  const activeFiltersCount = Object.values(filters).filter(v => v !== '').length;
-
-  const getTypeLabel = (type) => {
-    const types = {
-    'p1': 'P1',
-    'p2': 'P2',
-    'p3': 'P3'
-    };
-
-    return types[type] || type;
-  };
-
-  const resetFilters = () => {
-    setFilters({
-      search: '',
-      status: '',
-      type: '',
-      tanggal: ''
-    });
-  };
-
-// Tambahkan di akhir fungsi fetchPerizinans (opsional, jika ingin notifikasi saat refresh):
-const fetchPerizinans = async () => {
-  setLoading(true);
-  try {
-    const params = new URLSearchParams();
-    if (filters.status) params.append('status', filters.status);
-    if (filters.type) params.append('type', filters.type);
-    if (filters.search) params.append('search', filters.search);
-    if (filters.tanggal) params.append('tanggal', filters.tanggal);
-
-    const response = await fetch(`/hrd/perizinan?${params.toString()}`, {
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
+    setLoadingOverlay(true);
+    
+    router.post(`/hrd/perizinan/${selectedPerizinan.id}/reject`, {
+      catatan: rejectReason
+    }, {
+      preserveState: false,
+      preserveScroll: false,
+      onSuccess: () => {
+        showToast('Perizinan berhasil ditolak', 'success'); // ← Toast muncul di sini
+        setShowRejectModal(false);
+        setSelectedPerizinan(null);
+        setRejectReason('');
+        setLoadingOverlay(false);
       },
-      credentials: 'include'
-    });
-
-    if (!response.ok) throw new Error('Gagal mengambil data');
-
-    const result = await response.json();
-
-    if (result && result.perizinans) {
-      const data = result.perizinans.data || result.perizinans;
-      setPerizinans(data);
-      setFilteredData(data);
-      
-      if (result.stats) {
-        setStats(result.stats);
+      onError: (errors) => {
+        console.error('Error rejecting perizinan:', errors);
+        showToast('Gagal menolak perizinan', 'error');
+        setLoadingOverlay(false);
       }
-      
-      // OPSIONAL: Toast saat data berhasil di-refresh
-      // showToast('Data berhasil diperbarui', 'info');
-    }
-  } catch (error) {
-    console.error('Error fetching perizinans:', error);
-    showToast('Gagal mengambil data perizinan', 'error');
-  } finally {
-    setLoading(false);
-  }
-};
-
-  // Re-fetch ketika filter berubah
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      fetchPerizinans();
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [filters.search, filters.status, filters.type, filters.tanggal]);
-
-  // Initial fetch
-  useEffect(() => {
-    fetchPerizinans();
-  }, []);
-useEffect(() => {
-  const handleInertiaFinish = (event) => {
-    // Cek apakah ada flash message dari server
-    const flashMessage = event.detail?.page?.props?.flash;
-    
-    if (flashMessage?.success) {
-      showToast(flashMessage.success, 'success');
-    }
-    
-    if (flashMessage?.error) {
-      showToast(flashMessage.error, 'error');
-    }
-  };
-
-  // Listen to Inertia finish event
-  document.addEventListener('inertia:finish', handleInertiaFinish);
-
-  return () => {
-    document.removeEventListener('inertia:finish', handleInertiaFinish);
-  };
-}, []);
-
-  const getStatusBadge = (status) => {
-    const styles = {
-      'Diajukan': 'bg-yellow-100 text-yellow-800 border-yellow-300',
-      'Disetujui': 'bg-green-100 text-green-800 border-green-300',
-      'Ditolak': 'bg-red-100 text-red-800 border-red-300'
-    };
-    return styles[status] || 'bg-gray-100 text-gray-800 border-gray-300';
-  };
-
-  const handleApprove = (perizinan) => {
-    setSelectedPerizinan(perizinan);
-    setShowApprovalModal(true);
-    setApprovalAction('approve');
-    setApprovalNote('');
-  };
-
-  const handleReject = (perizinan) => {
-    setSelectedPerizinan(perizinan);
-    setShowRejectModal(true);
-  };
-
-
-
-// Ganti confirmApproval
-// Ganti confirmApproval dengan ini:
-const confirmApproval = () => {
-  setLoadingOverlay(true);
-  
-  const isHRD = currentUser.role === 'hrd';
-  const message = isHRD 
-    ? 'Perizinan berhasil disetujui!' 
-    : 'Perizinan berhasil diterima!';
-  
-  router.post(`/hrd/perizinan/${selectedPerizinan.id}/approve`, {
-    catatan: approvalNote
-  }, {
-    preserveState: false,
-    preserveScroll: false,
-    onSuccess: () => {
-      showToast(message, 'success'); // ← Toast muncul di sini
-      setShowApprovalModal(false);
-      setSelectedPerizinan(null);
-      setApprovalNote('');
-      setLoadingOverlay(false);
-    },
-    onError: (errors) => {
-      console.error('Error approving perizinan:', errors);
-      showToast('Gagal memproses persetujuan', 'error');
-      setLoadingOverlay(false);
-    }
-  });
-};
-
-// Ganti confirmReject dengan ini:
-const confirmReject = () => {
-  if (!rejectReason.trim()) {
-    showToast('Catatan penolakan harus diisi', 'warning');
-    return;
-  }
-
-  setLoadingOverlay(true);
-  
-  router.post(`/hrd/perizinan/${selectedPerizinan.id}/reject`, {
-    catatan: rejectReason
-  }, {
-    preserveState: false,
-    preserveScroll: false,
-    onSuccess: () => {
-      showToast('Perizinan berhasil ditolak', 'success'); // ← Toast muncul di sini
-      setShowRejectModal(false);
-      setSelectedPerizinan(null);
-      setRejectReason('');
-      setLoadingOverlay(false);
-    },
-    onError: (errors) => {
-      console.error('Error rejecting perizinan:', errors);
-      showToast('Gagal menolak perizinan', 'error');
-      setLoadingOverlay(false);
-    }
-  });
-};
-
-
-const handleDelete = async (id) => {
-  if (!confirm('Apakah Anda yakin ingin menghapus data perizinan ini?')) {
-    return;
-  }
-
-  try {
-    setLoadingOverlay(true); // ← TAMBAH INI
-    const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-    
-    if (!csrfToken) {
-      throw new Error('CSRF token tidak ditemukan');
-    }
-    
-    const response = await fetch(`/perizinan/${id}`, {
-      method: 'DELETE',
-      headers: {
-        'Accept': 'application/json',
-        'Content-Type': 'application/json',
-        'X-CSRF-TOKEN': csrfToken,
-        'X-Requested-With': 'XMLHttpRequest'
-      },
-      credentials: 'include'
     });
+  };
 
-    if (!response.ok) throw new Error('Gagal menghapus perizinan');
 
-    showToast('Data perizinan berhasil dihapus', 'success'); // ← UBAH INI
-    fetchPerizinans();
-    setLoadingOverlay(false); // ← TAMBAH INI
-  } catch (error) {
-    console.error('Error deleting perizinan:', error);
-    showToast('Gagal menghapus perizinan: ' + error.message, 'error'); // ← UBAH INI
-    setLoadingOverlay(false); // ← TAMBAH INI
-  }
-};
+  const handleDelete = async (id) => {
+    if (!confirm('Apakah Anda yakin ingin menghapus data perizinan ini?')) {
+      return;
+    }
 
-  return (
-    <LayoutTemplate>
-        <Head title="Perizinan Keluar Kantor" />
-        <div className="min-h-screen bg-gray-50 p-6">
-      <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-3xl font-bold text-gray-900">Kelola Perizinan</h1>
-          <button
-            onClick={() => {
-              resetForm();
-              setShowAddModal(true);
-            }}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
-          >
-            <Plus className="w-5 h-5" />
-            Tambah Perizinan
-          </button>
-        </div>
+    setLoadingOverlay(true);
+    
+    router.delete(`/hrd/perizinan/${id}`, {
+      preserveState: false,
+      preserveScroll: false,
+      onSuccess: () => {
+        showToast('Data perizinan berhasil dihapus', 'success');
+        setLoadingOverlay(false);
+      },
+      onError: (errors) => {
+        console.error('Error deleting perizinan:', errors);
+        showToast('Gagal menghapus perizinan', 'error');
+        setLoadingOverlay(false);
+      }
+    });
+  };
 
-{/* Search & Filter Button */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
-          <div className="p-4">
-            {/* Search Bar & Filter Button */}
-            <div className="flex gap-3">
-              {/* Search Input */}
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="text"
-                  placeholder="Cari nama karyawan atau jabatan..."
-                  value={filters.search}
-                  onChange={(e) => setFilters({...filters, search: e.target.value})}
-                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                />
-              </div>
 
-              {/* Filter Toggle Button */}
-              <button
-                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-                className={`flex items-center gap-2 px-4 py-2.5 border rounded-lg transition-colors relative ${
-                  showFilterDropdown 
-                    ? 'bg-blue-50 border-blue-500 text-blue-700' 
-                    : 'border-gray-300 text-gray-700 hover:bg-gray-50'
-                }`}
-              >
-                <Filter className="w-5 h-5" />
-                <span className="font-medium">Filter</span>
-                {activeFiltersCount > 0 && (
-                  <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
-                    {activeFiltersCount}
-                  </span>
-                )}
-              </button>
-            </div>
-
-            {/* Filter Dropdown - Muncul ketika tombol diklik */}
-            {showFilterDropdown && (
-              <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <div className="flex flex-col sm:flex-row gap-3 items-end">
-                  {/* Filter Status */}
-                  <div className="flex-1 min-w-0">
-                    <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                      Status
-                    </label>
-                    <select
-                      value={filters.status}
-                      onChange={(e) => setFilters({...filters, status: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white cursor-pointer text-sm"
-                    >
-                      <option value="">Semua Status</option>
-                      <option value="Diajukan">Diajukan</option>
-                      <option value="Disetujui">Disetujui</option>
-                      <option value="Ditolak">Ditolak</option>
-                    </select>
-                  </div>
-
-                  {/* Filter Tipe Perizinan */}
-                  <div className="flex-1 min-w-0">
-                    <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                      Tipe Izin
-                    </label>
-                    <select
-                      value={filters.type}
-                      onChange={(e) => setFilters({...filters, type: e.target.value})}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white cursor-pointer text-sm"
-                    >
-                      <option value="">Semua Tipe Izin</option>
-                      <option value="p1">Izin Seharian(P1)</option>
-                      <option value="p2">Izin Setengah Hari (P2)</option>
-                      <option value="p3">Izin Keluar Sementara(P3)</option>
-                    </select>
-                  </div>
-
-                  {/* Filter Tanggal */}
-                  <div className="flex-1 min-w-0">
-                    <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                      Tanggal
-                    </label>
-                    <div className="relative">
-                      <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
-                      <input
-                        type="date"
-                        value={filters.tanggal}
-                        onChange={(e) => setFilters({...filters, tanggal: e.target.value})}
-                        className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white cursor-pointer text-sm"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Reset Button */}
-                  {activeFiltersCount > 0 && (
-                    <button
-                      onClick={resetFilters}
-                      className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:text-gray-900 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition-colors whitespace-nowrap"
-                    >
-                      <X className="w-4 h-4" />
-                      <span className="hidden sm:inline">Reset</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Active Filters Display */}
-            {activeFiltersCount > 0 && (
-              <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-200">
-                <span className="text-xs text-gray-500 self-center">Filter aktif:</span>
-                {filters.status && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                    Status: {filters.status}
-                    <button onClick={() => setFilters({...filters, status: ''})} className="hover:bg-blue-200 rounded-full p-0.5">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                )}
-                {filters.type && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                    Tipe: {filters.type === 'p1' ? 'Seharian' : filters.type === 'p2' ? 'Keluar Kantor' : 'Datang Terlambat'}
-                    <button onClick={() => setFilters({...filters, type: ''})} className="hover:bg-blue-200 rounded-full p-0.5">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                )}
-                {filters.tanggal && (
-                  <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
-                    Tanggal: {new Date(filters.tanggal).toLocaleDateString('id-ID')}
-                    <button onClick={() => setFilters({...filters, tanggal: ''})} className="hover:bg-blue-200 rounded-full p-0.5">
-                      <X className="w-3 h-3" />
-                    </button>
-                  </span>
-                )}
-              </div>
-            )}
+    return (
+      <LayoutTemplate>
+          <Head title="Perizinan Keluar Kantor" />
+          <div className="min-h-screen bg-gray-50 p-6">
+        <div className="max-w-7xl mx-auto">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-4">
+            <h1 className="text-3xl font-bold text-gray-900">Kelola Perizinan</h1>
+            <button
+              onClick={() => {
+                resetForm();
+                setShowAddModal(true);
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors font-medium"
+            >
+              <Plus className="w-5 h-5" />
+              Tambah Perizinan
+            </button>
           </div>
-        </div>
 
-  {/* Table */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-          {loading ? (
-            <div className="p-8 text-center">
-              <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <p className="mt-2 text-gray-600">Memuat data...</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Karyawan
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Tipe Izin
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Tanggal
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Waktu
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Diketahui Oleh
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Diterima Oleh
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Status
-                    </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      Aksi
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {filteredData.length === 0 ? (
-                    <tr>
-                      <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
-                        Tidak ada data perizinan
-                      </td>
-                    </tr>
-                  ) : (
-                    filteredData.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        {/* Karyawan */}
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <div>
-                              <div className="font-medium text-gray-900">{item.user?.name || 'N/A'}</div>
-                            </div>
-                          </div>
-                        </td>
-                        
-                        {/* Tipe Izin */}
-                        <td className="px-6 py-4">
-                          <span className="text-sm text-gray-900">{getTypeLabel(item.type_perizinan)}</span>
-                        </td>
-                        
-                        {/* Tanggal */}
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2 text-sm text-gray-900">
-                            <Calendar className="w-4 h-4 text-gray-400" />
-                            {new Date(item.tanggal).toLocaleDateString('id-ID')}
-                          </div>
-                        </td>
-                        
-                        {/* Waktu */}
-                        <td className="px-6 py-4">
-                          {item.type_perizinan === 'p1' ? (
-                            <span className="text-sm text-gray-500">Seharian</span>
-                          ) : (
-                            <div className="flex items-center gap-2 text-sm text-gray-900">
-                              <Clock className="w-4 h-4 text-gray-400" />
-                              {item.jam_keluar} - {item.jam_kembali}
-                            </div>
-                          )}
-                        </td>
-                        
-                        {/* Diketahui Oleh - UBAH: Hanya tampilkan nama, tanpa status */}
-                        <td className="px-6 py-4">
-  <div className="space-y-2">
-   
-    
-    {/* Status - BARU */}
-    <div className="mt-2">
-      {getStatusDisplay(item.status_diketahui)}
-    </div>
-    
-    {/* Tombol Approve untuk Target User - BARU */}
-    {canApproveAsTarget(item) && (
-      <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
-        <button
-          onClick={() => handleApprove(item)}
-          className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors flex items-center gap-1"
-          title="Terima"
-        >
-          <Check className="w-3.5 h-3.5" />
-          Terima
-        </button>
-        <button
-          onClick={() => handleReject(item)}
-          className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors flex items-center gap-1"
-          title="Tolak"
-        >
-          <X className="w-3.5 h-3.5" />
-          Tolak
-        </button>
-      </div>
+  {/* Search & Filter Button */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 mb-4">
+            <div className="p-4">
+              {/* Search Bar & Filter Button */}
+              <div className="flex gap-3">
+                {/* Search Input */}
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    placeholder="Cari nama karyawan atau jabatan..."
+                    value={filters.search}
+                    onChange={(e) => setFilters({...filters, search: e.target.value})}
+                    className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                  />
+                </div>
+
+                {/* Filter Toggle Button */}
+                <button
+                  onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                  className={`flex items-center gap-2 px-4 py-2.5 border rounded-lg transition-colors relative ${
+                    showFilterDropdown 
+                      ? 'bg-blue-50 border-blue-500 text-blue-700' 
+                      : 'border-gray-300 text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <Filter className="w-5 h-5" />
+                  <span className="font-medium">Filter</span>
+                  {activeFiltersCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                      {activeFiltersCount}
+                    </span>
+                  )}
+                </button>
+              </div>
+
+              {/* Filter Dropdown - Muncul ketika tombol diklik */}
+              {showFilterDropdown && (
+                <div className="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <div className="flex flex-col sm:flex-row gap-3 items-end">
+                    {/* Filter Status */}
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                        Status
+                      </label>
+                      <select
+                        value={filters.status}
+                        onChange={(e) => setFilters({...filters, status: e.target.value})}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white cursor-pointer text-sm"
+                      >
+                        <option value="">Semua Status</option>
+                        <option value="Diajukan">Diajukan</option>
+                        <option value="Disetujui">Disetujui</option>
+                        <option value="Ditolak">Ditolak</option>
+                      </select>
+                    </div>
+
+                    {/* Filter Tipe Perizinan */}
+  <div className="flex-1 min-w-0">
+    <label className="block text-xs font-medium text-gray-700 mb-1.5">
+      Tipe Izin
+    </label>
+    <select
+      value={filters.type}
+      onChange={(e) => setFilters({...filters, type: e.target.value})}
+      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white cursor-pointer text-sm"
+    >
+      <option value="">Semua Tipe Izin</option>
+      <option value="p1">Izin Seharian(P1)</option>
+      <option value="p2">Izin Setengah Hari (P2)</option>
+      <option value="p3">Izin Keluar Sementara(P3)</option>
+    </select>
+  </div>
+
+  {/* Tanggal */}
+  <div>
+    <label className="block text-sm font-medium text-gray-700 mb-2">
+      Tanggal <span className="text-red-500">*</span>
+    </label>
+    <input
+      type="date"
+      value={formData.tanggal}
+      onChange={(e) => handleFormChange('tanggal', e.target.value)}
+      className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
+        formErrors.tanggal ? 'border-red-500' : 'border-gray-300'
+      }`}
+    />
+    {formErrors.tanggal && (
+      <p className="mt-1 text-sm text-red-600">{formErrors.tanggal}</p>
     )}
   </div>
-</td>
 
-                        
-                        {/* Status HRD dengan tombol aksi */}
-                       <td className="px-6 py-4">
-                          <div className="space-y-2">
-                            {/* Status - BARU */}
-                            <div>
-                              {getStatusDisplay(item.status_disetujui)}
-                            </div>
-                            
-                            {/* Tombol Approve untuk HRD - BARU */}
-                            {canApproveAsHRD(item) && (
-                              <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
-                                <button
-                                  onClick={() => handleApprove(item)}
-                                  className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors flex items-center gap-1"
-                                  title="Setujui"
-                                >
-                                  <Check className="w-3.5 h-3.5" />
-                                  Setujui
-                                </button>
-                                <button
-                                  onClick={() => handleReject(item)}
-                                  className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors flex items-center gap-1"
-                                  title="Tolak"
-                                >
-                                  <X className="w-3.5 h-3.5" />
-                                  Tolak
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        </td>
-
-                          
-                        {/* Status Keseluruhan */}
-                        <td className="px-6 py-4">
-                          <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${getStatusBadge(item.status)}`}>
-                            {item.status}
-                          </span>
-                        </td>
-                          
-                        {/* Aksi */}
-                        {/* Aksi - HANYA UNTUK VIEW/PRINT/DELETE */}
-<td className="px-6 py-4">
-  <div className="flex items-center gap-2">
-    <button
-      onClick={() => {
-        setSelectedPerizinan(item);
-        setShowDetailModal(true);
-      }}
-      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-      title="Lihat Detail"
-    >
-      <Eye className="w-4 h-4" />
-    </button>
-    <button
-      onClick={() => handlePrint(item.id)}
-      className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-      title="Print PDF"
-    >
-      <Printer className="w-4 h-4" />
-    </button>
-    <button
-      onClick={() => handleDelete(item.id)}
-      className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-      title="Hapus"
-    >
-      <Trash2 className="w-4 h-4" />
-    </button>
+  {/* Jam Keluar & Kembali - SEKARANG SELALU TAMPIL */}
+  <div className="grid grid-cols-2 gap-4">
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        Jam Keluar <span className="text-red-500">*</span>
+      </label>
+      <input
+        type="time"
+        value={formData.jam_keluar}
+        onChange={(e) => handleFormChange('jam_keluar', e.target.value)}
+        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
+          formErrors.jam_keluar ? 'border-red-500' : 'border-gray-300'
+        }`}
+      />
+      {formErrors.jam_keluar && (
+        <p className="mt-1 text-sm text-red-600">{formErrors.jam_keluar}</p>
+      )}
+    </div>
+    <div>
+      <label className="block text-sm font-medium text-gray-700 mb-2">
+        Jam Kembali <span className="text-red-500">*</span>
+      </label>
+      <input
+        type="time"
+        value={formData.jam_kembali}
+        onChange={(e) => handleFormChange('jam_kembali', e.target.value)}
+        className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
+          formErrors.jam_kembali ? 'border-red-500' : 'border-gray-300'
+        }`}
+      />
+      {formErrors.jam_kembali && (
+        <p className="mt-1 text-sm text-red-600">{formErrors.jam_kembali}</p>
+      )}
+    </div>
   </div>
-</td>
 
-                      </tr>
-                    ))
-                  )}
-                </tbody>
 
-              </table>
-            </div>
-          )}
-        </div>
+                    {/* Filter Tanggal */}
+                    <div className="flex-1 min-w-0">
+                      <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                        Tanggal
+                      </label>
+                      <div className="relative">
+                        <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        <input
+                          type="date"
+                          value={filters.tanggal}
+                          onChange={(e) => setFilters({...filters, tanggal: e.target.value})}
+                          className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none bg-white cursor-pointer text-sm"
+                        />
+                      </div>
+                    </div>
 
-        {/* Detail Modal */}
-        {showDetailModal && selectedPerizinan && (
-            
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-              <div className="p-6 border-b border-gray-200">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xl font-semibold text-gray-900">Detail Perizinan</h3>
-                  <button
-                    onClick={() => setShowDetailModal(false)}
-                    className="text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="w-6 h-6" />
-                  </button>
-                </div>
-              </div>
-             <div className="p-6 space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Nama Karyawan</label>
-                  <p className="mt-1 text-gray-900">{selectedPerizinan.user.name}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Jabatan</label>
-                  <p className="mt-1 text-gray-900">{selectedPerizinan.user.jabatan}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Email</label>
-                  <p className="mt-1 text-gray-900">{selectedPerizinan.user.email}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Tipe Perizinan</label>
-                  <p className="mt-1 text-gray-900">{getTypeLabel(selectedPerizinan.type_perizinan)}</p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Tanggal</label>
-                  <p className="mt-1 text-gray-900">
-                    {new Date(selectedPerizinan.tanggal).toLocaleDateString('id-ID', { 
-                      weekday: 'long', 
-                      year: 'numeric', 
-                      month: 'long', 
-                      day: 'numeric' 
-                    })}
-                  </p>
-                </div>
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Waktu</label>
-                  <p className="mt-1 text-gray-900">
-                    {selectedPerizinan.type_perizinan === 'p1' 
-                      ? 'Seharian' 
-                      : `${selectedPerizinan.jam_keluar} - ${selectedPerizinan.jam_kembali}`
-                    }
-                  </p>
-                </div>
-                  
-                {/* Diketahui Oleh - UBAH: Hanya nama, tanpa status */}
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Diketahui Oleh</label>
-                  <p className="mt-1 text-gray-900">{selectedPerizinan?.diketahui_oleh?.name || "-"}</p>
-                  <p className="text-xs text-gray-500">{selectedPerizinan?.diketahui_oleh?.jabatan || ""}</p>
-                </div>
-                  
-                {/* Status HRD - UBAH */}
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Status HRD</label>
-                  <div className="mt-1">
-                    {getStatusDisplay(selectedPerizinan.status_disetujui)}
+                    {/* Reset Button */}
+                    {activeFiltersCount > 0 && (
+                      <button
+                        onClick={resetFilters}
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:text-gray-900 bg-white hover:bg-gray-100 border border-gray-300 rounded-lg transition-colors whitespace-nowrap"
+                      >
+                        <X className="w-4 h-4" />
+                        <span className="hidden sm:inline">Reset</span>
+                      </button>
+                    )}
                   </div>
                 </div>
-                  
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Disetujui Oleh</label>
-                  <p className="mt-1 text-gray-900">{selectedPerizinan?.disetujui_oleh?.name || "Belum disetujui"}</p>
-                </div>
-                <div>
-                  
-                  <label className="text-sm font-medium text-gray-500">Status Keseluruhan</label>
-                  <p className="mt-1">
-                    <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${getStatusBadge(selectedPerizinan.status)}`}>
-                      {selectedPerizinan.status}
+              )}
+
+              {/* Active Filters Display */}
+              {activeFiltersCount > 0 && (
+                <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-gray-200">
+                  <span className="text-xs text-gray-500 self-center">Filter aktif:</span>
+                  {filters.status && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                      Status: {filters.status}
+                      <button onClick={() => setFilters({...filters, status: ''})} className="hover:bg-blue-200 rounded-full p-0.5">
+                        <X className="w-3 h-3" />
+                      </button>
                     </span>
-                  </p>
-                </div>
-              </div>
-                  
-              <div>
-                <label className="text-sm font-medium text-gray-500">Keperluan</label>
-                <p className="mt-1 text-gray-900 bg-gray-50 p-3 rounded-lg">
-                  {selectedPerizinan.keperluan}
-                </p>
-              </div>
-              {selectedPerizinan.catatan && (
-                <div>
-                  <label className="text-sm font-medium text-gray-500">Catatan</label>
-                  <p className="mt-1 text-gray-900 bg-gray-50 p-3 rounded-lg border-l-4 border-blue-500">
-                    {selectedPerizinan.catatan}
-                  </p>
+                  )}
+                  {filters.type && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                      Tipe: {filters.type === 'p1' ? 'Seharian' : filters.type === 'p2' ? 'Keluar Kantor' : 'Datang Terlambat'}
+                      <button onClick={() => setFilters({...filters, type: ''})} className="hover:bg-blue-200 rounded-full p-0.5">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
+                  {filters.tanggal && (
+                    <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                      Tanggal: {new Date(filters.tanggal).toLocaleDateString('id-ID')}
+                      <button onClick={() => setFilters({...filters, tanggal: ''})} className="hover:bg-blue-200 rounded-full p-0.5">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  )}
                 </div>
               )}
             </div>
-
-             <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
-  <button
-    onClick={() => setShowDetailModal(false)}
-    className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-  >
-    Tutup
-  </button>
-  {/* Hanya tampil untuk HRD */}
-  {canShowActionButtons(selectedPerizinan) && (
-    <>
-      <button
-        onClick={() => {
-          setShowDetailModal(false);
-          handleReject(selectedPerizinan);
-        }}
-        className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-2"
-      >
-        <X className="w-4 h-4" />
-        Tolak
-      </button>
-      <button
-        onClick={() => {
-          setShowDetailModal(false);
-          handleApprove(selectedPerizinan);
-        }}
-        className="px-4 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2"
-      >
-        <Check className="w-4 h-4" />
-        Setujui
-      </button>
-    </>
-  )}
-</div>
-
-            </div>
           </div>
-        )}
 
-        {/* Approval Modal */}
-{showApprovalModal && selectedPerizinan && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-    <div className="bg-white rounded-lg max-w-md w-full">
-      <div className="p-6">
-        <div className="flex items-center justify-center w-12 h-12 mx-auto bg-green-100 rounded-full mb-4">
-          <Check className="w-6 h-6 text-green-600" />
-        </div>
-        <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
-          Setujui Perizinan
-        </h3>
-        <p className="text-gray-600 text-center mb-4">
-          Apakah Anda yakin ingin menyetujui pengajuan izin dari <strong>{selectedPerizinan.user?.name}</strong>?
-        </p>
-        
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Catatan (Opsional)
-          </label>
-          <textarea
-            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-            rows="3"
-            placeholder="Tambahkan catatan jika diperlukan..."
-            value={approvalNote}
-            onChange={(e) => setApprovalNote(e.target.value)}
-          />
-        </div>
-
-        <div className="flex gap-3">
-          <button
-            onClick={() => {
-              setShowApprovalModal(false);
-              setApprovalNote('');
-            }}
-            className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-          >
-            Batal
-          </button>
-          <button
-            onClick={confirmApproval}
-            className="flex-1 px-4 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
-          >
-            Ya, Setujui
-          </button>
-        </div>
+    {/* Table */}
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            {loading ? (
+              <div className="p-8 text-center">
+                <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                <p className="mt-2 text-gray-600">Memuat data...</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Karyawan
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Tipe Izin
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Tanggal
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Waktu
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Diketahui Oleh
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Diterima Oleh
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Status
+                      </th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        Aksi
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {filteredData.length === 0 ? (
+                      <tr>
+                        <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                          Tidak ada data perizinan
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredData.map((item) => (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          {/* Karyawan */}
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-3">
+                              <div>
+                                <div className="font-medium text-gray-900">{item.user?.name || 'N/A'}</div>
+                              </div>
+                            </div>
+                          </td>
+                          
+                          {/* Tipe Izin */}
+                          <td className="px-6 py-4">
+                            <span className="text-sm text-gray-900">{getTypeLabel(item.type_perizinan)}</span>
+                          </td>
+                          
+                          {/* Tanggal */}
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-2 text-sm text-gray-900">
+                              <Calendar className="w-4 h-4 text-gray-400" />
+                              {new Date(item.tanggal).toLocaleDateString('id-ID')}
+                            </div>
+                          </td>
+                          
+                          {/* Waktu */}
+                          <td className="px-6 py-4">
+                            {item.type_perizinan === 'p1' ? (
+                              <span className="text-sm text-gray-500">Seharian</span>
+                            ) : (
+                              <div className="flex items-center gap-2 text-sm text-gray-900">
+                                <Clock className="w-4 h-4 text-gray-400" />
+                                {item.jam_keluar} - {item.jam_kembali}
+                              </div>
+                            )}
+                          </td>
+                          
+                          {/* Diketahui Oleh - UBAH: Hanya tampilkan nama, tanpa status */}
+                          <td className="px-6 py-4">
+    <div className="space-y-2">
+    
+      
+      {/* Status - BARU */}
+      <div className="mt-2">
+        {getStatusDisplay(item.status_diketahui)}
       </div>
-    </div>
-  </div>
-)}
-
-
-{/* Reject Modal */}
-    {showRejectModal && selectedPerizinan && (
-  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-    <div className="bg-white rounded-lg max-w-md w-full">
-      <div className="p-6">
-        <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
-          <X className="w-6 h-6 text-red-600" />
-        </div>
-        <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
-          Tolak Perizinan
-        </h3>
-        <p className="text-gray-600 text-center mb-4">
-          Berikan catatan penolakan untuk <strong>{selectedPerizinan.user?.name}</strong>
-        </p>
-        <textarea
-          className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent mb-4"
-          rows="4"
-          placeholder="Masukkan catatan penolakan..."
-          value={rejectReason}
-          onChange={(e) => setRejectReason(e.target.value)}
-        />
-        <div className="flex gap-3">
+      
+      {/* Tombol Approve untuk Target User - BARU */}
+      {canApproveAsTarget(item) && (
+        <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
           <button
-            onClick={() => {
-              setShowRejectModal(false);
-              setRejectReason('');
-            }}
-            className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            onClick={() => handleApprove(item)}
+            className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors flex items-center gap-1"
+            title="Terima"
           >
-            Batal
+            <Check className="w-3.5 h-3.5" />
+            Terima
           </button>
           <button
-            onClick={confirmReject}
-            disabled={!rejectReason.trim()}
-            className="flex-1 px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            onClick={() => handleReject(item)}
+            className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors flex items-center gap-1"
+            title="Tolak"
           >
+            <X className="w-3.5 h-3.5" />
             Tolak
           </button>
         </div>
+      )}
+      
+    </div>
+  </td>
+
+                          
+                          {/* Status HRD dengan tombol aksi */}
+                        <td className="px-6 py-4">
+                            <div className="space-y-2">
+                              {/* Status - BARU */}
+                              <div>
+                                {getStatusDisplay(item.status_disetujui)}
+                              </div>
+                              
+                              {/* Tombol Approve untuk HRD - BARU */}
+                              {canApproveAsHRD(item) && (
+                                <div className="flex items-center gap-2 mt-2 pt-2 border-t border-gray-100">
+                                  <button
+                                    onClick={() => handleApprove(item)}
+                                    className="px-3 py-1.5 text-xs font-medium text-white bg-green-600 hover:bg-green-700 rounded-md transition-colors flex items-center gap-1"
+                                    title="Setujui"
+                                  >
+                                    <Check className="w-3.5 h-3.5" />
+                                    Setujui
+                                  </button>
+                                  <button
+                                    onClick={() => handleReject(item)}
+                                    className="px-3 py-1.5 text-xs font-medium text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors flex items-center gap-1"
+                                    title="Tolak"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                    Tolak
+                                  </button>
+                                </div>
+                              )}
+                                  {currentUser.role === 'hrd' && 
+      item.status_disetujui === null && 
+      item.status_diketahui !== 'Disetujui' && (
+        <div className="mt-2 pt-2 border-t border-gray-100">
+          <p className="text-xs text-amber-600 flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5" />
+            Menunggu persetujuan {item.diketahui_oleh?.name || 'atasan'}
+          </p>
+        </div>
+      )}
+                            </div>
+                          </td>
+
+                            
+                          {/* Status Keseluruhan */}
+                          <td className="px-6 py-4">
+                            <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${getStatusBadge(item.status)}`}>
+                              {item.status}
+                            </span>
+                          </td>
+                            
+                          {/* Aksi */}
+                          {/* Aksi - HANYA UNTUK VIEW/PRINT/DELETE */}
+  <td className="px-6 py-4">
+    <div className="flex items-center gap-2">
+      <button
+        onClick={() => {
+          setSelectedPerizinan(item);
+          setShowDetailModal(true);
+        }}
+        className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+        title="Lihat Detail"
+      >
+        <Eye className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => handlePrint(item.id)}
+        className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+        title="Print PDF"
+      >
+        <Printer className="w-4 h-4" />
+      </button>
+      <button
+        onClick={() => handleDelete(item.id)}
+        className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+        title="Hapus"
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
+    </div>
+  </td>
+
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Detail Modal */}
+          {showDetailModal && selectedPerizinan && (
+              
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                <div className="p-6 border-b border-gray-200">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-semibold text-gray-900">Detail Perizinan</h3>
+                    <button
+                      onClick={() => setShowDetailModal(false)}
+                      className="text-gray-400 hover:text-gray-600"
+                    >
+                      <X className="w-6 h-6" />
+                    </button>
+                  </div>
+                </div>
+              <div className="p-6 space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Nama Karyawan</label>
+                    <p className="mt-1 text-gray-900">{selectedPerizinan.user.name}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Jabatan</label>
+                    <p className="mt-1 text-gray-900">{selectedPerizinan.user.jabatan}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Email</label>
+                    <p className="mt-1 text-gray-900">{selectedPerizinan.user.email}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Tipe Perizinan</label>
+                    <p className="mt-1 text-gray-900">{getTypeLabel(selectedPerizinan.type_perizinan)}</p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Tanggal</label>
+                    <p className="mt-1 text-gray-900">
+                      {new Date(selectedPerizinan.tanggal).toLocaleDateString('id-ID', { 
+                        weekday: 'long', 
+                        year: 'numeric', 
+                        month: 'long', 
+                        day: 'numeric' 
+                      })}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Waktu</label>
+                    <p className="mt-1 text-gray-900">
+                      {selectedPerizinan.type_perizinan === 'p1' 
+                        ? 'Seharian' 
+                        : `${selectedPerizinan.jam_keluar} - ${selectedPerizinan.jam_kembali}`
+                      }
+                    </p>
+                  </div>
+                    
+                  {/* Diketahui Oleh - UBAH: Hanya nama, tanpa status */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Diketahui Oleh</label>
+                    <p className="mt-1 text-gray-900">{selectedPerizinan?.diketahui_oleh?.name || "-"}</p>
+                    <p className="text-xs text-gray-500">{selectedPerizinan?.diketahui_oleh?.jabatan || ""}</p>
+                  </div>
+                    
+                  {/* Status HRD - UBAH */}
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Status HRD</label>
+                    <div className="mt-1">
+                      {getStatusDisplay(selectedPerizinan.status_disetujui)}
+                    </div>
+                  </div>
+                    
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Disetujui Oleh</label>
+                    <p className="mt-1 text-gray-900">{selectedPerizinan?.disetujui_oleh?.name || "Belum disetujui"}</p>
+                  </div>
+                  <div>
+                    
+                    <label className="text-sm font-medium text-gray-500">Status Keseluruhan</label>
+                    <p className="mt-1">
+                      <span className={`px-3 py-1 inline-flex text-xs leading-5 font-semibold rounded-full border ${getStatusBadge(selectedPerizinan.status)}`}>
+                        {selectedPerizinan.status}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+                    
+                <div>
+                  <label className="text-sm font-medium text-gray-500">Keperluan</label>
+                  <p className="mt-1 text-gray-900 bg-gray-50 p-3 rounded-lg">
+                    {selectedPerizinan.keperluan}
+                  </p>
+                </div>
+                {selectedPerizinan.catatan && (
+                  <div>
+                    <label className="text-sm font-medium text-gray-500">Catatan</label>
+                    <p className="mt-1 text-gray-900 bg-gray-50 p-3 rounded-lg border-l-4 border-blue-500">
+                      {selectedPerizinan.catatan}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="p-6 border-t border-gray-200 flex justify-end gap-3">
+    <button
+      onClick={() => setShowDetailModal(false)}
+      className="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+    >
+      Tutup
+    </button>
+    {/* Hanya tampil untuk HRD */}
+    {canShowActionButtons(selectedPerizinan) && (
+      <>
+        <button
+          onClick={() => {
+            setShowDetailModal(false);
+            handleReject(selectedPerizinan);
+          }}
+          className="px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors flex items-center gap-2"
+        >
+          <X className="w-4 h-4" />
+          Tolak
+        </button>
+        <button
+          onClick={() => {
+            setShowDetailModal(false);
+            handleApprove(selectedPerizinan);
+          }}
+          className="px-4 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors flex items-center gap-2"
+        >
+          <Check className="w-4 h-4" />
+          Setujui
+        </button>
+      </>
+    )}
+  </div>
+
+              </div>
+            </div>
+          )}
+
+          {/* Approval Modal */}
+  {showApprovalModal && selectedPerizinan && (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-md w-full">
+        <div className="p-6">
+          <div className="flex items-center justify-center w-12 h-12 mx-auto bg-green-100 rounded-full mb-4">
+            <Check className="w-6 h-6 text-green-600" />
+          </div>
+          <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+            Setujui Perizinan
+          </h3>
+          <p className="text-gray-600 text-center mb-4">
+            Apakah Anda yakin ingin menyetujui pengajuan izin dari <strong>{selectedPerizinan.user?.name}</strong>?
+          </p>
+          
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Catatan (Opsional)
+            </label>
+            <textarea
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              rows="3"
+              placeholder="Tambahkan catatan jika diperlukan..."
+              value={approvalNote}
+              onChange={(e) => setApprovalNote(e.target.value)}
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                setShowApprovalModal(false);
+                setApprovalNote('');
+              }}
+              className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              Batal
+            </button>
+            <button
+              onClick={confirmApproval}
+              className="flex-1 px-4 py-2 text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
+            >
+              Ya, Setujui
+            </button>
+          </div>
+        </div>
       </div>
     </div>
-  </div>
-    )}      
-{/* Add Modal */}
-    {showAddModal && (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-        <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-          <div className="p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xl font-semibold text-gray-900">Tambah Perizinan Baru</h3>
-              <button
-                onClick={() => {
-                  setShowAddModal(false);
-                  resetForm();
-                }}
-                className="text-gray-400 hover:text-gray-600"
-              >
-                <X className="w-6 h-6" />
-              </button>
-            </div>
+  )}
+
+
+  {/* Reject Modal */}
+      {showRejectModal && selectedPerizinan && (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-md w-full">
+        <div className="p-6">
+          <div className="flex items-center justify-center w-12 h-12 mx-auto bg-red-100 rounded-full mb-4">
+            <X className="w-6 h-6 text-red-600" />
           </div>
+          <h3 className="text-lg font-semibold text-gray-900 text-center mb-2">
+            Tolak Perizinan
+          </h3>
+          <p className="text-gray-600 text-center mb-4">
+            Berikan catatan penolakan untuk <strong>{selectedPerizinan.user?.name}</strong>
+          </p>
+          <textarea
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent mb-4"
+            rows="4"
+            placeholder="Masukkan catatan penolakan..."
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+          />
+          <div className="flex gap-3">
+            <button
+              onClick={() => {
+                setShowRejectModal(false);
+                setRejectReason('');
+              }}
+              className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              Batal
+            </button>
+            <button
+              onClick={confirmReject}
+              disabled={!rejectReason.trim()}
+              className="flex-1 px-4 py-2 text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Tolak
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+      )}      
+  {/* Add Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-gray-900">Tambah Perizinan Baru</h3>
+                <button
+                  onClick={() => {
+                    setShowAddModal(false);
+                    resetForm();
+                  }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+            </div>
+              
+            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+              {/* Pilih Karyawan */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Karyawan <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.uid}
+                  onChange={(e) => handleFormChange('uid', e.target.value)}
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
+                    formErrors.uid ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                >
+                  <option value="">Pilih Karyawan</option>
+                  {users.map(user => (
+                    <option key={user.id} value={user.id}>
+                      {user.name} - {user.jabatan}
+                    </option>
+                  ))}
+                </select>
+                {formErrors.uid && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.uid}</p>
+                )}
+              </div>
+
+              {/* Pilih Head yang Mengetahui */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Diketahui Oleh <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.uid_diketahui}
+                  onChange={(e) => handleFormChange('uid_diketahui', e.target.value)}
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
+                    formErrors.uid_diketahui ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                >
+                  <option value="">Pilih User yang Mengetahui</option>
+                  {heads.map(head => (
+                    <option key={head.id} value={head.id}>
+                      {head.name} - {head.jabatan}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-gray-500">
+                  Pilih user yang akan diberitahu tentang perizinan ini (bukan sebagai approver)
+                </p>
+                {formErrors.uid_diketahui && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.uid_diketahui}</p>
+                )}
+              </div>
             
-          <form onSubmit={handleSubmit} className="p-6 space-y-4">
-            {/* Pilih Karyawan */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Karyawan <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.uid}
-                onChange={(e) => handleFormChange('uid', e.target.value)}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
-                  formErrors.uid ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">Pilih Karyawan</option>
-                {users.map(user => (
-                  <option key={user.id} value={user.id}>
-                    {user.name} - {user.jabatan}
-                  </option>
-                ))}
-              </select>
-              {formErrors.uid && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.uid}</p>
-              )}
-            </div>
-
-            {/* Pilih Head yang Mengetahui */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Diketahui Oleh <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.uid_diketahui}
-                onChange={(e) => handleFormChange('uid_diketahui', e.target.value)}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
-                  formErrors.uid_diketahui ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">Pilih User yang Mengetahui</option>
-                {heads.map(head => (
-                  <option key={head.id} value={head.id}>
-                    {head.name} - {head.jabatan}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-gray-500">
-                Pilih user yang akan diberitahu tentang perizinan ini (bukan sebagai approver)
-              </p>
-              {formErrors.uid_diketahui && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.uid_diketahui}</p>
-              )}
-            </div>
-
-            {/* Tipe Perizinan */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Tipe Perizinan <span className="text-red-500">*</span>
-              </label>
-              <select
-                value={formData.type_perizinan}
-                onChange={(e) => handleFormChange('type_perizinan', e.target.value)}
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
-                  formErrors.type_perizinan ? 'border-red-500' : 'border-gray-300'
-                }`}
-              >
-                <option value="">Pilih Tipe Perizinan</option>
-                <option value="p1">Izin Seharian (P1)</option>
-                <option value="p2">Izin Setengah Hari (P2)</option>
-                <option value="p3">Izin Keluar Sementara (P3)</option>
-              </select>
-              {formErrors.type_perizinan && (
-                <p className="mt-1 text-sm text-red-600">{formErrors.type_perizinan}</p>
-              )}
-            </div>
-
             {/* Tanggal */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1280,112 +1397,164 @@ const handleDelete = async (id) => {
                 <p className="mt-1 text-sm text-red-600">{formErrors.tanggal}</p>
               )}
             </div>
-
-            {/* Jam Keluar & Kembali - hanya tampil untuk p2 dan p3 */}
-            {(formData.type_perizinan === 'p2' || formData.type_perizinan === 'p3') && (
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Jam Keluar <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="time"
-                    value={formData.jam_keluar}
-                    onChange={(e) => handleFormChange('jam_keluar', e.target.value)}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
-                      formErrors.jam_keluar ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  />
-                  {formErrors.jam_keluar && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.jam_keluar}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Jam Kembali <span className="text-red-500">*</span>
-                  </label>
-                  <input
-                    type="time"
-                    value={formData.jam_kembali}
-                    onChange={(e) => handleFormChange('jam_kembali', e.target.value)}
-                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
-                      formErrors.jam_kembali ? 'border-red-500' : 'border-gray-300'
-                    }`}
-                  />
-                  {formErrors.jam_kembali && (
-                    <p className="mt-1 text-sm text-red-600">{formErrors.jam_kembali}</p>
-                  )}
-                </div>
+            
+            {/* Jam Keluar & Kembali - SEKARANG SELALU TAMPIL */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Jam Keluar <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="time"
+                  value={formData.jam_keluar}
+                  onChange={(e) => handleFormChange('jam_keluar', e.target.value)}
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
+                    formErrors.jam_keluar ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                {formErrors.jam_keluar && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.jam_keluar}</p>
+                )}
               </div>
-            )}
-
-            {/* Keperluan */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Keperluan <span className="text-red-500">*</span>
-              </label>
-              <textarea
-                value={formData.keperluan}
-                onChange={(e) => handleFormChange('keperluan', e.target.value)}
-                rows="4"
-                className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none ${
-                  formErrors.keperluan ? 'border-red-500' : 'border-gray-300'
-                }`}
-              />
-              <div className="flex justify-between mt-1">
-                {formErrors.keperluan ? (
-                  <p className="text-sm text-red-600">{formErrors.keperluan}</p>
-                ) : (
-                  <p className="text-sm text-gray-500">
-                    {formData.keperluan.length} / 1000 karakter
-                  </p>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Jam Kembali <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="time"
+                  value={formData.jam_kembali}
+                  onChange={(e) => handleFormChange('jam_kembali', e.target.value)}
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
+                    formErrors.jam_kembali ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                {formErrors.jam_kembali && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.jam_kembali}</p>
                 )}
               </div>
             </div>
 
-            {/* Buttons */}
-            <div className="flex gap-3 pt-4 border-t">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowAddModal(false);
-                  resetForm();
-                }}
-                className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-              >
-                Batal
-              </button>
-              <button
-                type="submit"
-                disabled={loading}
-                className="flex-1 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Menyimpan...' : 'Simpan Perizinan'}
-              </button>
+              {/* Tanggal */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tanggal <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="date"
+                  value={formData.tanggal}
+                  onChange={(e) => handleFormChange('tanggal', e.target.value)}
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
+                    formErrors.tanggal ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                {formErrors.tanggal && (
+                  <p className="mt-1 text-sm text-red-600">{formErrors.tanggal}</p>
+                )}
+              </div>
+  <div>
+          
+
+              {/* Display tipe perizinan yang terdeteksi */}
+              {formData.jam_keluar && formData.jam_kembali && formData.type_perizinan ? (
+                <div className="px-4 py-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-blue-900">
+                        {formData.type_perizinan === 'p1' && '🕐 P1 - Izin Seharian'}
+                        {formData.type_perizinan === 'p2' && '⏰ P2 - Izin Setengah Hari'}
+                        {formData.type_perizinan === 'p3' && '⏱️ P3 - Izin Keluar Sementara'}
+                      </p>
+                      <p className="text-xs text-blue-700 mt-1">
+                        Durasi: {getDurationLabel(formData.jam_keluar, formData.jam_kembali)}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        Terdeteksi Otomatis
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="px-4 py-3 bg-gray-50 border border-gray-200 rounded-lg">
+                  <p className="text-sm text-gray-600">
+                    <Clock className="w-4 h-4 inline mr-2" />
+                    Tipe perizinan akan terdeteksi otomatis setelah Anda mengisi jam keluar dan jam kembali
+                  </p>
+                </div>
+              )}
+              {formErrors.type_perizinan && (
+                <p className="mt-1 text-sm text-red-600">{formErrors.type_perizinan}</p>
+              )}
             </div>
-          </form>
+              
+              {/* Keperluan */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Keperluan <span className="text-red-500">*</span>
+                </label>
+                <textarea
+                  value={formData.keperluan}
+                  onChange={(e) => handleFormChange('keperluan', e.target.value)}
+                  rows="4"
+                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none resize-none ${
+                    formErrors.keperluan ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                <div className="flex justify-between mt-1">
+                  {formErrors.keperluan ? (
+                    <p className="text-sm text-red-600">{formErrors.keperluan}</p>
+                  ) : (
+                    <p className="text-sm text-gray-500">
+                      {formData.keperluan.length} / 1000 karakter
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Buttons */}
+              <div className="flex gap-3 pt-4 border-t">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowAddModal(false);
+                    resetForm();
+                  }}
+                  className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="flex-1 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Menyimpan...' : 'Simpan Perizinan'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+  </div>
+      </div>
+      {loadingOverlay && (
+    <div style={{margin:"0px", padding:"0px"}} className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
+      <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
+        <div className="relative">
+          <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
+          <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+        </div>
+        <div className="text-center">
+          <p className="text-lg font-semibold text-gray-800 mb-1">Memproses</p>
+          <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
         </div>
       </div>
-    )}
-
-</div>
     </div>
-    {loadingOverlay && (
-  <div style={{margin:"0px", padding:"0px"}} className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-    <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
-      <div className="relative">
-        <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
-        <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
-      </div>
-      <div className="text-center">
-        <p className="text-lg font-semibold text-gray-800 mb-1">Memproses</p>
-        <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
-      </div>
-    </div>
-  </div>
-)}
-    </LayoutTemplate>
-  );
-}
+  )}
+      </LayoutTemplate>
+    );
+  }
 
-export default KeluarKantor;
+  export default KeluarKantor;

@@ -1358,4 +1358,260 @@ public function update(Request $request, $id)
     return $pdf->stream($filename);
 }
 
+public function indexHead()
+{
+    $user = auth()->user();
+    
+    // Hitung periode aktif user yang login
+    $tmk = \Carbon\Carbon::parse($user->tmk);
+    $today = \Carbon\Carbon::now();
+    
+    $diffInDays = $today->diffInDays($tmk);
+    $years = 0;
+    $months = 0;
+    $days = 0;
+    
+    // Hitung tahun penuh
+    $tempDate = $tmk->copy();
+    while ($tempDate->copy()->addYear()->lte($today)) {
+        $years++;
+        $tempDate->addYear();
+    }
+    
+    // Hitung bulan penuh setelah tahun
+    while ($tempDate->copy()->addMonth()->lte($today)) {
+        $months++;
+        $tempDate->addMonth();
+    }
+    
+    // Hitung sisa hari
+    $days = $tempDate->diffInDays($today);
+    
+    // Tentukan periode berdasarkan tahun penuh yang sudah dilalui
+    if ($years < 1) {
+        $currentPeriod = 0;
+    } else {
+        $currentPeriod = $years;
+    }
+    
+    // Hitung tahun anniversary
+    $currentAnniversary = $tmk->copy()->setYear($today->year);
+    if ($today->lt($currentAnniversary)) {
+        $currentAnniversary->subYear();
+    }
+    
+    // SPECIAL HANDLING untuk periode 0
+    if ($currentPeriod == 0) {
+        $periodStartDate = $tmk;
+        $periodEndDate = $tmk->copy()->addYear()->subDay();
+    } else {
+        $periodStartDate = $currentAnniversary;
+        $periodEndDate = $currentAnniversary->copy()->addYear()->subDay();
+    }
+    
+    // Ambil jatah cuti periode saat ini
+    $currentJatahCuti = JatahCuti::where('uid', $user->id)
+        ->where('tahun_ke', $currentPeriod)
+        ->first();
+    
+    if (!$currentJatahCuti) {
+        $jumlahCuti = $this->calculateCutiByPeriod($currentPeriod, null);
+        $currentJatahCuti = JatahCuti::create([
+            'uid' => $user->id,
+            'tahun_ke' => $currentPeriod,
+            'tahun' => $periodStartDate->year,
+            'jumlah_cuti' => $jumlahCuti,
+            'sisa_cuti' => $jumlahCuti,
+            'cuti_dipakai' => 0,
+            'tmk' => $user->tmk,
+            'pinjam_tahun_prev' => 0,
+            'pinjam_tahun_next' => 0,
+            'cuti_bersama' => 0,
+        ]);
+    }
+    
+    // Ambil/buat jatah cuti periode berikutnya
+    $nextPeriod = $currentPeriod + 1;
+    $nextJatahCuti = JatahCuti::where('uid', $user->id)
+        ->where('tahun_ke', $nextPeriod)
+        ->first();
+    
+    if (!$nextJatahCuti) {
+        $jumlahCutiNext = $this->calculateCutiByPeriod($nextPeriod, null);
+        $nextPeriodStart = $periodEndDate->copy()->addDay();
+        
+        $nextJatahCuti = JatahCuti::create([
+            'uid' => $user->id,
+            'tahun_ke' => $nextPeriod,
+            'tahun' => $nextPeriodStart->year,
+            'jumlah_cuti' => $jumlahCutiNext,
+            'sisa_cuti' => $jumlahCutiNext,
+            'cuti_dipakai' => 0,
+            'keterangan' => "Periode {$nextPeriod}" . ($currentPeriod == 0 ? " (Akan Aktif Setelah 1 Tahun)" : " (Dapat Dipinjam)"),
+            'tmk' => $user->tmk,
+            'pinjam_tahun_prev' => 0,
+            'pinjam_tahun_next' => 0,
+            'cuti_bersama' => 0,
+        ]);
+    }
+    
+    // Ambil jatah cuti periode sebelumnya (jika ada)
+    $prevPeriod = $currentPeriod - 1;
+    $prevJatahCuti = null;
+    if ($prevPeriod > 0) {
+        $prevJatahCuti = JatahCuti::where('uid', $user->id)
+            ->where('tahun_ke', $prevPeriod)
+            ->first();
+    }
+    
+    $jatahCutiData = [
+        [
+            'id' => $currentJatahCuti->id,
+            'tahun' => $currentJatahCuti->tahun,
+            'tahun_ke' => $currentJatahCuti->tahun_ke,
+            'jumlah_cuti' => $currentJatahCuti->jumlah_cuti,
+            'cuti_dipakai' => $currentJatahCuti->cuti_dipakai,
+            'sisa_cuti' => $currentJatahCuti->sisa_cuti,
+            'is_current' => true,
+            'is_borrowable' => false,
+            'periode_range' => $periodStartDate->format('d M Y') . ' - ' . $periodEndDate->format('d M Y'),
+            'tmk' => $user->tmk,
+            'masa_kerja_tahun' => $years,
+            'masa_kerja_bulan' => $months,
+            'masa_kerja_hari' => $days,
+            'total_hari_kerja' => $diffInDays,
+            'pinjam_tahun_0' => $currentJatahCuti->pinjam_tahun_prev ?? 0,
+            'pinjam_tahun_2' => $currentJatahCuti->pinjam_tahun_next ?? 0,
+            'cuti_bersama' => $currentJatahCuti->cuti_bersama ?? 0,
+            'is_periode_0' => $currentPeriod == 0,
+        ],
+        [
+            'id' => $nextJatahCuti->id,
+            'tahun' => $nextJatahCuti->tahun,
+            'tahun_ke' => $nextJatahCuti->tahun_ke,
+            'jumlah_cuti' => $nextJatahCuti->jumlah_cuti,
+            'cuti_dipakai' => $nextJatahCuti->cuti_dipakai,
+            'sisa_cuti' => $nextJatahCuti->sisa_cuti,
+            'is_current' => false,
+            'is_borrowable' => $currentPeriod > 0,
+            'label' => $currentPeriod == 0 ? "Periode 1 (Akan Aktif Setelah 1 Tahun)" : "Periode {$nextPeriod} (Dapat Dipinjam)",
+            'periode_range' => $periodEndDate->copy()->addDay()->format('d M Y') . ' - ' . $periodEndDate->copy()->addYear()->format('d M Y'),
+            'tmk' => $user->tmk,
+            'masa_kerja_tahun' => $years,
+            'masa_kerja_bulan' => $months,
+            'masa_kerja_hari' => $days,
+            'total_hari_kerja' => $diffInDays,
+            'pinjam_tahun_0' => $nextJatahCuti->pinjam_tahun_prev ?? 0,
+            'pinjam_tahun_2' => $nextJatahCuti->pinjam_tahun_next ?? 0,
+            'cuti_bersama' => $nextJatahCuti->cuti_bersama ?? 0,
+            'is_periode_0' => false,
+        ]
+    ];
+    
+    if ($prevJatahCuti) {
+        $jatahCutiData[] = [
+            'id' => $prevJatahCuti->id,
+            'tahun' => $prevJatahCuti->tahun,
+            'tahun_ke' => $prevJatahCuti->tahun_ke,
+            'jumlah_cuti' => $prevJatahCuti->jumlah_cuti,
+            'cuti_dipakai' => $prevJatahCuti->cuti_dipakai,
+            'sisa_cuti' => $prevJatahCuti->sisa_cuti,
+            'is_current' => false,
+            'is_borrowable' => false,
+            'label' => "Periode {$prevPeriod} (Sebelumnya)",
+            'periode_range' => $periodStartDate->copy()->subYear()->format('d M Y') . ' - ' . $periodStartDate->copy()->subDay()->format('d M Y'),
+            'tmk' => $user->tmk,
+            'masa_kerja_tahun' => $years,
+            'masa_kerja_bulan' => $months,
+            'masa_kerja_hari' => $days,
+            'total_hari_kerja' => $diffInDays,
+            'pinjam_tahun_0' => $prevJatahCuti->pinjam_tahun_prev ?? 0,
+            'pinjam_tahun_2' => $prevJatahCuti->pinjam_tahun_next ?? 0,
+            'cuti_bersama' => $prevJatahCuti->cuti_bersama ?? 0,
+            'is_periode_0' => false,
+        ];
+    }
+    
+    // ✅ Ambil SEMUA pengajuan cuti dimana user adalah salah satu approver
+    $pemakaianCuti = PemakaianCuti::with([
+        'user', 'jatahCuti', 'penerimaTugas',
+        'diketahuiAtasanUser', 'diketahuiHrdUser', 'disetujuiUser'
+    ])
+    ->where(function($query) use ($user) {
+        $query->where('diketahui_atasan', $user->id)
+              ->orWhere('diketahui_hrd', $user->id)
+              ->orWhere('disetujui', $user->id);
+    })
+    ->orderBy('tanggal_pengajuan', 'desc')
+    ->orderBy('created_at', 'desc')
+    ->paginate(10)
+    ->through(function($item) {
+        return [
+            'id' => $item->id,
+            'uid' => $item->uid,
+            'tanggal_pengajuan' => $item->tanggal_pengajuan,
+            'tanggal_mulai' => $item->tanggal_mulai,
+            'tanggal_selesai' => $item->tanggal_selesai,
+            'jumlah_hari' => floatval($item->jumlah_hari),
+            'alasan' => $item->alasan,
+            'catatan' => $item->catatan,
+            'cuti_setengah_hari' => $item->cuti_setengah_hari,
+            'id_penerima_tugas' => $item->id_penerima_tugas,
+            'tugas' => $item->tugas,
+            'user' => $item->user ? [
+                'id' => $item->user->id,
+                'name' => $item->user->name,
+                'email' => $item->user->email,
+            ] : null,
+            'penerima_tugas' => $item->penerimaTugas ? [
+                'id' => $item->penerimaTugas->id,
+                'name' => $item->penerimaTugas->name,
+            ] : null,
+            'jatah_cuti' => [
+                'tahun' => $item->jatahCuti->tahun ?? null,
+                'tahun_ke' => $item->jatahCuti->tahun_ke ?? null,
+                'sisa_cuti' => $item->jatahCuti->sisa_cuti ?? 0,
+            ],
+            'diketahui_atasan' => $item->diketahui_atasan,
+            'diketahui_hrd' => $item->diketahui_hrd,
+            'disetujui' => $item->disetujui,
+            'diketahui_atasan_user' => $item->diketahuiAtasanUser ? [
+                'id' => $item->diketahuiAtasanUser->id,
+                'name' => $item->diketahuiAtasanUser->name,
+                'jabatan' => $item->diketahuiAtasanUser->jabatan,
+            ] : null,
+            'diketahui_hrd_user' => $item->diketahuiHrdUser ? [
+                'id' => $item->diketahuiHrdUser->id,
+                'name' => $item->diketahuiHrdUser->name,
+                'jabatan' => $item->diketahuiHrdUser->jabatan,
+            ] : null,
+            'disetujui_user' => $item->disetujuiUser ? [
+                'id' => $item->disetujuiUser->id,
+                'name' => $item->disetujuiUser->name,
+                'jabatan' => $item->disetujuiUser->jabatan,
+            ] : null,
+            'status_diketahui_atasan' => $item->status_diketahui_atasan,
+            'status_diketahui_hrd' => $item->status_diketahui_hrd,
+            'status_disetujui' => $item->status_disetujui,
+            'status_final' => $item->status_final,
+        ];
+    });
+    
+    return Inertia::render('Atasan/CutiHead', [
+        'jatahCuti' => $jatahCutiData,
+        'pemakaianCuti' => $pemakaianCuti,
+        'paginationLinks' => $pemakaianCuti->linkCollection()->toArray(),
+        'periodInfo' => [
+            'current' => $currentPeriod,
+            'start' => $periodStartDate->format('d F Y'),
+            'end' => $periodEndDate->format('d F Y'),
+            'is_periode_0' => $currentPeriod == 0,
+            'days_until_first_year' => $currentPeriod == 0 ? max(0, 365 - $diffInDays) : 0,
+        ],
+        'auth' => ['user' => $user]
+    ]);
+}
+
+
+
 }

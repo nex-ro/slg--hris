@@ -100,4 +100,108 @@ class PemakaianCuti extends Model
     {
         return $this->belongsTo(User::class, 'id_penerima_tugas');
     }
+    // Tambahkan di class PemakaianCuti
+
+public function canApproveAsAtasan($userId)
+{
+    return $this->diketahui_atasan == $userId && 
+           $this->status_diketahui_atasan === 'diproses' &&
+           $this->status_final === 'diproses';
+}
+
+public function canApproveAsHRD($userId)
+{
+    // HRD hanya bisa approve jika:
+    // 1. Dia adalah HRD yang ditunjuk
+    // 2. Status HRD masih diproses
+    // 3. Status final masih diproses
+    // 4. Jika ada atasan, atasan harus sudah menyetujui
+    
+    if ($this->diketahui_hrd != $userId || 
+        $this->status_diketahui_hrd !== 'diproses' || 
+        $this->status_final !== 'diproses') {
+        return false;
+    }
+    
+    // Jika ada atasan, cek apakah sudah disetujui
+    if ($this->diketahui_atasan) {
+        return $this->status_diketahui_atasan === 'disetujui';
+    }
+    
+    return true;
+}
+
+public function canApproveAsPimpinan($userId)
+{
+    // Pimpinan hanya bisa approve jika:
+    // 1. Dia adalah pimpinan yang ditunjuk
+    // 2. Status pimpinan masih diproses
+    // 3. Status final masih diproses
+    // 4. Semua approver sebelumnya (atasan & HRD) sudah menyetujui
+    
+    if ($this->disetujui != $userId || 
+        $this->status_disetujui !== 'diproses' || 
+        $this->status_final !== 'diproses') {
+        return false;
+    }
+    
+    // Cek atasan (jika ada)
+    if ($this->diketahui_atasan && $this->status_diketahui_atasan !== 'disetujui') {
+        return false;
+    }
+    
+    // Cek HRD (jika ada)
+    if ($this->diketahui_hrd && $this->status_diketahui_hrd !== 'disetujui') {
+        return false;
+    }
+    
+    return true;
+}
+
+public function getApprovalHierarchyStatus()
+{
+    $hierarchy = [];
+    
+    if ($this->diketahui_atasan) {
+        $hierarchy[] = [
+            'level' => 'Atasan',
+            'user_id' => $this->diketahui_atasan,
+            'status' => $this->status_diketahui_atasan,
+            'can_approve' => $this->status_diketahui_atasan === 'diproses'
+        ];
+    }
+    
+    if ($this->diketahui_hrd) {
+        $canApprove = $this->status_diketahui_hrd === 'diproses';
+        if ($this->diketahui_atasan) {
+            $canApprove = $canApprove && $this->status_diketahui_atasan === 'disetujui';
+        }
+        
+        $hierarchy[] = [
+            'level' => 'HRD',
+            'user_id' => $this->diketahui_hrd,
+            'status' => $this->status_diketahui_hrd,
+            'can_approve' => $canApprove
+        ];
+    }
+    
+    if ($this->disetujui) {
+        $canApprove = $this->status_disetujui === 'diproses';
+        if ($this->diketahui_atasan) {
+            $canApprove = $canApprove && $this->status_diketahui_atasan === 'disetujui';
+        }
+        if ($this->diketahui_hrd) {
+            $canApprove = $canApprove && $this->status_diketahui_hrd === 'disetujui';
+        }
+        
+        $hierarchy[] = [
+            'level' => 'Pimpinan',
+            'user_id' => $this->disetujui,
+            'status' => $this->status_disetujui,
+            'can_approve' => $canApprove
+        ];
+    }
+    
+    return $hierarchy;
+}
 }

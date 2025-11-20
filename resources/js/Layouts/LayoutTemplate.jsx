@@ -201,7 +201,7 @@ useEffect(() => {
         subItems: [
           { icon: Thermometer, label: 'Sakit', href: '/perizinan/sakit' },
           { icon: CalendarClock, label: 'Keluar Kantor', href: '/perizinan/keluar-kantor' },
-          { icon: UmbrellaIcon, label: 'Izin Cuti', href: '/perizinan/cuti'},
+          { icon: UmbrellaIcon, label: 'Izin Cuti', href: '/head/cuti'},
           
           // { icon: MapPin, label: 'Dinas Luar', href: '/perizinan/dinas-luar' },
         ],
@@ -212,7 +212,7 @@ useEffect(() => {
     const pegawaiMenu = [
       { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
       { icon: Calendar,label: 'Absen Saya', href: `/pegawai/absensi/${userId}` },
-      { icon: FileText, label: 'Dokumen', href: '/dokumen' },
+      // { icon: FileText, label: 'Dokumen', href: '/dokumen' },
       { icon: Thermometer, label: 'Sakit', href: '/pegawai/sakit' },
       { icon: CalendarClock, label: 'Izin Keluar Kantor', href: '/pegawai/izin' },
       { icon: UmbrellaIcon, label: 'Izin Cuti', href: '/pegawai/cuti'},

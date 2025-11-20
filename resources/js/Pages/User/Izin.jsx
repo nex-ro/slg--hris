@@ -21,7 +21,7 @@ const [loadingOverlay, setLoadingOverlay] = useState(false);
 
 
   const { data, setData, post, processing, errors, reset } = useForm({
-    type_perizinan: 'p1',
+    type_perizinan: '',
     tanggal: '',
     jam_keluar: '',
     jam_kembali: '',
@@ -43,6 +43,17 @@ const [loadingOverlay, setLoadingOverlay] = useState(false);
     });
   }
 }, [flash]);
+
+// Auto-update permission type when time changes
+useEffect(() => {
+  if (data.jam_keluar && data.jam_kembali) {
+    const newType = determinePermissionType(data.jam_keluar, data.jam_kembali);
+    if (newType && newType !== data.type_perizinan) {
+      setData('type_perizinan', newType);
+    }
+  }
+}, [data.jam_keluar, data.jam_kembali]);
+// Auto-update permission type in edit mode
 
  const handleSubmit = (e) => {
   e.preventDefault();
@@ -68,6 +79,45 @@ const [loadingOverlay, setLoadingOverlay] = useState(false);
   });
 };
 
+// Function to calculate duration in hours
+const calculateDuration = (jamKeluar, jamKembali) => {
+  if (!jamKeluar || !jamKembali) return 0;
+  
+  const [keluarHour, keluarMinute] = jamKeluar.split(':').map(Number);
+  const [kembaliHour, kembaliMinute] = jamKembali.split(':').map(Number);
+  
+  const keluarInMinutes = keluarHour * 60 + keluarMinute;
+  const kembaliInMinutes = kembaliHour * 60 + kembaliMinute;
+  
+  const durationInMinutes = kembaliInMinutes - keluarInMinutes;
+  return durationInMinutes / 60; // Convert to hours
+};
+
+// Function to determine permission type based on duration
+const determinePermissionType = (jamKeluar, jamKembali) => {
+  const duration = calculateDuration(jamKeluar, jamKembali);
+  
+  if (duration <= 0) return '';
+  
+  if (duration < 3) {
+    return 'p3'; // Izin Keluar Sementara (< 3 jam)
+  } else if (duration <= 6) {
+    return 'p2'; // Izin Setengah Hari (3-6 jam)
+  } else {
+    return 'p1'; // Izin Full Day (> 6 jam)
+  }
+};
+
+// Calculate duration info for display
+const getDurationInfo = (jamKeluar, jamKembali) => {
+  const duration = calculateDuration(jamKeluar, jamKembali);
+  if (duration <= 0) return null;
+  
+  const hours = Math.floor(duration);
+  const minutes = Math.round((duration - hours) * 60);
+  
+  return `${hours} jam ${minutes > 0 ? minutes + ' menit' : ''}`;
+};
   const getStatusIcon = (status) => {
     switch(status) {
       case 'Diajukan':
@@ -120,6 +170,15 @@ const [loadingOverlay, setLoadingOverlay] = useState(false);
     uid_diketahui: '',
     keperluan: ''
   });
+
+  useEffect(() => {
+  if (editData.jam_keluar && editData.jam_kembali) {
+    const newType = determinePermissionType(editData.jam_keluar, editData.jam_kembali);
+    if (newType && newType !== editData.type_perizinan) {
+      setEditData('type_perizinan', newType);
+    }
+  }
+}, [editData.jam_keluar, editData.jam_kembali]);
 
  const handleEditSubmit = (e) => {
   e.preventDefault();
@@ -275,25 +334,7 @@ const handleDelete = (id) => {
               </div>
 
               <form onSubmit={handleSubmit}>
-                {/* Type Perizinan */}
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Tipe Perizinan <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={data.type_perizinan}
-                    onChange={(e) => setData('type_perizinan', e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    required
-                  >
-                    <option value="p1">Izin Full Day (P1)</option>
-                    <option value="p2">Izin Setengah Hari (P2)</option>
-                    <option value="p3">Izin Keluar Kantor Sementara (P3)</option>
-                  </select>
-                  {errors.type_perizinan && (
-                    <p className="text-red-500 text-xs mt-1">{errors.type_perizinan}</p>
-                  )}
-                </div>
+                
 
                 {/* Tanggal */}
                 <div className="mb-4">
@@ -312,48 +353,57 @@ const handleDelete = (id) => {
                     <p className="text-red-500 text-xs mt-1">{errors.tanggal}</p>
                   )}
                 </div>
-
-                {/* Info for P1 */}
-                {data.type_perizinan === 'p1' && (
-                  <div className="mb-4 p-3 bg-blue-50 rounded-lg">
-                    <p className="text-sm text-blue-800">
-                      <span className="font-medium">Info:</span> Untuk izin Full Day, Anda akan tidak masuk kerja seharian.
-                    </p>
+                
+                <div className="grid grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Jam Keluar <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="time"
+                      value={data.jam_keluar}
+                      onChange={(e) => setData('jam_keluar', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                    {errors.jam_keluar && (
+                      <p className="text-red-500 text-xs mt-1">{errors.jam_keluar}</p>
+                    )}
                   </div>
-                )}
-
-                {/* Jam Keluar & Kembali */}
-                {showTimeFields && (
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Jam Keluar <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="time"
-                        value={data.jam_keluar}
-                        onChange={(e) => setData('jam_keluar', e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        required
-                      />
-                      {errors.jam_keluar && (
-                        <p className="text-red-500 text-xs mt-1">{errors.jam_keluar}</p>
-                      )}
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Jam Kembali <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        type="time"
-                        value={data.jam_kembali}
-                        onChange={(e) => setData('jam_kembali', e.target.value)}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        required
-                      />
-                      {errors.jam_kembali && (
-                        <p className="text-red-500 text-xs mt-1">{errors.jam_kembali}</p>
-                      )}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Jam Kembali <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="time"
+                      value={data.jam_kembali}
+                      onChange={(e) => setData('jam_kembali', e.target.value)}
+                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      required
+                    />
+                    {errors.jam_kembali && (
+                      <p className="text-red-500 text-xs mt-1">{errors.jam_kembali}</p>
+                    )}
+                  </div>
+                </div>
+                {/* TAMBAHKAN: Auto-detected Permission Type Display */}
+                {data.jam_keluar && data.jam_kembali && data.type_perizinan && (
+                  <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-blue-600 mt-0.5" />
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold text-blue-800 mb-1">
+                          Tipe Izin Terdeteksi: {getTypeLabel(data.type_perizinan)}
+                        </p>
+                        <p className="text-xs text-blue-700">
+                          Durasi: {getDurationInfo(data.jam_keluar, data.jam_kembali)}
+                        </p>
+                        <p className="text-xs text-blue-600 mt-1">
+                          {data.type_perizinan === 'p3' && '< 3 jam: Izin Keluar Kantor Sementara'}
+                          {data.type_perizinan === 'p2' && '3-6 jam: Izin Setengah Hari'}
+                          {data.type_perizinan === 'p1' && '> 6 jam: Izin Full Day'}
+                        </p>
+                      </div>
                     </div>
                   </div>
                 )}

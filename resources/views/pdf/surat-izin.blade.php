@@ -139,15 +139,15 @@
             text-align: center;
         }
         .signature-space {
-            height: 85px;
+            height: 100px;
             display: flex;
             align-items: center;
             justify-content: center;
             position: relative;
         }
         .signature-image {
-            max-width: 105px;
-            max-height: 75px;
+            max-width: 140px;
+            max-height: 100px;
             object-fit: contain;
             margin-top: 5px;
         }

@@ -559,16 +559,16 @@ public function approve(Request $request, $id)
         $oldStatus = $perizinan->status;
 
         $isHRD = $currentUser->role === 'hrd';
-        
         $isTargetUser = $perizinan->uid_diketahui == $currentUser->id;
 
         if (!$isHRD && !$isTargetUser) {
             return back()->with('error', 'Anda tidak memiliki akses untuk menyetujui perizinan ini');
         }
-        // SCENARIO A: User yang dituju menyetujui (status_diketahui)
+
+        // ✅ PERBAIKAN: Gunakan if-else untuk mencegah eksekusi ganda
+        // PRIORITAS 1: Jika user adalah target (uid_diketahui) DAN status_diketahui masih null
         if ($isTargetUser && $perizinan->status_diketahui === null) {
             $perizinan->status_diketahui = 'Disetujui';
-            // TIDAK perlu set uid_diketahui karena sudah ada dari awal pengajuan
             if ($request->catatan) {
                 $perizinan->catatan = $request->catatan;
             }
@@ -576,17 +576,25 @@ public function approve(Request $request, $id)
             
             $this->sendPerizinanNotification($perizinan, 'disetujui_target');
         }
-
-        // SCENARIO B: HRD menyetujui (status_disetujui)
-        if ($isHRD && $perizinan->status_disetujui === null) {
+        // PRIORITAS 2: Jika user adalah HRD DAN bukan sedang approve sebagai target
+        // DAN status_disetujui masih null DAN status_diketahui sudah disetujui
+        else if ($isHRD && 
+                 $perizinan->status_disetujui === null && 
+                 $perizinan->status_diketahui === 'Disetujui') {
             $perizinan->status_disetujui = 'Disetujui';
-            $perizinan->uid_disetujui = $currentUser->id; // PERBAIKAN: Simpan ID HRD yang menyetujui
+            $perizinan->uid_disetujui = $currentUser->id;
             if ($request->catatan) {
                 $perizinan->catatan = ($perizinan->catatan ? $perizinan->catatan . "\n" : "") . $request->catatan;
             }
             $perizinan->save();
             
             $this->sendPerizinanNotification($perizinan, 'disetujui_hrd');
+        }
+        // ✅ TAMBAHAN: Handle kasus dimana HRD mencoba approve tapi status_diketahui belum disetujui
+        else if ($isHRD && 
+                 $perizinan->status_disetujui === null && 
+                 $perizinan->status_diketahui !== 'Disetujui') {
+            return back()->with('warning', 'Perizinan harus disetujui oleh ' . ($perizinan->diketahuiOleh->name ?? 'atasan') . ' terlebih dahulu');
         }
 
         // Refresh data sebelum update overall status
@@ -610,8 +618,6 @@ public function approve(Request $request, $id)
         return back()->with('error', 'Gagal menyetujui perizinan: ' . $e->getMessage());
     }
 }
-
-
 
 
 public function generatePdf($id)

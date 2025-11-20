@@ -158,7 +158,7 @@ Route::middleware('hrd')->group(function () {
     Route::post('/hrd/perizinan/{id}/reject', [IzinController::class, 'reject']);
     
     // Delete perizinan
-    Route::delete('/perizinan/{id}', [IzinController::class, 'destroy']);
+    Route::delete('/hrd/perizinan/{id}', [IzinController::class, 'destroy']);
 
     Route::get('/perizinan/cuti', [CutiController::class, 'Admin'])->middleware(['auth', 'verified'])->name('perizinan.cuti');
     Route::get('/cuti', [CutiController::class, 'index'])->name('cuti.index');
@@ -179,6 +179,7 @@ Route::middleware('head')->group(function () {
     Route::get('/absensi/list/{divisi}', [AbsensiController::class, 'absensiHead'])->name('absensi.head');
     Route::get('/kehadiran/divisi', [HrdController::class, 'getByDateAndDivisi']);
     Route::get('/pegawai/{divisi}', [UserController::class, 'pegawaiHead'])->name('pegawai.head');
+    Route::get('/head/cuti', [CutiController::class, 'indexHead'])->name('cuti.head');
 
 
 });

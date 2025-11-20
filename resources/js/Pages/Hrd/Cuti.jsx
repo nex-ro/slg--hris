@@ -162,8 +162,7 @@ const handleDeletePengajuan = (cutiId) => {
 const getAvailableApprovers = (selectedUserId) => {
   if (!selectedUserId) return users;
   return users.filter(user => 
-    parseInt(user.id) !== parseInt(selectedUserId) &&
-    parseInt(user.id) !== parseInt(currentUserId)
+    parseInt(user.id) !== parseInt(selectedUserId) 
   );
 };
 
@@ -629,29 +628,70 @@ const closeUserDetailModal = () => {
 
   const canApproveAsAtasan = (cuti) => {
     const cutiAtasanId = parseInt(cuti.diketahui_atasan);
-  const userId = parseInt(currentUserId);
+    const userId = parseInt(currentUserId);
 
     return cutiAtasanId === userId && 
            cuti.status_diketahui_atasan === 'diproses' &&
-           cuti.status_final === 'diproses'; 
+           cuti.status_final === 'diproses';
   };
 
   const canApproveAsHRD = (cuti) => {
-  const cutiHrdId = parseInt(cuti.diketahui_hrd);
-  const userId = parseInt(currentUserId);
+    const cutiHrdId = parseInt(cuti.diketahui_hrd);
+    const userId = parseInt(currentUserId);
 
-    return cutiHrdId === userId && 
-           cuti.status_diketahui_hrd === 'diproses' &&
-           cuti.status_final === 'diproses'; // ✅ TAMBAH CEK INI
+    if (cutiHrdId !== userId || 
+        cuti.status_diketahui_hrd !== 'diproses' || 
+        cuti.status_final !== 'diproses') {
+      return false;
+    }
+
+    if (cuti.diketahui_atasan) {
+      return cuti.status_diketahui_atasan === 'disetujui';
+    }
+
+    return true;
   };
 
   const canApproveAsPimpinan = (cuti) => {
     const cutiPimpinanId = parseInt(cuti.disetujui);
     const userId = parseInt(currentUserId);
 
-    return cutiPimpinanId === userId && 
-           cuti.status_disetujui === 'diproses' &&
-           cuti.status_final === 'diproses'; 
+    if (cutiPimpinanId !== userId || 
+        cuti.status_disetujui !== 'diproses' || 
+        cuti.status_final !== 'diproses') {
+      return false;
+    }
+    if (cuti.diketahui_atasan && cuti.status_diketahui_atasan !== 'disetujui') {
+      return false;
+    }
+    if (cuti.diketahui_hrd && cuti.status_diketahui_hrd !== 'disetujui') {
+      return false;
+    }
+
+    return true;
+  };
+
+  const getHierarchyMessage = (cuti, approvalType) => {
+    if (approvalType === 'hrd' && cuti.diketahui_atasan) {
+      if (cuti.status_diketahui_atasan !== 'disetujui') {
+        return 'Menunggu persetujuan Atasan';
+      }
+    }
+
+    if (approvalType === 'pimpinan') {
+      const pending = [];
+      if (cuti.diketahui_atasan && cuti.status_diketahui_atasan !== 'disetujui') {
+        pending.push('Atasan');
+      }
+      if (cuti.diketahui_hrd && cuti.status_diketahui_hrd !== 'disetujui') {
+        pending.push('HRD');
+      }
+      if (pending.length > 0) {
+        return `Menunggu persetujuan ${pending.join(' dan ')}`;
+      }
+    }
+
+    return null;
   };
 
   // Tambahkan fungsi untuk badge status final
@@ -825,9 +865,6 @@ const handleInputChange = (e) => {
   });
 };
 
-
-
-
 const calculateWorkDays = (startDate, endDate, isHalfDay) => {
   if (!startDate || !endDate) {
     setWorkDays(0);
@@ -840,9 +877,29 @@ const calculateWorkDays = (startDate, endDate, isHalfDay) => {
     return;
   }
 
-  // Hitung hari kerja (Senin-Jumat) untuk cuti penuh
+  // ✅ PERBAIKAN: Normalisasi tanggal (set ke jam 00:00:00) untuk menghindari masalah timezone
   const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+  
   const end = new Date(endDate);
+  end.setHours(0, 0, 0, 0);
+
+  // ✅ PERBAIKAN: Hitung selisih hari dulu
+  const timeDiff = end.getTime() - start.getTime();
+  const totalDays = Math.floor(timeDiff / (1000 * 60 * 60 * 24)) + 1; // +1 karena inklusif
+
+  // ✅ JIKA HANYA 1 HARI (tanggal sama)
+  if (totalDays === 1) {
+    const dayOfWeek = start.getDay();
+    // Cek apakah hari kerja (Senin=1 sampai Jumat=5)
+    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+      setWorkDays(1);
+    } else {
+      setWorkDays(0); // Weekend tidak dihitung
+    }
+    return;
+  }
+
   let count = 0;
   let current = new Date(start);
 
@@ -854,17 +911,9 @@ const calculateWorkDays = (startDate, endDate, isHalfDay) => {
     }
     current.setDate(current.getDate() + 1);
   }
+  
   setWorkDays(count);
 };
-
-
-// ========================================
-// FUNGSI OPEN FORM MODAL ADMIN (UPDATE)
-// ========================================
-
-
-
-
 
 
 // Filter & Pagination
@@ -1258,135 +1307,135 @@ const handlePageChangePengajuan = (page) => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-  {paginatedPengajuanCuti.length > 0 ? (
-    paginatedPengajuanCuti.map((cuti, index) => (
-      <tr key={cuti.id} className="hover:bg-gray-50">
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-          {(currentPagePengajuan - 1) * itemsPerPagePengajuan + index + 1}
-        </td>
-        <td className="px-6 py-4 whitespace-nowrap">
-          <div className="text-sm font-medium text-gray-900">{cuti.user?.name}</div>
-          <div className="text-sm text-gray-500">{formatDate(cuti.tanggal_pengajuan)}</div>
-        </td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-          {formatDate(cuti.tanggal_mulai)} - {formatDate(cuti.tanggal_selesai)}
-        </td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600">
-          {cuti.jumlah_hari} hari
-        </td>
-        <td className="px-6 py-4">
-          <div className="flex flex-col gap-2">
-            {cuti.status_diketahui_atasan ? getStatusBadge(cuti.status_diketahui_atasan) : '-'}
-            {canApproveAsAtasan(cuti) && (
-              <div className="flex gap-1">
-                <button
-                  onClick={() => handleApproval(cuti.id, 'atasan', 'disetujui')}
-                  className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
-                  title="Setujui"
-                >
-                  <CheckCircle className="w-3 h-3" />
-                  Setuju
-                </button>
-                <button
-                  onClick={() => handleApproval(cuti.id, 'atasan', 'ditolak')}
-                  className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
-                  title="Tolak"
-                >
-                  <XCircle className="w-3 h-3" />
-                  Tolak
-                </button>
-              </div>
-            )}
-          </div>
-        </td>
-        <td className="px-6 py-4">
-          <div className="flex flex-col gap-2">
-            {cuti.status_diketahui_hrd ? getStatusBadge(cuti.status_diketahui_hrd) : '-'}
-            {canApproveAsHRD(cuti) && (
-              <div className="flex gap-1">
-                <button
-                  onClick={() => handleApproval(cuti.id, 'hrd', 'disetujui')}
-                  className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
-                  title="Setujui"
-                >
-                  <CheckCircle className="w-3 h-3" />
-                  Setuju
-                </button>
-                <button
-                  onClick={() => handleApproval(cuti.id, 'hrd', 'ditolak')}
-                  className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
-                  title="Tolak"
-                >
-                  <XCircle className="w-3 h-3" />
-                  Tolak
-                </button>
-              </div>
-            )}
-          </div>
-        </td>
-        <td className="px-6 py-4">
-          <div className="flex flex-col gap-2">
-            {cuti.status_disetujui ? getStatusBadge(cuti.status_disetujui) : '-'}
-            {canApproveAsPimpinan(cuti) && (
-              <div className="flex gap-1">
-                <button
-                  onClick={() => handleApproval(cuti.id, 'pimpinan', 'disetujui')}
-                  className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
-                  title="Setujui"
-                >
-                  <CheckCircle className="w-3 h-3" />
-                  Setuju
-                </button>
-                <button
-                  onClick={() => handleApproval(cuti.id, 'pimpinan', 'ditolak')}
-                  className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
-                  title="Tolak"
-                >
-                  <XCircle className="w-3 h-3" />
-                  Tolak
-                </button>
-              </div>
-            )}
-          </div>
-        </td>
-        <td className="px-6 py-4 text-center">
-          <div className="flex items-center justify-center gap-2">
-            <button
-              onClick={() => openDetailModal(cuti)}
-              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              title="Lihat Detail"
-            >
-              <Eye className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => handleDownloadPdf(cuti.id)}
-              className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-              title="Download PDF"
-            >
-              <Download className="w-4 h-4" />
-            </button>
-            {cuti.status_final === 'ditolak' && (
-              <button
-                onClick={() => handleDeletePengajuan(cuti.id)}
-                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                title="Hapus Pengajuan"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </td>
-
-      </tr>
-    ))
-  ) : (
-    <tr>
-      <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
-        {searchPengajuan ? 'Tidak ada hasil yang ditemukan' : 'Belum ada pengajuan cuti'}
-      </td>
-    </tr>
-  )}
-</tbody>
+                {paginatedPengajuanCuti.length > 0 ? (
+                  paginatedPengajuanCuti.map((cuti, index) => (
+                    <tr key={cuti.id} className="hover:bg-gray-50">
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {(currentPagePengajuan - 1) * itemsPerPagePengajuan + index + 1}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-gray-900">{cuti.user?.name}</div>
+                        <div className="text-sm text-gray-500">{formatDate(cuti.tanggal_pengajuan)}</div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {formatDate(cuti.tanggal_mulai)} - {formatDate(cuti.tanggal_selesai)}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-blue-600">
+                        {cuti.jumlah_hari} hari
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-2">
+                          {cuti.status_diketahui_atasan ? getStatusBadge(cuti.status_diketahui_atasan) : '-'}
+                          {canApproveAsAtasan(cuti) && (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleApproval(cuti.id, 'atasan', 'disetujui')}
+                                className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                                title="Setujui"
+                              >
+                                <CheckCircle className="w-3 h-3" />
+                                Setuju
+                              </button>
+                              <button
+                                onClick={() => handleApproval(cuti.id, 'atasan', 'ditolak')}
+                                className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
+                                title="Tolak"
+                              >
+                                <XCircle className="w-3 h-3" />
+                                Tolak
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-2">
+                          {cuti.status_diketahui_hrd ? getStatusBadge(cuti.status_diketahui_hrd) : '-'}
+                          {canApproveAsHRD(cuti) && (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleApproval(cuti.id, 'hrd', 'disetujui')}
+                                className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                                title="Setujui"
+                              >
+                                <CheckCircle className="w-3 h-3" />
+                                Setuju
+                              </button>
+                              <button
+                                onClick={() => handleApproval(cuti.id, 'hrd', 'ditolak')}
+                                className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
+                                title="Tolak"
+                              >
+                                <XCircle className="w-3 h-3" />
+                                Tolak
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col gap-2">
+                          {cuti.status_disetujui ? getStatusBadge(cuti.status_disetujui) : '-'}
+                          {canApproveAsPimpinan(cuti) && (
+                            <div className="flex gap-1">
+                              <button
+                                onClick={() => handleApproval(cuti.id, 'pimpinan', 'disetujui')}
+                                className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
+                                title="Setujui"
+                              >
+                                <CheckCircle className="w-3 h-3" />
+                                Setuju
+                              </button>
+                              <button
+                                onClick={() => handleApproval(cuti.id, 'pimpinan', 'ditolak')}
+                                className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
+                                title="Tolak"
+                              >
+                                <XCircle className="w-3 h-3" />
+                                Tolak
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <button
+                            onClick={() => openDetailModal(cuti)}
+                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                            title="Lihat Detail"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDownloadPdf(cuti.id)}
+                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+                            title="Download PDF"
+                          >
+                            <Download className="w-4 h-4" />
+                          </button>
+                          {cuti.status_final === 'ditolak' && (
+                            <button
+                              onClick={() => handleDeletePengajuan(cuti.id)}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                              title="Hapus Pengajuan"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                        
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                      {searchPengajuan ? 'Tidak ada hasil yang ditemukan' : 'Belum ada pengajuan cuti'}
+                    </td>
+                  </tr>
+                )}
+              </tbody>
               </table>
               {/* Pagination untuk Pengajuan Cuti */}
 {totalPagesPengajuan > 1 && (
@@ -1552,8 +1601,7 @@ const handlePageChangePengajuan = (page) => {
             )}
           </div>
         )}
-
-        {/* Status Persetujuan */}
+        {/* Status Persetujuan dengan Hierarki */}
         <div className="border-t pt-4">
           <h4 className="text-sm font-semibold text-gray-700 mb-3">Status Persetujuan</h4>
           <div className="space-y-3">
@@ -1566,7 +1614,9 @@ const handlePageChangePengajuan = (page) => {
               }`}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-gray-600" />
+                    <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center text-blue-600 font-bold text-sm">
+                      1
+                    </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">
                         {selectedCuti.diketahui_atasan_user.name}
@@ -1604,11 +1654,15 @@ const handlePageChangePengajuan = (page) => {
               <div className={`rounded-lg p-4 ${
                 selectedCuti.status_final === 'ditolak' || selectedCuti.status_final === 'disetujui'
                   ? 'bg-gray-100 opacity-75'
+                  : !canApproveAsHRD(selectedCuti)
+                  ? 'bg-gray-50 opacity-60'
                   : 'bg-gray-50'
               }`}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-gray-600" />
+                    <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-600 font-bold text-sm">
+                      {selectedCuti.diketahui_atasan ? '2' : '1'}
+                    </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">
                         {selectedCuti.diketahui_hrd_user.name}
@@ -1620,6 +1674,17 @@ const handlePageChangePengajuan = (page) => {
                   </div>
                   {getStatusBadge(selectedCuti.status_diketahui_hrd)}
                 </div>
+
+                {/* Pesan Hierarki */}
+                {(() => {
+                  const hierarchyMsg = getHierarchyMessage(selectedCuti, 'hrd');
+                  return hierarchyMsg && selectedCuti.status_final === 'diproses' && (
+                    <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                      ⏳ {hierarchyMsg}
+                    </div>
+                  );
+                })()}
+
                 {canApproveAsHRD(selectedCuti) && selectedCuti.status_final === 'diproses' && (
                   <div className="flex gap-2 mt-3">
                     <button
@@ -1646,11 +1711,20 @@ const handlePageChangePengajuan = (page) => {
               <div className={`rounded-lg p-4 ${
                 selectedCuti.status_final === 'ditolak' || selectedCuti.status_final === 'disetujui'
                   ? 'bg-gray-100 opacity-75'
+                  : !canApproveAsPimpinan(selectedCuti)
+                  ? 'bg-gray-50 opacity-60'
                   : 'bg-gray-50'
               }`}>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <User className="w-4 h-4 text-gray-600" />
+                    <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600 font-bold text-sm">
+                      {(() => {
+                        let level = 1;
+                        if (selectedCuti.diketahui_atasan) level++;
+                        if (selectedCuti.diketahui_hrd) level++;
+                        return level;
+                      })()}
+                    </div>
                     <div>
                       <p className="text-sm font-medium text-gray-900">
                         {selectedCuti.disetujui_user.name}
@@ -1662,6 +1736,17 @@ const handlePageChangePengajuan = (page) => {
                   </div>
                   {getStatusBadge(selectedCuti.status_disetujui)}
                 </div>
+                    
+                {/* Pesan Hierarki */}
+                {(() => {
+                  const hierarchyMsg = getHierarchyMessage(selectedCuti, 'pimpinan');
+                  return hierarchyMsg && selectedCuti.status_final === 'diproses' && (
+                    <div className="mb-2 p-2 bg-yellow-50 border border-yellow-200 rounded text-xs text-yellow-800">
+                      ⏳ {hierarchyMsg}
+                    </div>
+                  );
+                })()}
+
                 {canApproveAsPimpinan(selectedCuti) && selectedCuti.status_final === 'diproses' && (
                   <div className="flex gap-2 mt-3">
                     <button

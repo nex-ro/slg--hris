@@ -10,7 +10,6 @@ class Perizinan extends Model
     use HasFactory;
 
     protected $table = 'perizinans';
-
     protected $fillable = [
         'uid',
         'uid_diketahui',
