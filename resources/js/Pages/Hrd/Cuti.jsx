@@ -25,6 +25,12 @@ function Cuti({ jatahCuti, users, tahunList, filters = {}, pemakaianCuti = [], a
   const [searchJatah, setSearchJatah] = useState('');
   const [currentPageJatah, setCurrentPageJatah] = useState(1);
   const itemsPerPageJatah = 9; 
+const [showEditStatusModal, setShowEditStatusModal] = useState(false);
+const [selectedCutiForEdit, setSelectedCutiForEdit] = useState(null);
+const [editStatusData, setEditStatusData] = useState({
+  status_final: '',
+  catatan: ''
+});
 
   const [showFormModalAdmin, setShowFormModalAdmin] = useState(false);
   const [selectedUserForCuti, setSelectedUserForCuti] = useState(null);
@@ -124,35 +130,37 @@ const handleDeletePengajuan = (cutiId) => {
   const cuti = pemakaianCutiArray.find(c => c.id === cutiId);
   
   if (!cuti) {
-    showToast('Data pengajuan cuti tidak ditemukan', 'error'); // ← UBAH INI
+    showToast('Data pengajuan cuti tidak ditemukan', 'error');
     return;
   }
 
+  // ✅ PERBAIKAN: Hanya cek jika sudah disetujui, tidak perlu cek ditolak
   if (cuti.status_final === 'disetujui') {
-    showToast('Tidak dapat menghapus pengajuan cuti yang sudah disetujui', 'warning'); // ← UBAH INI
+    showToast('Tidak dapat menghapus pengajuan cuti yang sudah disetujui', 'warning');
     return;
   }
 
+  const statusText = cuti.status_final === 'ditolak' ? 'Ditolak' : 'Diproses';
   const confirmMessage = `Apakah Anda yakin ingin menghapus pengajuan cuti ini?\n\n` +
     `Karyawan: ${cuti.user?.name}\n` +
     `Tanggal: ${formatDate(cuti.tanggal_mulai)} - ${formatDate(cuti.tanggal_selesai)}\n` +
-    `Status: ${cuti.status_final === 'ditolak' ? 'Ditolak' : 'Diproses'}`;
+    `Status: ${statusText}`;
 
   if (confirm(confirmMessage)) {
-    setLoadingOverlay(true); // ← TAMBAH INI
+    setLoadingOverlay(true);
     router.delete(route('cuti.destroy-pengajuan', cutiId), {
       onSuccess: () => {
-        setLoadingOverlay(false); // ← TAMBAH INI
-        showToast('Pengajuan cuti berhasil dihapus!', 'success'); // ← TAMBAH INI
+        setLoadingOverlay(false);
+        showToast('Pengajuan cuti berhasil dihapus!', 'success');
         router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
       },
       onError: (errors) => {
         console.error('Delete errors:', errors);
-        setLoadingOverlay(false); // ← TAMBAH INI
+        setLoadingOverlay(false);
         if (errors.error) {
-          showToast(errors.error, 'error'); // ← UBAH INI
+          showToast(errors.error, 'error');
         } else {
-          showToast('Terjadi kesalahan saat menghapus pengajuan cuti', 'error'); // ← UBAH INI
+          showToast('Terjadi kesalahan saat menghapus pengajuan cuti', 'error');
         }
       }
     });
@@ -182,7 +190,44 @@ const [formData, setFormData] = useState({
 });
 
 const [workDays, setWorkDays] = useState(0);
+// Function untuk buka modal edit status
+const openEditStatusModal = (cuti) => {
+  setSelectedCutiForEdit(cuti);
+  setEditStatusData({
+    status_final: cuti.status_final || 'diproses',
+    catatan: ''
+  });
+  setShowEditStatusModal(true);
+};
 
+// Function untuk submit edit status
+const handleSubmitEditStatus = () => {
+  if (editStatusData.status_final === 'ditolak' && !editStatusData.catatan.trim()) {
+    showToast('Catatan wajib diisi saat menolak pengajuan cuti', 'warning');
+    return;
+  }
+
+  setLoadingOverlay(true);
+  
+  router.post(route('hrd.cuti.updateStatusDirect', selectedCutiForEdit.id), editStatusData, {
+    onSuccess: () => {
+      setShowEditStatusModal(false);
+      setSelectedCutiForEdit(null);
+      setEditStatusData({ status_final: '', catatan: '' });
+      setLoadingOverlay(false);
+      showToast('Status pengajuan cuti berhasil diubah!', 'success');
+      router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
+    },
+    onError: (errors) => {
+      setLoadingOverlay(false);
+      if (errors.error) {
+        showToast(errors.error, 'error');
+      } else {
+        showToast('Terjadi kesalahan saat mengubah status', 'error');
+      }
+    }
+  });
+};
 
   const currentUserId = auth?.user?.id;
 
@@ -1399,32 +1444,44 @@ const handlePageChangePengajuan = (page) => {
                         </div>
                       </td>
                       <td className="px-6 py-4 text-center">
-                        <div className="flex items-center justify-center gap-2">
-                          <button
-                            onClick={() => openDetailModal(cuti)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Lihat Detail"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDownloadPdf(cuti.id)}
-                            className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                            title="Download PDF"
-                          >
-                            <Download className="w-4 h-4" />
-                          </button>
-                          {cuti.status_final === 'ditolak' && (
-                            <button
-                              onClick={() => handleDeletePengajuan(cuti.id)}
-                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              title="Hapus Pengajuan"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-                      </td>
+  <div className="flex items-center justify-center gap-2">
+    <button
+      onClick={() => openDetailModal(cuti)}
+      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+      title="Lihat Detail"
+    >
+      <Eye className="w-4 h-4" />
+    </button>
+    
+    <button
+      onClick={() => handleDownloadPdf(cuti.id)}
+      className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
+      title="Download PDF"
+    >
+      <Download className="w-4 h-4" />
+    </button>
+    
+    {/* ✅ BUTTON BARU: EDIT STATUS */}
+    <button
+      onClick={() => openEditStatusModal(cuti)}
+      className="p-2 text-purple-600 hover:bg-purple-50 rounded-lg transition-colors"
+      title="Edit Status"
+    >
+      <Edit2 className="w-4 h-4" />
+    </button>
+    
+    {/* ✅ UPDATED: Delete button - tidak perlu cek ditolak */}
+    {cuti.status_final !== 'disetujui' && (
+      <button
+        onClick={() => handleDeletePengajuan(cuti.id)}
+        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+        title="Hapus Pengajuan"
+      >
+        <Trash2 className="w-4 h-4" />
+      </button>
+    )}
+  </div>
+</td>
                         
                     </tr>
                   ))
@@ -2579,6 +2636,135 @@ const handlePageChangePengajuan = (page) => {
   </div>
 )}
 {/* Modal Tambah/Edit Jatah Cuti */}
+{/* ✅ MODAL BARU: EDIT STATUS LANGSUNG */}
+{showEditStatusModal && selectedCutiForEdit && (
+  <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+    <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto mx-5">
+      <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-purple-50">
+        <div className="flex items-center gap-3">
+          <Edit2 className="w-6 h-6 text-purple-600" />
+          <h3 className="text-xl font-semibold text-gray-800">Edit Status Pengajuan</h3>
+        </div>
+        <button
+          onClick={() => {
+            setShowEditStatusModal(false);
+            setSelectedCutiForEdit(null);
+            setEditStatusData({ status_final: '', catatan: '' });
+          }}
+          className="text-gray-400 hover:text-gray-600 transition-colors"
+        >
+          <X className="w-6 h-6" />
+        </button>
+      </div>
+
+      <div className="p-6 space-y-4">
+        {/* Info Pengajuan */}
+        <div className="bg-gray-50 rounded-lg p-4">
+          <p className="text-sm text-gray-600 mb-2">Pengajuan dari:</p>
+          <p className="font-semibold text-gray-900">{selectedCutiForEdit.user?.name}</p>
+          <p className="text-sm text-gray-600 mt-1">
+            {formatDate(selectedCutiForEdit.tanggal_mulai)} - {formatDate(selectedCutiForEdit.tanggal_selesai)} 
+            ({selectedCutiForEdit.jumlah_hari} hari)
+          </p>
+          <div className="mt-2">
+            <span className="text-sm text-gray-600">Status saat ini: </span>
+            {getStatusFinalBadge(selectedCutiForEdit.status_final)}
+          </div>
+        </div>
+
+        {/* Pilih Status */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Ubah Status Menjadi <span className="text-red-500">*</span>
+          </label>
+          <select
+            value={editStatusData.status_final}
+            onChange={(e) => setEditStatusData({ ...editStatusData, status_final: e.target.value })}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+            required
+          >
+            <option value="">Pilih Status</option>
+            <option value="disetujui">Disetujui</option>
+            <option value="ditolak">Ditolak</option>
+          </select>
+        </div>
+
+        {/* Catatan */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Catatan {editStatusData.status_final === 'ditolak' && <span className="text-red-500">*</span>}
+          </label>
+          <textarea
+            value={editStatusData.catatan}
+            onChange={(e) => setEditStatusData({ ...editStatusData, catatan: e.target.value })}
+            placeholder={
+              editStatusData.status_final === 'disetujui' 
+                ? 'Tambahkan catatan persetujuan (opsional)...' 
+                : 'Alasan penolakan wajib diisi...'
+            }
+            className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:border-transparent resize-none ${
+              editStatusData.status_final === 'ditolak' 
+                ? 'border-red-300 focus:ring-red-500' 
+                : 'border-gray-300 focus:ring-purple-500'
+            }`}
+            rows="4"
+            maxLength="500"
+          />
+          {editStatusData.status_final === 'ditolak' && (
+            <p className="text-xs text-red-600 mt-1">
+              * Catatan wajib diisi saat menolak pengajuan
+            </p>
+          )}
+          <p className="text-xs text-gray-500 mt-1">
+            {editStatusData.catatan.length}/500 karakter
+          </p>
+        </div>
+
+        {/* Warning */}
+        {editStatusData.status_final && (
+          <div className={`p-3 rounded-lg ${
+            editStatusData.status_final === 'disetujui' 
+              ? 'bg-green-50 border border-green-200 text-green-800' 
+              : 'bg-red-50 border border-red-200 text-red-800'
+          }`}>
+            <p className="text-sm font-medium">⚠️ Peringatan:</p>
+            <p className="text-xs mt-1">
+              {editStatusData.status_final === 'disetujui' 
+                ? 'Jatah cuti akan langsung dikurangi dan kehadiran akan diupdate.' 
+                : 'Pengajuan akan langsung ditolak dan tidak dapat diubah lagi.'}
+            </p>
+          </div>
+        )}
+      </div>
+
+      <div className="flex gap-3 p-6 border-t border-gray-200">
+        <button
+          onClick={() => {
+            setShowEditStatusModal(false);
+            setSelectedCutiForEdit(null);
+            setEditStatusData({ status_final: '', catatan: '' });
+          }}
+          className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          Batal
+        </button>
+        <button
+          onClick={handleSubmitEditStatus}
+          disabled={!editStatusData.status_final}
+          className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors ${
+            !editStatusData.status_final
+              ? 'bg-gray-400 cursor-not-allowed'
+              : editStatusData.status_final === 'disetujui'
+              ? 'bg-green-600 hover:bg-green-700'
+              : 'bg-red-600 hover:bg-red-700'
+          }`}
+        >
+          Simpan Perubahan
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 {showModal && (
   <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
     {/* UBAH: max-w-md -> max-w-lg, TAMBAH: max-h-[85vh] overflow-y-auto */}

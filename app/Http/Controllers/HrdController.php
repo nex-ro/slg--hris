@@ -73,6 +73,7 @@ class HrdController extends Controller
             ...$data
         ]);
     }
+     
     private function getMonthlyData($month, $year, $tower, $divisi, $userId)
 {
     return [
@@ -1127,6 +1128,77 @@ public function exportByTowerAndDivisi(Request $request)
             'message' => $e->getMessage()
         ], 500);
     }
+}
+// Tambahkan di DashboardController.php
+
+public function head(Request $request)
+{
+    $user = auth()->user();
+    $currentDate = now();
+    
+    // Get filter parameters with defaults
+    $month = $request->input('month', $currentDate->month);
+    $year = $request->input('year', $currentDate->year);
+    $userId = $request->input('userId', null);
+    $periodType = $request->input('periodType', 'month');
+    
+    // ✅ FIXED: Hanya divisi user yang login
+    $userDivisi = $user->divisi;
+    $userTower = $user->tower;
+    
+    // Get users dalam divisi yang sama untuk filter
+    $users = User::where('active', 1)
+        ->where('divisi', $userDivisi)
+        ->select('id', 'name')
+        ->orderBy('name')
+        ->get();
+
+    // Get data based on period type - dengan filter divisi user
+    if ($periodType === 'month') {
+        $data = $this->getMonthlyDataHead($month, $year, $userTower, $userDivisi, $userId);
+    } else {
+        $data = $this->getPeriodDataHead($year, $userTower, $userDivisi, $userId);
+    }
+
+    return Inertia::render('Atasan/Dashboard', [
+        'filters' => [
+            'month' => (int)$month,
+            'year' => (int)$year,
+            'divisi' => $userDivisi,
+            'tower' => $userTower,
+            'userId' => $userId,
+            'periodType' => $periodType,
+        ],
+        'users' => $users,
+        'userInfo' => [
+            'name' => $user->name,
+            'divisi' => $userDivisi,
+            'tower' => $userTower,
+        ],
+        ...$data
+    ]);
+}
+
+private function getMonthlyDataHead($month, $year, $tower, $divisi, $userId)
+{
+    return [
+        'top10PerTower' => $this->getTop10LateEmployees($month, $year, $tower, $divisi),
+        'monthlyTable' => $this->getMonthlyTableData($year, $tower, $divisi, $month, 'month'),
+        'lateTrendData' => $this->getLateTrendDataMonth($month, $year, $tower, $divisi, $userId),
+        'late3TimesData' => $this->getEmployeesLate3Times($month, $year, $tower, $divisi),
+        'summaryStats' => $this->getSummaryStatsMonth($month, $year, $tower, $divisi),
+    ];
+}
+
+private function getPeriodDataHead($year, $tower, $divisi, $userId)
+{
+    return [
+        'top10PerTower' => $this->getTop10LateEmployeesPeriod($year, $tower, $divisi),
+        'monthlyTable' => $this->getMonthlyTableData($year, $tower, $divisi, null, 'period'),
+        'lateTrendData' => $this->getLateTrendDataPeriod($year, $tower, $divisi, $userId),
+        'late3TimesData' => $this->getEmployeesLate3TimesPeriod($year, $tower, $divisi),
+        'summaryStats' => $this->getSummaryStatsPeriod($year, $tower, $divisi),
+    ];
 }
 
 

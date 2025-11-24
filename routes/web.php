@@ -87,7 +87,6 @@ Route::middleware('pegawai')->group(function () {
 
             Route::get('/cuti', [CutiController::class, 'index'])->name('cuti.index');
     Route::get('/cuti/create', [CutiController::class, 'create'])->name('cuti.create');
-    Route::post('/cuti/store', [CutiController::class, 'storePengajuan'])->name('cuti.store');
     Route::get('/cuti/rekan-kerja', [CutiController::class, 'getRekanKerja'])->name('cuti.rekan-kerja');
 
     Route::get('/cuti/approvers', [CutiController::class, 'getApprovers'])->name('cuti.approvers'); // Route baru
@@ -171,11 +170,13 @@ Route::middleware('hrd')->group(function () {
 
     Route::post('/hrd/cuti/store-pengajuan-admin', [CutiController::class, 'storePengajuanAdmin'])
     ->name('hrd.cuti.storePengajuanAdmin');
+    Route::post('/hrd/cuti/update-status-direct/{id}', [CutiController::class, 'updateStatusDirect'])
+    ->name('hrd.cuti.updateStatusDirect');
 
     
 });
 Route::middleware('head')->group(function () {
-    Route::get('/HEAD/dashboard', [HrdController::class, 'index'])->middleware(['auth', 'verified'])->name('head.dashboard');
+    Route::get('/HEAD/dashboard', [HrdController::class, 'head'])->middleware(['auth', 'verified'])->name('head.dashboard');
     Route::get('/absensi/list/{divisi}', [AbsensiController::class, 'absensiHead'])->name('absensi.head');
     Route::get('/kehadiran/divisi', [HrdController::class, 'getByDateAndDivisi']);
     Route::get('/pegawai/{divisi}', [UserController::class, 'pegawaiHead'])->name('pegawai.head');
@@ -198,6 +199,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/izin/{id}/pdf', [IzinController::class, 'generatePdf'])->name('izin.pdf');
     Route::get('/api/kehadiran/by-user', [HrdController::class, 'getByUser']);
     Route::get('/cuti/download-pdf/{id}', [CutiController::class, 'downloadPdf'])->name('cuti.download-pdf');
+
+
+        Route::post('/cuti/store', [CutiController::class, 'storePengajuan'])->name('cuti.store');
+
 });
 
 require __DIR__.'/auth.php';

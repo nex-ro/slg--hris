@@ -281,25 +281,25 @@ useEffect(() => {
     return 'Dashboard';
   };
 
-  const roleBadge = () => {
+  const jabatanBadge = () => {
+    const jabatan = auth?.user?.jabatan || 'User';
     const roleColors = {
       'hrd': 'from-purple-500 to-purple-600',
       'head': 'from-blue-500 to-blue-600',
+      'atasan': 'from-blue-500 to-blue-600',
       'admin': 'from-red-500 to-red-600',
       'pegawai': 'from-green-500 to-green-600',
       'karyawan': 'from-green-500 to-green-600',
       'employee': 'from-green-500 to-green-600',
     };
-    const roleLabels = {
-      'hrd': 'HRD', 'head': 'Head', 'admin': 'Admin', 
-      'pegawai': 'Pegawai', 'karyawan': 'Pegawai', 'employee': 'Pegawai',
-    };
+
     const color = roleColors[userRole?.toLowerCase()] || 'from-gray-500 to-gray-600';
-    const label = roleLabels[userRole?.toLowerCase()] || 'User';
-    return { color, label };
+
+    return { color, label: jabatan };
   };
 
-  const badge = roleBadge();
+  const badge = jabatanBadge();
+
 
   return (
     <div className="min-h-screen bg-gray-50 flex relative">
@@ -318,7 +318,6 @@ useEffect(() => {
     </div>
   </div>
 )}
-
       {sidebarOpen && (
         <div className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}

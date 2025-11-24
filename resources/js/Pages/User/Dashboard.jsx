@@ -34,11 +34,8 @@ function Dashboard({ auth, jatahCuti, statistik, pengajuanMenunggu, bulanTahun }
     <DashboardLayouts>
       <Head title="Dashboard" />
 
-      <div className="p-6">
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold text-gray-800">Dashboard</h1>
-          <p className="text-gray-600">Selamat datang, {auth?.user?.name || 'Pengguna'}</p>
-        </div>
+      <div className="">
+        
 
         {/* Pengajuan Menunggu Approval */}
         {(pengajuanMenunggu?.cuti > 0 || pengajuanMenunggu?.izin > 0 || pengajuanMenunggu?.sakit > 0) && (

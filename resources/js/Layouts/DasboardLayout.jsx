@@ -45,9 +45,25 @@ const DashboardLayouts = ({ children }) => {
     }
   }, [auth?.user]);
 
-  const getCsrfToken = () => {
-    return document.querySelector('meta[name="csrf-token"]')?.content || '';
-  };
+ const getCsrfToken = () => {
+  // Coba ambil dari meta tag
+  let token = document.querySelector('meta[name="csrf-token"]')?.content;
+  
+  // Jika tidak ada, coba dari cookie
+  if (!token) {
+    const cookies = document.cookie.split(';');
+    for (let cookie of cookies) {
+      const [name, value] = cookie.trim().split('=');
+      if (name === 'XSRF-TOKEN') {
+        token = decodeURIComponent(value);
+        break;
+      }
+    }
+  }
+  
+  return token || '';
+};
+
 
   const fetchNotifications = async () => {
     if (!auth?.user) return;
@@ -73,62 +89,102 @@ const DashboardLayouts = ({ children }) => {
     }
   };
 
-  const handleNotificationClick = async (notification) => {
-    try {
-      const response = await fetch(`/notifications/${notification.id}/click`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': getCsrfToken()
-        },
-        credentials: 'include'
-      });
-      
-      if (response.ok) {
-        const result = await response.json();
-        
-        // Update notification list
-        fetchNotifications();
-        
-        // Close dropdown
-        setNotificationOpen(false);
-        
-        // Redirect jika link tidak kosong
-        if (result.link && result.link.trim() !== '') {
-          // Cek apakah link internal atau eksternal
-          if (result.link.startsWith('http://') || result.link.startsWith('https://')) {
-            window.location.href = result.link; // External link
-          } else {
-            window.location.href = result.link; // Internal link (relative path)
-          }
-        }
-      } else {
-        console.error('Failed to mark notification as read:', response.status);
-      }
-    } catch (error) {
-      console.error('Error handling notification click:', error);
+ const handleNotificationClick = async (notification) => {
+  try {
+    const csrfToken = getCsrfToken();
+    
+    if (!csrfToken) {
+      console.error('CSRF token not found');
+      toast.error('Terjadi kesalahan. Silakan refresh halaman.');
+      return;
     }
-  };
 
-  const markAllAsRead = async () => {
-    try {
-      const response = await fetch('/notifications/mark-all-read', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': getCsrfToken()
-        },
-        credentials: 'include'
-      });
-      if (response.ok) {
-        fetchNotifications();
+    const response = await fetch(`/notifications/${notification.id}/click`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'include',
+      body: JSON.stringify({})
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      
+      // Update notification list
+      await fetchNotifications();
+      
+      // Close dropdown
+      setNotificationOpen(false);
+      
+      // Redirect jika link tidak kosong
+      if (result.link && result.link.trim() !== '') {
+        if (result.link.startsWith('http://') || result.link.startsWith('https://')) {
+          window.location.href = result.link;
+        } else {
+          window.location.href = result.link;
+        }
       }
-    } catch (error) {
-      console.error('Error marking all as read:', error);
+    } else if (response.status === 419) {
+      console.error('CSRF token mismatch');
+      toast.error('Sesi Anda telah berakhir. Silakan refresh halaman.');
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } else {
+      console.error('Failed to mark notification as read:', response.status);
+      toast.error('Gagal memproses notifikasi');
     }
-  };
+  } catch (error) {
+    console.error('Error handling notification click:', error);
+    toast.error('Terjadi kesalahan jaringan');
+  }
+};
+  const markAllAsRead = async () => {
+  try {
+    const csrfToken = getCsrfToken();
+    
+    if (!csrfToken) {
+      console.error('CSRF token not found');
+      toast.error('Terjadi kesalahan. Silakan refresh halaman.');
+      return;
+    }
+
+    const response = await fetch('/notifications/mark-all-read', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+        'X-CSRF-TOKEN': csrfToken,
+        'X-Requested-With': 'XMLHttpRequest'
+      },
+      credentials: 'include',
+      body: JSON.stringify({}) // Kirim body kosong untuk POST request
+    });
+
+    if (response.ok) {
+      await fetchNotifications();
+      toast.success('Semua notifikasi telah ditandai sebagai dibaca');
+    } else if (response.status === 419) {
+      console.error('CSRF token mismatch');
+      toast.error('Sesi Anda telah berakhir. Silakan refresh halaman.');
+      // Optional: reload halaman setelah beberapa detik
+      setTimeout(() => {
+        window.location.reload();
+      }, 2000);
+    } else {
+      console.error('Failed to mark all as read:', response.status);
+      toast.error('Gagal menandai notifikasi');
+    }
+  } catch (error) {
+    console.error('Error marking all as read:', error);
+    toast.error('Terjadi kesalahan jaringan');
+  }
+};
+
 
   const formatTimeAgo = (dateString) => {
     const date = new Date(dateString);
@@ -263,25 +319,27 @@ const DashboardLayouts = ({ children }) => {
     return 'Dashboard';
   };
 
-  const roleBadge = () => {
-    const roleColors = {
-      'hrd': 'from-purple-500 to-purple-600',
-      'head': 'from-blue-500 to-blue-600',
-      'admin': 'from-red-500 to-red-600',
-      'pegawai': 'from-green-500 to-green-600',
-      'karyawan': 'from-green-500 to-green-600',
-      'employee': 'from-green-500 to-green-600',
-    };
-    const roleLabels = {
-      'hrd': 'HRD', 'head': 'Head', 'admin': 'Admin', 
-      'pegawai': 'Pegawai', 'karyawan': 'Pegawai', 'employee': 'Pegawai',
-    };
-    const color = roleColors[userRole?.toLowerCase()] || 'from-gray-500 to-gray-600';
-    const label = roleLabels[userRole?.toLowerCase()] || 'User';
-    return { color, label };
+ const jabatanBadge = () => {
+  const jabatan = auth?.user?.jabatan || 'User';
+  
+  // Warna berdasarkan role untuk konsistensi, tapi label dari jabatan
+  const roleColors = {
+    'hrd': 'from-purple-500 to-purple-600',
+    'head': 'from-blue-500 to-blue-600',
+    'atasan': 'from-blue-500 to-blue-600',
+    'admin': 'from-red-500 to-red-600',
+    'pegawai': 'from-green-500 to-green-600',
+    'karyawan': 'from-green-500 to-green-600',
+    'employee': 'from-green-500 to-green-600',
   };
+  
+  const color = roleColors[userRole?.toLowerCase()] || 'from-gray-500 to-gray-600';
+  
+  return { color, label: jabatan };
+};
 
-  const badge = roleBadge();
+const badge = jabatanBadge();
+
 
   return (
     <div className="min-h-screen bg-gray-50 flex">
@@ -562,15 +620,15 @@ const DashboardLayouts = ({ children }) => {
         </header>
 
         <div className="flex-1 overflow-y-auto">
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-4 sm:px-6 py-8">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
-              <div>
-                <h1 className="text-3xl font-bold text-white">{getCurrentPageLabel()}</h1>
-                <p className="text-blue-100 mt-1">Welcome back, {auth?.user?.name || 'User'} ({badge.label})</p>
+                    <div className="bg-gradient-to-r from-blue-600 to-indigo-700 px-4 sm:px-6 py-4 sm:py-8">
+            <div className="flex flex-row justify-between items-center">
+              <div className="flex-1">
+                <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-white">{getCurrentPageLabel()}</h1>
+                <p className="text-blue-100 text-sm sm:text-base mt-1">Welcome back, {auth?.user?.name || 'User'}</p>
               </div>
-              <div className="text-right mt-4 sm:mt-0">
+              <div className="hidden sm:block text-right">
                 <p className="text-blue-100 text-sm">Today</p>
-                <p className="text-white font-medium">
+                <p className="text-white font-medium text-sm lg:text-base">
                   {new Date().toLocaleDateString('id-ID', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
                 </p>
               </div>

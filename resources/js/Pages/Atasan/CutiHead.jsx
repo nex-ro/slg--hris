@@ -8,21 +8,43 @@ import LayoutTemplate from "@/Layouts/LayoutTemplate";
 import { toast } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-function CutiHead({ auth, jatahCuti = [], pemakaianCuti = [], paginationLinks = [], users = [] }) {
-  const cutiList = pemakaianCuti?.data || [];
-  const [activeTab, setActiveTab] = useState('pengajuan');
+function CutiHead({ 
+  auth, 
+  jatahCuti = [], 
+  cutiSaya = [], 
+  validasiCuti = [], 
+  cutiSayaPaginationLinks = [], 
+  validasiPaginationLinks = [],
+  users = [] 
+}) {
+  console.log(jatahCuti)
+  const cutiSayaData = Array.isArray(cutiSaya) 
+    ? cutiSaya 
+    : (cutiSaya?.data || []);
+    
+  const validasiCutiData = Array.isArray(validasiCuti) 
+    ? validasiCuti 
+    : (validasiCuti?.data || []);
+
+  const [activeTab, setActiveTab] = useState('cuti-saya'); 
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedCuti, setSelectedCuti] = useState(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [catatan, setCatatan] = useState('');
   const [loadingOverlay, setLoadingOverlay] = useState(false);
-  const [searchPengajuan, setSearchPengajuan] = useState('');
-  const [currentPagePengajuan, setCurrentPagePengajuan] = useState(1);
   const itemsPerPagePengajuan = 10;
-const cutiListData = Array.isArray(pemakaianCuti) 
-  ? pemakaianCuti 
-  : (pemakaianCuti?.data || []);
+  const [searchCutiSaya, setSearchCutiSaya] = useState('');
+const [currentPageCutiSaya, setCurrentPageCutiSaya] = useState(1);
+const itemsPerPageCutiSaya = 10;
+const [searchPengajuan, setSearchPengajuan] = useState('');
+const [currentPagePengajuan, setCurrentPagePengajuan] = useState(1);
+
+// ✅ State terpisah untuk Validasi Cuti
+const [searchValidasi, setSearchValidasi] = useState('');
+const [currentPageValidasi, setCurrentPageValidasi] = useState(1);
+const itemsPerPageValidasi = 10;
+
 
   // State untuk form pengajuan cuti
   const [showFormModal, setShowFormModal] = useState(false);
@@ -54,14 +76,29 @@ const cutiListData = Array.isArray(pemakaianCuti)
   const formatHari = (hari) => {
     return Number(hari) % 1 === 0 ? Math.floor(hari) : Number(hari);
   };
+// ✅ Filter Cuti Saya - HANYA cuti yang uid-nya sama dengan user login
+const filteredCutiSaya = cutiSayaData.filter(cuti => {
+  // PENTING: Pastikan HANYA cuti milik user yang login
+  if (parseInt(cuti.uid) !== parseInt(currentUserId)) {
+    console.log('Filtered out:', cuti.id, 'uid:', cuti.uid, 'currentUserId:', currentUserId);
+    return false;
+  }
+  
+  // Filter berdasarkan search
+  if (!searchCutiSaya) return true;
+  
+  const searchLower = searchCutiSaya.toLowerCase();
+  return cuti.alasan?.toLowerCase().includes(searchLower) ||
+         cuti.catatan?.toLowerCase().includes(searchLower);
+});
+
 
   // Tambahkan state ini di bagian useState
 const [searchApproval, setSearchApproval] = useState('');
 const [currentPageApproval, setCurrentPageApproval] = useState(1);
 const itemsPerPageApproval = 10;
 
-// Tambahkan fungsi filter dan pagination untuk approval
-const filteredApprovalCuti = cutiListData.filter(cuti => {
+const filteredApprovalCuti = validasiCutiData.filter(cuti => {
   const isAtasan = parseInt(cuti.diketahui_atasan) === parseInt(currentUserId);
   const isHRD = parseInt(cuti.diketahui_hrd) === parseInt(currentUserId);
   const isPimpinan = parseInt(cuti.disetujui) === parseInt(currentUserId);
@@ -78,11 +115,31 @@ const filteredApprovalCuti = cutiListData.filter(cuti => {
 
 
 
-const totalPagesApproval = Math.ceil(filteredApprovalCuti.length / itemsPerPageApproval);
-const paginatedApprovalCuti = filteredApprovalCuti.slice(
-  (currentPageApproval - 1) * itemsPerPageApproval,
-  currentPageApproval * itemsPerPageApproval
+const totalPagesCutiSaya = Math.ceil(filteredCutiSaya.length / itemsPerPageCutiSaya);
+const paginatedCutiSaya = filteredCutiSaya.slice(
+  (currentPageCutiSaya - 1) * itemsPerPageCutiSaya,
+  currentPageCutiSaya * itemsPerPageCutiSaya
 );
+   // ✅ Filter Validasi Cuti - HANYA cuti yang butuh approval dari user login
+const filteredValidasiCuti = validasiCutiData.filter(cuti => {
+  // Cek apakah user adalah approver
+  const isAtasan = parseInt(cuti.diketahui_atasan) === parseInt(currentUserId);
+  const isHRD = parseInt(cuti.diketahui_hrd) === parseInt(currentUserId);
+  const isPimpinan = parseInt(cuti.disetujui) === parseInt(currentUserId);
+  
+  // PENTING: Harus approver DAN bukan cuti sendiri
+  if (!isAtasan && !isHRD && !isPimpinan) return false;
+  if (parseInt(cuti.uid) === parseInt(currentUserId)) return false;
+  
+  // Filter berdasarkan search
+  if (!searchValidasi) return true;
+  
+  const searchLower = searchValidasi.toLowerCase();
+  return cuti.user?.name?.toLowerCase().includes(searchLower) ||
+         cuti.user?.email?.toLowerCase().includes(searchLower) ||
+         cuti.alasan?.toLowerCase().includes(searchLower);
+});
+
 
 const handleSearchApproval = (value) => {
   setSearchApproval(value);
@@ -161,10 +218,26 @@ const getStatusBadgeWithIcon = (status) => {
     </div>
   );
 };
+const handleDeletePengajuan = (cutiId) => {
+  if (!confirm('Apakah Anda yakin ingin menghapus pengajuan cuti ini?')) {
+    return;
+  }
 
-// ✅ FIX: Pastikan cutiList adalah array
+  setLoadingOverlay(true);
+  router.delete(`/cuti/delete/${cutiId}`, {
+    onSuccess: () => {
+      setLoadingOverlay(false);
+      toast.success('Pengajuan cuti berhasil dihapus!');
+      router.reload({ only: ['cutiSaya', 'validasiCuti'] });
+    },
+    onError: () => {
+      setLoadingOverlay(false);
+      toast.error('Gagal menghapus pengajuan cuti');
+    }
+  });
+};
 
-// ✅ TAMBAHAN: Fungsi untuk validasi hierarki
+
 const canApproveAsAtasan = (cuti) => {
   const cutiAtasanId = parseInt(cuti.diketahui_atasan);
   const userId = parseInt(currentUserId);
@@ -376,8 +449,7 @@ const getApprovalHierarchyStatus = (cuti) => {
     }
   };
 
-  // Filter pengajuan cuti untuk tab 1
- const filteredPengajuanCuti = cutiListData.filter(cuti => {
+const filteredPengajuanCuti = validasiCutiData.filter(cuti => {
   if (!searchPengajuan) return true;
   const searchLower = searchPengajuan.toLowerCase();
   return cuti.user?.name?.toLowerCase().includes(searchLower) ||
@@ -386,9 +458,9 @@ const getApprovalHierarchyStatus = (cuti) => {
 });
 
 
-  const handleApproval = (cutiId, approvalType, status) => {
-  // ✅ FIX: Gunakan cutiListData yang sudah di-fix
-  const cuti = cutiListData.find(c => c.id === cutiId);
+const handleApproval = (cutiId, approvalType, status) => {
+  // ✅ FIX: Gunakan validasiCutiData
+  const cuti = validasiCutiData.find(c => c.id === cutiId);
   
   if (!cuti) {
     showToast('Data cuti tidak ditemukan', 'error');
@@ -400,7 +472,6 @@ const getApprovalHierarchyStatus = (cuti) => {
     return;
   }
 
-  // ✅ Mapping role ke approval_type yang benar
   let mappedApprovalType = approvalType.toLowerCase();
   
   setConfirmAction({
@@ -412,21 +483,32 @@ const getApprovalHierarchyStatus = (cuti) => {
   setCatatan('');
   setShowConfirmModal(true);
 };
+
+
+
   const totalPagesPengajuan = Math.ceil(filteredPengajuanCuti.length / itemsPerPagePengajuan);
   const paginatedPengajuanCuti = filteredPengajuanCuti.slice(
     (currentPagePengajuan - 1) * itemsPerPagePengajuan,
     currentPagePengajuan * itemsPerPagePengajuan
   );
 
-  const pendingApprovals = cutiListData.filter(cuti => {
-  if (cuti.status_final !== 'diproses') return false;
-  
-  const isAtasan = cuti.diketahui_atasan === currentUserId && cuti.status_diketahui_atasan === 'diproses';
-  const isHRD = cuti.diketahui_hrd === currentUserId && cuti.status_diketahui_hrd === 'diproses' && canApproveAsHRD(cuti);
-  const isPimpinan = cuti.disetujui === currentUserId && cuti.status_disetujui === 'diproses' && canApproveAsPimpinan(cuti);
-  
-  return isAtasan || isHRD || isPimpinan;
-}).length || 0;
+const totalPagesValidasi = Math.ceil(filteredValidasiCuti.length / itemsPerPageValidasi);
+const paginatedValidasiCuti = filteredValidasiCuti.slice(
+  (currentPageValidasi - 1) * itemsPerPageValidasi,
+  currentPageValidasi * itemsPerPageValidasi
+);
+
+  // ✅ Hitung pending approvals
+  const pendingApprovals = validasiCutiData.filter(cuti => {
+    if (cuti.status_final !== 'diproses') return false;
+    
+    const isAtasan = cuti.diketahui_atasan === currentUserId && cuti.status_diketahui_atasan === 'diproses';
+    const isHRD = cuti.diketahui_hrd === currentUserId && cuti.status_diketahui_hrd === 'diproses' && canApproveAsHRD(cuti);
+    const isPimpinan = cuti.disetujui === currentUserId && cuti.status_disetujui === 'diproses' && canApproveAsPimpinan(cuti);
+    
+    return isAtasan || isHRD || isPimpinan;
+  }).length || 0;
+
 
 
   // Fungsi untuk form pengajuan cuti
@@ -524,8 +606,7 @@ const getApprovalHierarchyStatus = (cuti) => {
   };
 
   const handleSubmitCuti = (e) => {
-    e.preventDefault();
-    
+    e.preventDefault();  
     if (!formData.diketahui_atasan && !formData.diketahui_hrd && !formData.disetujui) {
       toast.warning('Pilih minimal satu approver (Atasan, HRD, atau Pimpinan)');
       return;
@@ -582,293 +663,565 @@ const getApprovalHierarchyStatus = (cuti) => {
 
       <div className=" max-w-7xl mx-auto">
        
-        {/* Informasi Jatah Cuti (jika ada) */}
-        {jatahCuti.length > 0 && jatahCuti[0] && (
-          <div className="mb-6 bg-white rounded-lg shadow-md overflow-hidden">
-            <div className="px-6 py-4 bg-blue-600 text-white">
-              <h2 className="text-xl font-semibold">Informasi Jatah Cuti Saya</h2>
-            </div>
-            <div className="p-6">
-              <table className="w-full">
-                <tbody className="divide-y divide-gray-200">
-                  <tr>
-                    <td className="py-2 text-sm text-gray-700 w-1/3">Tahun ke</td>
-                    <td className="py-2 text-sm text-gray-900 font-medium">: {jatahCuti[0].tahun_ke || '1'}</td>
-                  </tr>
-                  <tr>
-                    <td className="py-2 text-sm text-gray-700">TMK</td>
-                    <td className="py-2 text-sm text-gray-900 font-medium">
-                      : {jatahCuti[0].tmk ? formatDate(jatahCuti[0].tmk) : '-'}
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="py-2 text-sm text-gray-700">Hak cuti sebenarnya</td>
-                    <td className="py-2 text-sm text-gray-900 font-medium">
-                      : {formatHari(jatahCuti[0].jumlah_cuti)} hari
-                    </td>
-                  </tr>
-                  <tr>
-                    <td className="py-2 text-sm text-gray-700">Telah terpakai</td>
-                    <td className="py-2 text-sm text-gray-900 font-medium">: {formatHari(jatahCuti[0].cuti_dipakai) || '0'} hari</td>
-                  </tr>
-                  <tr className="bg-blue-50">
-                    <td className="py-2 text-sm font-semibold text-gray-900">Sisa cuti</td>
-                    <td className="py-2 text-sm font-bold text-blue-600">: {formatHari(jatahCuti[0].sisa_cuti)} hari</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-
-        {/* Tab Content: Pengajuan Cuti */}
-        {activeTab === 'pengajuan' && (
-          <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="p-6">
-              <div className="flex flex-col md:flex-row gap-4 items-center mb-4">
-                <div className="flex-1 relative w-full">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-                  <input
-                    type="text"
-                    placeholder="Cari berdasarkan nama, email, atau alasan..."
-                    value={searchPengajuan}
-                    onChange={(e) => setSearchPengajuan(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-                <button
-                  onClick={openFormModal}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
-                >
-                  <Plus className="w-5 h-5" />
-                  Ajukan Cuti
-                </button>
-              </div>
-            </div>
-
-            <div className="overflow-x-auto">
-              <table className="w-full">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Karyawan</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Periode Cuti</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Durasi</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status Atasan</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status HRD</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status Pimpinan</th>
-                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
-                </tr>
-              </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                  {paginatedPengajuanCuti.length > 0 ? (
-                    paginatedPengajuanCuti.map((cuti, index) => {
-                      const hierarchy = getApprovalHierarchyStatus(cuti);
-                      
-                      return (
-                        <tr key={cuti.id} className="hover:bg-gray-50">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {(currentPagePengajuan - 1) * itemsPerPagePengajuan + index + 1}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="text-sm font-medium text-gray-900">{cuti.user?.name}</div>
-                            <div className="text-sm text-gray-500">{formatDate(cuti.tanggal_pengajuan)}</div>
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            {formatDate(cuti.tanggal_mulai)} - {formatDate(cuti.tanggal_selesai)}
-                          </td>
-                          <td className="px-6 py-4 whitespace-nowrap">
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm font-semibold text-blue-600">
-                                {cuti.jumlah_hari} hari
-                              </span>
-                              {cuti.cuti_setengah_hari && (
-                                <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded-full">
-                                  1/2 Hari
-                                </span>
-                              )}
-                            </div>
-                          </td>
-                            
-                          {/* ✅ KOLOM HIERARKI APPROVAL - BARU */}
-                        <td className="px-6 py-4">
-                        <div className="flex flex-col gap-2">
-                          {cuti.status_diketahui_atasan ? getStatusBadge(cuti.status_diketahui_atasan) : '-'}
-                          {canApproveAsAtasan(cuti) && (
-                            <div className="flex gap-1">
-                              <button
-                                onClick={() => handleApproval(cuti.id, 'atasan', 'disetujui')}
-                                className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
-                                title="Setujui"
-                              >
-                                <CheckCircle className="w-3 h-3" />
-                                Setuju
-                              </button>
-                              <button
-                                onClick={() => handleApproval(cuti.id, 'atasan', 'ditolak')}
-                                className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
-                                title="Tolak"
-                              >
-                                <XCircle className="w-3 h-3" />
-                                Tolak
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col gap-2">
-                          {cuti.status_diketahui_hrd ? getStatusBadge(cuti.status_diketahui_hrd) : '-'}
-                          {canApproveAsHRD(cuti) && (
-                            <div className="flex gap-1">
-                              <button
-                                onClick={() => handleApproval(cuti.id, 'hrd', 'disetujui')}
-                                className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
-                                title="Setujui"
-                              >
-                                <CheckCircle className="w-3 h-3" />
-                                Setuju
-                              </button>
-                              <button
-                                onClick={() => handleApproval(cuti.id, 'hrd', 'ditolak')}
-                                className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
-                                title="Tolak"
-                              >
-                                <XCircle className="w-3 h-3" />
-                                Tolak
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex flex-col gap-2">
-                          {cuti.status_disetujui ? getStatusBadge(cuti.status_disetujui) : '-'}
-                          {canApproveAsPimpinan(cuti) && (
-                            <div className="flex gap-1">
-                              <button
-                                onClick={() => handleApproval(cuti.id, 'pimpinan', 'disetujui')}
-                                className="flex items-center gap-1 px-2 py-1 bg-green-600 text-white text-xs rounded hover:bg-green-700 transition-colors"
-                                title="Setujui"
-                              >
-                                <CheckCircle className="w-3 h-3" />
-                                Setuju
-                              </button>
-                              <button
-                                onClick={() => handleApproval(cuti.id, 'pimpinan', 'ditolak')}
-                                className="flex items-center gap-1 px-2 py-1 bg-red-600 text-white text-xs rounded hover:bg-red-700 transition-colors"
-                                title="Tolak"
-                              >
-                                <XCircle className="w-3 h-3" />
-                                Tolak
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-                            
-                          <td className="px-6 py-4 text-center">
-                            <div className="flex items-center justify-center gap-2">
-                              <button
-                                onClick={() => openDetailModal(cuti)}
-                                className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                title="Lihat Detail"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDownloadPdf(cuti.id)}
-                                className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                title="Download PDF"
-                              >
-                                <Download className="w-4 h-4" />
-                              </button>
-                              {cuti.status_final === 'ditolak' && (
-                                <button
-                                  onClick={() => handleDeletePengajuan(cuti.id)}
-                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                  title="Hapus Pengajuan"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
-                        {searchPengajuan ? 'Tidak ada hasil yang ditemukan' : 'Belum ada pengajuan cuti'}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-
-              {/* Pagination */}
-              {pemakaianCuti?.data && pemakaianCuti.data.length > 0 && (
-                <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
-                  <div className="text-sm text-gray-700">
-                    Menampilkan{' '}
-                    <span className="font-medium">{pemakaianCuti.from || 0}</span>
-                    {' '}-{' '}
-                    <span className="font-medium">{pemakaianCuti.to || 0}</span>
-                    {' '}dari{' '}
-                    <span className="font-medium">{pemakaianCuti.total || 0}</span>
-                    {' '}pengajuan
-                  </div>
-                  
-                  <div className="flex gap-2">
-                    {paginationLinks && paginationLinks.map((link, index) => {
-                      if (link.url === null) {
-                        return (
-                          <button
-                            key={index}
-                            disabled
-                            className="px-3 py-2 text-sm border border-gray-300 rounded bg-gray-100 text-gray-400 cursor-not-allowed"
-                          >
-                            {link.label === '&laquo; Previous' ? (
-                              <ChevronLeft className="w-4 h-4" />
-                            ) : link.label === 'Next &raquo;' ? (
-                              <ChevronRight className="w-4 h-4" />
-                            ) : (
-                              <span dangerouslySetInnerHTML={{ __html: link.label }} />
-                            )}
-                          </button>
-                        );
-                      }
-
-                      return (
-                        <button
-                          key={index}
-                          onClick={() => handlePageChange(link.url)}
-                          className={`px-3 py-2 text-sm border rounded transition-colors ${
-                            link.active
-                              ? 'bg-blue-600 text-white border-blue-600 font-semibold'
-                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
-                          }`}
-                        >
-                          {link.label === '&laquo; Previous' ? (
-                            <ChevronLeft className="w-4 h-4" />
-                          ) : link.label === 'Next &raquo;' ? (
-                            <ChevronRight className="w-4 h-4" />
-                          ) : (
-                            <span dangerouslySetInnerHTML={{ __html: link.label }} />
-                          )}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+       {/* Informasi Jatah Cuti */}
+{jatahCuti.length > 0 && jatahCuti[0] && (
+  <div className="mb-6 bg-white rounded-lg shadow-md overflow-hidden">
+    <div className="px-6 py-3 bg-blue-600 text-white">
+      <h2 className="text-lg font-semibold">Informasi Jatah Cuti</h2>
+    </div>
+    <div className="p-6">
+      <table className="w-full">
+        <tbody className="divide-y divide-gray-200">
+          <tr>
+            <td className="py-2 text-sm text-gray-700 w-1/3">Tahun ke</td>
+            <td className="py-2 text-sm text-gray-900">: {jatahCuti[0].tahun_ke || '1'}</td>
+          </tr>
+          <tr>
+            <td className="py-2 text-sm text-gray-700">TMK</td>
+            <td className="py-2 text-sm text-gray-900">
+              : {jatahCuti[0].tmk ? formatDate(jatahCuti[0].tmk) : '-'}
+              {jatahCuti[0].masa_kerja_tahun !== undefined && (
+                <span className="text-gray-600 ml-2">
+                  ({jatahCuti[0].masa_kerja_tahun} tahun {jatahCuti[0].masa_kerja_bulan} bulan {jatahCuti[0].masa_kerja_hari} hari)
+                </span>
               )}
+            </td>
+          </tr>
+          <tr>
+            <td className="py-2 text-sm text-gray-700">Hak cuti sebenarnya</td>
+            <td className="py-2 text-sm text-gray-900">
+              : {formatHari(jatahCuti[0].jumlah_cuti)} hari
+            </td>
+          </tr>
+          <tr>
+            <td className="py-2 text-sm text-gray-700">Dipinjam untuk tahun ke 0</td>
+            <td className="py-2 text-sm text-gray-900">
+              : {formatHari(jatahCuti[0].pinjam_tahun_0 || 0)} hari
+            </td>
+          </tr>
+          <tr>
+            <td className="py-2 text-sm text-gray-700">Dapat dipinjam cuti tahun ke 2</td>
+            <td className="py-2 text-sm text-gray-900">
+              : {formatHari(jatahCuti[1].sisa_cuti || 0)} hari
+            </td>
+          </tr>
+          <tr>
+            <td className="py-2 text-sm text-gray-700">Telah terpakai</td>
+            <td className="py-2 text-sm text-gray-900">
+              : {formatHari(jatahCuti[0].cuti_dipakai || 0)} hari
+            </td>
+          </tr>
+          <tr className="bg-blue-50">
+            <td className="py-2 text-sm font-semibold text-gray-900">Sisa cuti</td>
+            <td className="py-2 text-sm font-bold text-blue-600">
+              : {formatHari(jatahCuti[0].sisa_cuti)} hari
+            </td>
+          </tr>
+          <tr>
+            <td className="py-2 text-sm text-gray-700">Detail pemakaian</td>
+            <td className="py-2 text-sm text-gray-900">
+              : {jatahCuti[0].cuti_dipakai > 0 ? 'Ada cuti terpakai' : 'Belum ada cuti terpakai'}
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+)}
+
+<div className="">
+          <div className="bg-white rounded-lg shadow-sm p-1">
+            <div className="flex gap-2">
+              <button
+                onClick={() => setActiveTab('cuti-saya')}
+                className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all ${
+                  activeTab === 'cuti-saya'
+                    ? 'bg-blue-600 text-white shadow-md'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <User className="w-5 h-5" />
+                  <span>Cuti Saya</span>
+                </div>
+              </button>
+              <button
+                onClick={() => setActiveTab('validasi-cuti')}
+                className={`flex-1 px-6 py-3 rounded-lg font-semibold transition-all relative ${
+                  activeTab === 'validasi-cuti'
+                    ? 'bg-green-600 text-white shadow-md'
+                    : 'text-gray-600 hover:bg-gray-100'
+                }`}
+              >
+                <div className="flex items-center justify-center gap-2">
+                  <CheckCircle className="w-5 h-5" />
+                  <span>Validasi Cuti</span>
+                  {pendingApprovals > 0 && (
+                    <span className="bg-red-500 text-white text-xs font-bold rounded-full w-6 h-6 flex items-center justify-center">
+                      {pendingApprovals}
+                    </span>
+                  )}
+                </div>
+              </button>
             </div>
           </div>
-        )}
+        </div>
 
-        
+       {activeTab === 'cuti-saya' && (
+  <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+    <div className="p-6">
+      <div className="flex flex-col md:flex-row gap-4 items-center mb-4">
+        <div className="flex-1 relative w-full">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <input
+            type="text"
+            placeholder="Cari berdasarkan alasan atau catatan..."
+            value={searchCutiSaya}  
+            onChange={(e) => {
+              setSearchCutiSaya(e.target.value);  
+              setCurrentPageCutiSaya(1); 
+            }}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+        <button
+          onClick={openFormModal}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
+        >
+          <Plus className="w-5 h-5" />
+          Ajukan Cuti Baru
+        </button>
+      </div>
+    </div>
+
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-max">
+        <thead className="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-16">No</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[150px]">Tanggal Pengajuan</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[180px]">Periode Cuti</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Durasi</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">Alasan</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[120px]">Status</th>
+            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Aksi</th>
+          </tr>
+        </thead>
+        <tbody className="bg-white divide-y divide-gray-200">
+          {paginatedCutiSaya.length > 0 ? (
+            paginatedCutiSaya.map((cuti, index) => (
+              <tr key={cuti.id} className="hover:bg-gray-50">
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                  {(currentPageCutiSaya - 1) * itemsPerPageCutiSaya + index + 1}
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                  {formatDate(cuti.tanggal_pengajuan)}
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2 text-sm text-gray-900">
+                    <Calendar className="w-4 h-4 text-gray-400" />
+                    <span>{formatDate(cuti.tanggal_mulai)}</span>
+                  </div>
+                </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm font-medium text-blue-600">
+                      {formatHari(cuti.jumlah_hari)} hari
+                    </span>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="text-sm text-gray-900 line-clamp-2" title={cuti.alasan}>
+                    {cuti.alasan}
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${
+                    cuti.status_final === 'disetujui' 
+                      ? 'bg-green-100 text-green-800' 
+                      : cuti.status_final === 'ditolak'
+                      ? 'bg-red-100 text-red-800'
+                      : 'bg-yellow-100 text-yellow-800'
+                  }`}>
+                    {cuti.status_final === 'disetujui' ? 'Disetujui' : cuti.status_final === 'ditolak' ? 'Ditolak' : 'Menunggu'}
+                  </span>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center justify-center gap-2">
+                    <button
+                      onClick={() => openDetailModal(cuti)}
+                      className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                      title="Lihat Detail"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDownloadPdf(cuti.id)}
+                      className="p-1.5 text-gray-600 hover:bg-gray-50 rounded transition-colors"
+                      title="Download PDF"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                    {cuti.status_final === 'ditolak' && (
+                      <button
+                        onClick={() => handleDeletePengajuan(cuti.id)}
+                        className="p-1.5 text-red-600 hover:bg-red-50 rounded transition-colors"
+                        title="Hapus"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
+                {searchCutiSaya ? 'Tidak ada hasil yang ditemukan' : 'Belum ada pengajuan cuti'}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {/* Pagination Cuti Saya */}
+      {filteredCutiSaya.length > itemsPerPageCutiSaya && ( 
+        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
+          <div className="text-sm text-gray-700">
+            Menampilkan{' '}
+            <span className="font-medium">
+              {(currentPageCutiSaya - 1) * itemsPerPageCutiSaya + 1}
+            </span>
+            {' '}-{' '}
+            <span className="font-medium">
+              {Math.min(currentPageCutiSaya * itemsPerPageCutiSaya, filteredCutiSaya.length)}
+            </span>
+            {' '}dari{' '}
+            <span className="font-medium">{filteredCutiSaya.length}</span>
+            {' '}pengajuan
+          </div>
+          
+          <div className="flex gap-2">
+            <button
+              onClick={() => setCurrentPageCutiSaya(prev => Math.max(1, prev - 1))}
+              disabled={currentPageCutiSaya === 1}
+              className={`px-3 py-2 text-sm border rounded transition-colors ${
+                currentPageCutiSaya === 1
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            
+            {[...Array(totalPagesCutiSaya)].map((_, i) => (
+              <button
+                key={i + 1}
+                onClick={() => setCurrentPageCutiSaya(i + 1)}
+                className={`px-3 py-2 text-sm border rounded transition-colors ${
+                  currentPageCutiSaya === i + 1
+                    ? 'bg-blue-600 text-white border-blue-600 font-semibold'
+                    : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                }`}
+              >
+                {i + 1}
+              </button>
+            ))}
+            
+            <button
+              onClick={() => setCurrentPageCutiSaya(prev => Math.min(totalPagesCutiSaya, prev + 1))}
+              disabled={currentPageCutiSaya === totalPagesCutiSaya}
+              className={`px-3 py-2 text-sm border rounded transition-colors ${
+                currentPageCutiSaya === totalPagesCutiSaya
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-white text-gray-700 hover:bg-gray-50'
+              }`}
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
+        {/* ✅ TAB CONTENT: VALIDASI CUTI */}
+{activeTab === 'validasi-cuti' && (
+  <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+    <div className="p-6">
+      <div className="flex flex-col md:flex-row gap-4 items-center mb-4">
+        <div className="flex-1 relative w-full">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <input
+            type="text"
+            placeholder="Cari berdasarkan nama, email, atau alasan..."
+            value={searchApproval} 
+            onChange={(e) => handleSearchApproval(e.target.value)}
+            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          />
+        </div>
+        <button
+          onClick={openFormModal}
+          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
+        >
+          <Plus className="w-5 h-5" />
+          Ajukan Cuti
+        </button>
+      </div>
+    </div>
+
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-max">
+        <thead className="bg-gray-50 border-b border-gray-200">
+          <tr>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-12">No</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[180px]">Karyawan</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[200px]">Periode Cuti</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider w-24">Durasi</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[140px]">Atasan</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[140px]">HRD</th>
+            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider min-w-[140px]">Pimpinan</th>
+            <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider w-32">Aksi</th>
+          </tr>
+        </thead>
+        <tbody className="bg-white divide-y divide-gray-200">
+          {/* ✅ PENTING: Gunakan paginatedValidasiCuti, BUKAN paginatedPengajuanCuti */}
+          {paginatedValidasiCuti.length > 0 ? (
+            paginatedValidasiCuti.map((cuti, index) => {
+              return (
+                <tr key={cuti.id} className="hover:bg-gray-50">
+                  <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                    {/* ✅ UBAH: gunakan currentPageApproval */}
+                    {(currentPageApproval - 1) * itemsPerPageApproval + index + 1}
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="text-sm font-medium text-gray-900 truncate max-w-[160px]" title={cuti.user?.name}>
+                      {cuti.user?.name}
+                    </div>
+                    <div className="text-xs text-gray-500">{formatDate(cuti.tanggal_pengajuan)}</div>
+                  </td>
+                  <td className="px-4 py-3">
+                    <div className="text-xs text-gray-900">
+                      <div>{formatDate(cuti.tanggal_mulai)}</div>
+                      <div className="text-gray-500">s/d {formatDate(cuti.tanggal_selesai)}</div>
+                    </div>
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-sm font-semibold text-blue-600">
+                        {cuti.jumlah_hari} hari
+                      </span>
+                      {cuti.cuti_setengah_hari && (
+                        <span className="px-1.5 py-0.5 bg-yellow-100 text-yellow-800 text-[10px] font-semibold rounded-full text-center">
+                          1/2 Hari
+                        </span>
+                      )}
+                    </div>
+                  </td>
+                    
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col gap-1.5">
+                      {cuti.status_diketahui_atasan ? (
+                        <span className={`px-2 py-1 rounded text-[10px] font-semibold text-center ${
+                          cuti.status_diketahui_atasan === 'disetujui' ? 'bg-green-100 text-green-800' :
+                          cuti.status_diketahui_atasan === 'ditolak' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {cuti.status_diketahui_atasan === 'disetujui' ? '✓ Disetujui' :
+                           cuti.status_diketahui_atasan === 'ditolak' ? '✗ Ditolak' : 'Menunggu'}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400 text-center">-</span>
+                      )}
+                      {canApproveAsAtasan(cuti) && (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleApproval(cuti.id, 'atasan', 'disetujui')}
+                            className="flex-1 flex items-center justify-center gap-1 px-1.5 py-1 bg-green-600 text-white text-[10px] rounded hover:bg-green-700 transition-colors"
+                            title="Setujui"
+                          >
+                            <CheckCircle className="w-3 h-3" />
+                            <span className="hidden sm:inline">Terima</span>
+                          </button>
+                          <button
+                            onClick={() => handleApproval(cuti.id, 'atasan', 'ditolak')}
+                            className="flex-1 flex items-center justify-center gap-1 px-1.5 py-1 bg-red-600 text-white text-[10px] rounded hover:bg-red-700 transition-colors"
+                            title="Tolak"
+                          >
+                            <XCircle className="w-3 h-3" />
+                            <span className="hidden sm:inline">Tolak</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col gap-1.5">
+                      {cuti.status_diketahui_hrd ? (
+                        <span className={`px-2 py-1 rounded text-[10px] font-semibold text-center ${
+                          cuti.status_diketahui_hrd === 'disetujui' ? 'bg-green-100 text-green-800' :
+                          cuti.status_diketahui_hrd === 'ditolak' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {cuti.status_diketahui_hrd === 'disetujui' ? '✓ Disetujui' :
+                           cuti.status_diketahui_hrd === 'ditolak' ? '✗ Ditolak' : 'Menunggu'}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400 text-center">-</span>
+                      )}
+                      {canApproveAsHRD(cuti) && (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleApproval(cuti.id, 'hrd', 'disetujui')}
+                            className="flex-1 flex items-center justify-center gap-1 px-1.5 py-1 bg-green-600 text-white text-[10px] rounded hover:bg-green-700 transition-colors"
+                            title="Setujui"
+                          >
+                            <CheckCircle className="w-3 h-3" />
+                            <span className="hidden sm:inline">Terima</span>
+                          </button>
+                          <button
+                            onClick={() => handleApproval(cuti.id, 'hrd', 'ditolak')}
+                            className="flex-1 flex items-center justify-center gap-1 px-1.5 py-1 bg-red-600 text-white text-[10px] rounded hover:bg-red-700 transition-colors"
+                            title="Tolak"
+                          >
+                            <XCircle className="w-3 h-3" />
+                            <span className="hidden sm:inline">Tolak</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+
+                  <td className="px-4 py-3">
+                    <div className="flex flex-col gap-1.5">
+                      {cuti.status_disetujui ? (
+                        <span className={`px-2 py-1 rounded text-[10px] font-semibold text-center ${
+                          cuti.status_disetujui === 'disetujui' ? 'bg-green-100 text-green-800' :
+                          cuti.status_disetujui === 'ditolak' ? 'bg-red-100 text-red-800' :
+                          'bg-yellow-100 text-yellow-800'
+                        }`}>
+                          {cuti.status_disetujui === 'disetujui' ? '✓ Disetujui' :
+                           cuti.status_disetujui === 'ditolak' ? '✗ Ditolak' : 'Menunggu'}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400 text-center">-</span>
+                      )}
+                      {canApproveAsPimpinan(cuti) && (
+                        <div className="flex gap-1">
+                          <button
+                            onClick={() => handleApproval(cuti.id, 'pimpinan', 'disetujui')}
+                            className="flex-1 flex items-center justify-center gap-1 px-1.5 py-1 bg-green-600 text-white text-[10px] rounded hover:bg-green-700 transition-colors"
+                            title="Setujui"
+                          >
+                            <CheckCircle className="w-3 h-3" />
+                            <span className="hidden sm:inline">Terima</span>
+                          </button>
+                          <button
+                            onClick={() => handleApproval(cuti.id, 'pimpinan', 'ditolak')}
+                            className="flex-1 flex items-center justify-center gap-1 px-1.5 py-1 bg-red-600 text-white text-[10px] rounded hover:bg-red-700 transition-colors"
+                            title="Tolak"
+                          >
+                            <XCircle className="w-3 h-3" />
+                            <span className="hidden sm:inline">Tolak</span>
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </td>
+                    
+                  <td className="px-4 py-3">
+                    <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => openDetailModal(cuti)}
+                        className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                        title="Lihat Detail"
+                      >
+                        <Eye className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDownloadPdf(cuti.id)}
+                        className="p-1.5 text-green-600 hover:bg-green-50 rounded transition-colors"
+                        title="Download PDF"
+                      >
+                        <Download className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })
+          ) : (
+            <tr>
+              <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                {searchApproval ? 'Tidak ada hasil yang ditemukan' : 'Belum ada pengajuan yang perlu divalidasi'}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+
+      {/* Pagination */}
+      {validasiCuti?.data && validasiCuti.data.length > 0 && (
+        <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
+          <div className="text-sm text-gray-700">
+            Menampilkan{' '}
+            <span className="font-medium">{validasiCuti.from || 0}</span>
+            {' '}-{' '}
+            <span className="font-medium">{validasiCuti.to || 0}</span>
+            {' '}dari{' '}
+            <span className="font-medium">{validasiCuti.total || 0}</span>
+            {' '}pengajuan
+          </div>
+          
+          <div className="flex gap-2">
+            {validasiPaginationLinks && validasiPaginationLinks.map((link, index) => {
+              if (link.url === null) {
+                return (
+                  <button
+                    key={index}
+                    disabled
+                    className="px-3 py-2 text-sm border border-gray-300 rounded bg-gray-100 text-gray-400 cursor-not-allowed"
+                  >
+                    {link.label === '&laquo; Previous' ? (
+                      <ChevronLeft className="w-4 h-4" />
+                    ) : link.label === 'Next &raquo;' ? (
+                      <ChevronRight className="w-4 h-4" />
+                    ) : (
+                      <span dangerouslySetInnerHTML={{ __html: link.label }} />
+                    )}
+                  </button>
+                );
+              }
+
+              return (
+                <button
+                  key={index}
+                  onClick={() => handlePageChange(link.url)}
+                  className={`px-3 py-2 text-sm border rounded transition-colors ${
+                    link.active
+                      ? 'bg-blue-600 text-white border-blue-600 font-semibold'
+                      : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  {link.label === '&laquo; Previous' ? (
+                    <ChevronLeft className="w-4 h-4" />
+                  ) : link.label === 'Next &raquo;' ? (
+                    <ChevronRight className="w-4 h-4" />
+                  ) : (
+                    <span dangerouslySetInnerHTML={{ __html: link.label }} />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  </div>
+)}
 
         {/* Modal Form Pengajuan Cuti */}
         {showFormModal && (

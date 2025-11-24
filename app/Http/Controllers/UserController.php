@@ -361,8 +361,5 @@ class UserController extends Controller
     }
 
 
-    public function head()
-    {
-        return Inertia::render('Atasan/Dashboard', []);
-    }   
+    
 }
