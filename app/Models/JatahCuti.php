@@ -20,6 +20,7 @@ class JatahCuti extends Model
         'sisa_cuti',
         'pinjam_tahun_prev',
         'pinjam_tahun_next',
+       
         'keterangan',
     ];
     

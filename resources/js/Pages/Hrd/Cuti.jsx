@@ -42,6 +42,68 @@ const [editStatusData, setEditStatusData] = useState({
   const currentUserRole = auth?.user?.role;
   const isHeadRole = currentUserRole === 'head';
 
+  const [showManualCutiModal, setShowManualCutiModal] = useState(false);
+  const [manualCutiData, setManualCutiData] = useState({
+    uid: '',
+    jatah_cuti_id: '',
+    tanggal_mulai: '',
+    tanggal_selesai: '',
+    jumlah_hari: 0,
+    cuti_setengah_hari: false, // ✅ TAMBAHKAN INI
+    alasan: '',
+    status_final: 'disetujui',
+    catatan: '',
+    file_cuti: null
+  });
+
+const [selectedUserForManual, setSelectedUserForManual] = useState(null);
+const openManualCutiModal = (userGroup) => {
+  setSelectedUserForManual(userGroup);
+  
+  // Get available cuti
+  const tmk = new Date(userGroup.user.tmk);
+  const today = new Date();
+  const yearsDiff = today.getFullYear() - tmk.getFullYear();
+  const monthDiff = today.getMonth() - tmk.getMonth();
+  const dayDiff = today.getDate() - tmk.getDate();
+  
+  let activePeriod = yearsDiff;
+  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+    activePeriod--;
+  }
+  
+  const availableCuti = userGroup.cutiList.filter(item => {
+    const sisaCuti = parseFloat(item.sisa_cuti);
+    const tahunKe = parseInt(item.tahun_ke);
+    
+    if (sisaCuti > 0) {
+      if (tahunKe < activePeriod) return true;
+      if (tahunKe === activePeriod) return true;
+      if (tahunKe === activePeriod + 1 && activePeriod >= 1) return true;
+    }
+    return false;
+  });
+  
+  setJatahCutiForUser(availableCuti);
+  setManualCutiData({
+    uid: userGroup.user.id,
+    jatah_cuti_id: '',
+    tanggal_mulai: '',
+    tanggal_selesai: '',
+    jumlah_hari: 0,
+    alasan: '',
+    status_final: 'disetujui',
+    cuti_setengah_hari: false, // ✅ RESET
+
+    catatan: '',
+    file_cuti: null
+  });
+  
+  setShowManualCutiModal(true);
+};
+
+
+
   const [loadingOverlay, setLoadingOverlay] = useState(false);  
 
   useEffect(() => {
@@ -57,14 +119,18 @@ const [editStatusData, setEditStatusData] = useState({
   }, []);
 
 const formatCutiNumber = (num) => { 
-  return Math.round(parseFloat(num || 0));
+  const parsed = parseFloat(num || 0);
+  if (parsed % 1 === 0) {
+    return Math.round(parsed);
+  }
+  return parsed;
 };
+
   const openFormModalAdminFromPengajuan = () => {
   setShowSelectUserModal(true);
   setSearchUser('');
 };
 
-// ✅ TAMBAHKAN INI setelah semua useState
 useEffect(() => {
   const refreshCsrfToken = async () => {
     try {
@@ -93,6 +159,29 @@ useEffect(() => {
 
   refreshCsrfToken();
 }, []);
+
+// ✅ TAMBAHKAN useEffect untuk auto-calculate jumlah hari
+useEffect(() => {
+  if (manualCutiData.tanggal_mulai && manualCutiData.tanggal_selesai) {
+    let jumlahHari = 0;
+    
+    if (manualCutiData.cuti_setengah_hari) {
+      jumlahHari = 0.5;
+    } else {
+      jumlahHari = calculateWorkDaysManual(
+        manualCutiData.tanggal_mulai, 
+        manualCutiData.tanggal_selesai, 
+        false
+      );
+    }
+    
+    setManualCutiData(prev => ({
+      ...prev,
+      jumlah_hari: jumlahHari
+    }));
+  }
+}, [manualCutiData.tanggal_mulai, manualCutiData.tanggal_selesai, manualCutiData.cuti_setengah_hari]);
+
 const selectUserAndOpenForm = async (userGroup) => {
   setShowSelectUserModal(false);
   openFormModalAdmin(userGroup);
@@ -420,6 +509,177 @@ const handleSubmit = () => {
       }
     });
   }
+};
+// Di bagian handleManualCutiInputChange, update untuk handle cuti setengah hari
+// ✅ SIMPLIFIED: handleManualCutiInputChange
+const handleManualCutiInputChange = (e) => {
+  const { name, value, type, files, checked } = e.target;
+  
+  if (type === 'file') {
+    setManualCutiData(prev => ({ ...prev, [name]: files[0] }));
+  } else if (type === 'checkbox') {
+    // ✅ HANDLE CHECKBOX CUTI SETENGAH HARI
+    setManualCutiData(prev => {
+      const updated = { ...prev, [name]: checked };
+      
+      // Jika cuti setengah hari dicentang dan tanggal mulai sudah ada
+      if (name === 'cuti_setengah_hari') {
+        if (checked && updated.tanggal_mulai) {
+          // Set tanggal selesai = tanggal mulai
+          updated.tanggal_selesai = updated.tanggal_mulai;
+          updated.jumlah_hari = 0.5;
+        } else if (!checked && updated.tanggal_mulai && updated.tanggal_selesai) {
+          // Recalculate jika di-uncheck
+          updated.jumlah_hari = calculateWorkDaysManual(
+            updated.tanggal_mulai, 
+            updated.tanggal_selesai, 
+            false
+          );
+        }
+      }
+      
+      return updated;
+    });
+  } else {
+    // ✅ HANDLE INPUT TEXT/DATE
+    setManualCutiData(prev => {
+      const updated = { ...prev, [name]: value };
+      
+      // Auto-set tanggal selesai jika cuti setengah hari
+      if (name === 'tanggal_mulai' && updated.cuti_setengah_hari) {
+        updated.tanggal_selesai = value;
+      }
+      
+      return updated;
+    });
+  }
+};
+
+// ✅ FUNCTION BARU: Calculate work days untuk manual entry (exclude weekend)
+const calculateWorkDaysManual = (startDate, endDate, isHalfDay) => {
+  if (!startDate || !endDate) return 0;
+  
+  if (isHalfDay) return 0.5;
+  
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+  
+  const end = new Date(endDate);
+  end.setHours(0, 0, 0, 0);
+  
+  let count = 0;
+  let current = new Date(start);
+  
+  while (current <= end) {
+    const dayOfWeek = current.getDay();
+    // ✅ HANYA HITUNG SENIN-JUMAT (1-5), SKIP SABTU (6) & MINGGU (0)
+    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+      count++;
+    }
+    current.setDate(current.getDate() + 1);
+  }
+  
+  return count;
+};
+
+// ✅ UPDATE: handleSubmitManualCuti dengan konversi boolean yang benar
+const handleSubmitManualCuti = (e) => {
+  e.preventDefault();
+  
+  // ✅ VALIDASI: Jatah Cuti harus dipilih
+  if (!manualCutiData.jatah_cuti_id) {
+    showToast('Pilih periode cuti terlebih dahulu', 'warning');
+    return;
+  }
+  
+  // ✅ VALIDASI: Tanggal Mulai harus diisi
+  if (!manualCutiData.tanggal_mulai) {
+    showToast('Tanggal mulai harus diisi', 'warning');
+    return;
+  }
+  
+  // ✅ VALIDASI: Tanggal Selesai harus diisi
+  if (!manualCutiData.tanggal_selesai) {
+    showToast('Tanggal selesai harus diisi', 'warning');
+    return;
+  }
+  
+  // ✅ VALIDASI: Tanggal selesai tidak boleh lebih awal dari tanggal mulai
+  if (new Date(manualCutiData.tanggal_selesai) < new Date(manualCutiData.tanggal_mulai)) {
+    showToast('Tanggal selesai tidak boleh lebih awal dari tanggal mulai', 'warning');
+    return;
+  }
+  
+  // ✅ VALIDASI: Durasi cuti harus valid
+  if (!manualCutiData.jumlah_hari || manualCutiData.jumlah_hari <= 0) {
+    showToast('Durasi cuti tidak valid. Pastikan tanggal sudah dipilih dengan benar.', 'warning');
+    return;
+  }
+  
+  // ✅ VALIDASI: Alasan harus diisi
+  if (!manualCutiData.alasan || !manualCutiData.alasan.trim()) {
+    showToast('Alasan cuti harus diisi', 'warning');
+    return;
+  }
+  
+  // ✅ VALIDASI: Cek sisa cuti mencukupi jika status disetujui
+  if (manualCutiData.status_final === 'disetujui') {
+    const selectedJatah = jatahCutiForUser.find(j => j.id == manualCutiData.jatah_cuti_id);
+    if (selectedJatah && parseFloat(selectedJatah.sisa_cuti) < manualCutiData.jumlah_hari) {
+      showToast(
+        `Sisa cuti tidak mencukupi. Sisa: ${selectedJatah.sisa_cuti} hari, Dibutuhkan: ${manualCutiData.jumlah_hari} hari`,
+        'warning'
+      );
+      return;
+    }
+  }
+  
+  setLoadingOverlay(true);
+  
+  const formData = new FormData();
+  
+  // ✅ PERBAIKAN: Append setiap field dengan tipe yang benar
+  formData.append('uid', manualCutiData.uid);
+  formData.append('jatah_cuti_id', manualCutiData.jatah_cuti_id);
+  formData.append('tanggal_mulai', manualCutiData.tanggal_mulai);
+  formData.append('tanggal_selesai', manualCutiData.tanggal_selesai);
+  formData.append('jumlah_hari', manualCutiData.jumlah_hari);
+  
+  // ✅ CONVERT BOOLEAN: kirim sebagai 0 atau 1 (lebih aman untuk FormData)
+  formData.append('cuti_setengah_hari', manualCutiData.cuti_setengah_hari ? '1' : '0');
+  
+  formData.append('alasan', manualCutiData.alasan);
+  formData.append('status_final', manualCutiData.status_final);
+  
+  if (manualCutiData.catatan) {
+    formData.append('catatan', manualCutiData.catatan);
+  }
+  
+  if (manualCutiData.file_cuti) {
+    formData.append('file_cuti', manualCutiData.file_cuti);
+  }
+  
+  router.post(route('hrd.cuti.storeManual'), formData, {
+    forceFormData: true,
+    onSuccess: () => {
+      setShowManualCutiModal(false);
+      setSelectedUserForManual(null);
+      setLoadingOverlay(false);
+      showToast('Cuti manual berhasil ditambahkan!', 'success');
+      router.reload({ only: ['jatahCuti', 'pemakaianCuti'] });
+    },
+    onError: (errors) => {
+      setLoadingOverlay(false);
+      console.error('Error submitting manual cuti:', errors);
+      if (errors.error) {
+        showToast(errors.error, 'error');
+      } else if (errors.cuti_setengah_hari) {
+        showToast('Format cuti setengah hari tidak valid: ' + errors.cuti_setengah_hari, 'error');
+      } else {
+        showToast('Terjadi kesalahan saat menambahkan cuti manual', 'error');
+      }
+    }
+  });
 };
 
   const openFormModalAdmin = async (userGroup) => {
@@ -1045,9 +1305,6 @@ const handlePageChangePengajuan = (page) => {
    )}
   </div>
     </div>
-
-
-
         {activeTab === 'jatah' && (
           <>
            <div className="bg-white rounded-lg shadow-sm p-6 ">
@@ -1116,7 +1373,7 @@ const handlePageChangePengajuan = (page) => {
               const filteredData = groupedData.filter(userGroup => 
                 !searchJatah || userGroup.user?.name?.toLowerCase().includes(searchJatah.toLowerCase())
               );
-            
+
               // Pagination
               const paginatedData = filteredData.slice(
                 (currentPageJatah - 1) * itemsPerPageJatah,
@@ -1452,15 +1709,24 @@ const handlePageChangePengajuan = (page) => {
     >
       <Eye className="w-4 h-4" />
     </button>
-    
     <button
-      onClick={() => handleDownloadPdf(cuti.id)}
+      onClick={() => {
+        {console.log(cuti.is_manual && cuti.file_path)}
+        if (cuti.is_manual && cuti.file_path) {
+          window.open(route('cuti.download-Manual', cuti.id), '_blank');
+        } else {
+          // Generate PDF
+                        {console.log("tsesss")}
+
+          handleDownloadPdf(cuti.id);
+          
+        }
+      }}
       className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-      title="Download PDF"
+      title={cuti.is_manual && cuti.file_path ? "Download File Cuti" : "Download PDF"}
     >
       <Download className="w-4 h-4" />
     </button>
-    
     {/* ✅ BUTTON BARU: EDIT STATUS */}
     <button
       onClick={() => openEditStatusModal(cuti)}
@@ -2171,12 +2437,26 @@ const handlePageChangePengajuan = (page) => {
           </div>
         </div>
 
-        {/* Riwayat Pengajuan Cuti */}
+        {/* ✅ SECTION RIWAYAT PENGAJUAN CUTI DENGAN BUTTON */}
         <div>
-          <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-            <Clock className="w-5 h-5 text-blue-600" />
-            Riwayat Pengajuan Cuti
-          </h4>
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+              <Clock className="w-5 h-5 text-blue-600" />
+              Riwayat Pengajuan Cuti
+            </h4>
+            
+            {/* ✅ BUTTON TAMBAH CUTI MANUAL - PINDAH KE SINI */}
+            <button
+              onClick={() => {
+                closeUserDetailModal();
+                openManualCutiModal(selectedUserGroup);
+              }}
+              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-md hover:shadow-lg"
+            >
+              <Plus className="w-4 h-4" />
+              Tambah Cuti Manual
+            </button>
+          </div>
           
           <div className="space-y-3">
             {(() => {
@@ -2201,6 +2481,12 @@ const handlePageChangePengajuan = (page) => {
                             <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-semibold rounded-full">
                               {cuti.jumlah_hari} hari
                             </span>
+                            {/* ✅ TAMBAHAN: Badge untuk cuti manual */}
+                            {cuti.is_manual && (
+                              <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">
+                                Manual Entry
+                              </span>
+                            )}
                           </div>
                           <p className="text-sm text-gray-700 mb-2">{cuti.alasan}</p>
                           <p className="text-xs text-gray-500">
@@ -2259,13 +2545,31 @@ const handlePageChangePengajuan = (page) => {
                           <Eye className="w-3 h-3" />
                           Detail
                         </button>
-                        <button
-                          onClick={() => handleDownloadPdf(cuti.id)}
-                          className="flex items-center gap-1 px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
-                        >
-                          <Download className="w-3 h-3" />
-                          PDF
-                        </button>
+                        
+                        {/* ✅ TAMBAHAN: Button download file jika ada */}
+                      {/* ✅ TAMBAHAN: Button download file jika ada */}
+{cuti.file_path && cuti.is_manual ? (
+  <button
+    onClick={() => window.open(route('cuti.download-file', cuti.id), '_blank')}
+    className="flex items-center gap-1 px-3 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700 transition-colors"
+  >
+    <Download className="w-3 h-3" />
+    File Upload
+  </button>
+) : (
+  <button
+    onClick={() => {
+      closeUserDetailModal();
+      handleDownloadPdf(cuti.id);
+    }}
+    className="flex items-center gap-1 px-3 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700 transition-colors"
+  >
+    <Download className="w-3 h-3" />
+    PDF
+  </button>
+)}
+                   
+                        
                         {(cuti.status_final === 'ditolak' || cuti.status_final ==='diproses')&& (
                           <button
                             onClick={() => {
@@ -2765,154 +3069,432 @@ const handlePageChangePengajuan = (page) => {
     </div>
   </div>
 )}
-{showModal && (
+  {showModal && (
+    <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[85vh] overflow-y-auto">
+        <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-blue-50">
+          <h3 className="text-lg font-semibold text-gray-800">
+            {modalType === 'create' ? 'Tambah Jatah Cuti' : 'Edit Jatah Cuti'}
+          </h3>
+          <button
+            onClick={closeModal}
+            className="text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-4 space-y-3">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Pilih Karyawan <span className="text-red-500">*</span>
+            </label>
+            <select
+              value={formData.uid}
+              onChange={(e) => setFormData({ ...formData, uid: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              required
+              disabled={modalType === 'edit'}
+            >
+              <option value="">Pilih Karyawan</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tahun <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              value={formData.tahun}
+              onChange={(e) => setFormData({ ...formData, tahun: e.target.value })}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              required
+              disabled={modalType === 'edit'}
+            />
+          </div>
+
+          {modalType === 'create' && formData.uid && formData.tahun && (
+            <button
+              type="button"
+              onClick={calculateCuti}
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+            >
+              <Calculator className="w-4 h-4" />
+              Hitung Jatah Cuti Otomatis
+            </button>
+          )}
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Tahun Ke-
+            </label>
+            <input
+              type="number"
+              value={formData.tahun_ke}
+              readOnly
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-100"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Jumlah Cuti (Hari) <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="number"
+              step="0.5"
+              value={formData.jumlah_cuti}
+              onChange={(e) => setFormData({ 
+                ...formData, 
+                jumlah_cuti: e.target.value,
+                sisa_cuti: e.target.value 
+              })}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              required
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Keterangan
+            </label>
+            <textarea
+              value={formData.keterangan}
+              onChange={(e) => setFormData({ ...formData, keterangan: e.target.value })}
+              rows="2"
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+              placeholder="Tambahkan catatan jika perlu..."
+            />
+          </div>
+        </div>
+
+        <div className="flex gap-3 p-4 border-t border-gray-200">
+          <button
+            onClick={closeModal}
+            className="flex-1 px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            Batal
+          </button>
+          <button
+            onClick={handleSubmit}
+            className="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            {modalType === 'create' ? 'Simpan' : 'Update'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
+   {loadingOverlay && (
+    <div style={{margin:"0px", padding:"0px"}} className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center">
+      <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
+        <div className="relative">
+          <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
+          <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+        </div>
+        <div className="text-center">
+          <p className="text-lg font-semibold text-gray-800 mb-1">Loading</p>
+          <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
+        </div>
+      </div>
+    </div>
+  )}
+{showManualCutiModal && selectedUserForManual && (
   <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-    {/* UBAH: max-w-md -> max-w-lg, TAMBAH: max-h-[85vh] overflow-y-auto */}
-    <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[85vh] overflow-y-auto">
-      
-      {/* UBAH: p-6 -> p-4, text-xl -> text-lg, w-6 h-6 -> w-5 h-5, TAMBAH: bg-blue-50 */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 bg-blue-50">
-        <h3 className="text-lg font-semibold text-gray-800">
-          {modalType === 'create' ? 'Tambah Jatah Cuti' : 'Edit Jatah Cuti'}
-        </h3>
+  
+   <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+      <div className="flex items-center justify-between p-6 border-b border-gray-200 bg-indigo-50">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-indigo-600 rounded-lg">
+            <Plus className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h3 className="text-xl font-semibold text-gray-800">Tambah Cuti Manual</h3>
+            <p className="text-sm text-gray-600">
+              User: <strong>{selectedUserForManual.user.name}</strong>
+            </p>
+          </div>
+        </div>
         <button
-          onClick={closeModal}
+          onClick={() => {
+            setShowManualCutiModal(false);
+            setSelectedUserForManual(null);
+          }}
           className="text-gray-400 hover:text-gray-600 transition-colors"
         >
-          <X className="w-5 h-5" />
+          <X className="w-6 h-6" />
         </button>
       </div>
 
-      {/* UBAH: p-6 space-y-4 -> p-4 space-y-3 */}
-      <div className="p-4 space-y-3">
-        
-        {/* Pilih User - UBAH: mb-2 -> mb-1, px-4 py-2 -> px-3 py-2, TAMBAH: text-sm */}
+      <form onSubmit={handleSubmitManualCuti} className="p-6 space-y-4">
+        {/* Pilih Jatah Cuti */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Pilih Karyawan <span className="text-red-500">*</span>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Pilih Jatah Cuti <span className="text-red-500">*</span>
           </label>
           <select
-            value={formData.uid}
-            onChange={(e) => setFormData({ ...formData, uid: e.target.value })}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+            name="jatah_cuti_id"
+            value={manualCutiData.jatah_cuti_id}
+            onChange={handleManualCutiInputChange}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
             required
-            disabled={modalType === 'edit'}
           >
-            <option value="">Pilih Karyawan</option>
-            {users.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.name}
+            <option value="">Pilih Periode Cuti</option>
+            {jatahCutiForUser.map((jatah) => (
+              <option key={jatah.id} value={jatah.id}>
+                Tahun ke-{jatah.tahun_ke} - Sisa: {formatCutiNumber(jatah.sisa_cuti)} hari
               </option>
             ))}
           </select>
         </div>
 
-        {/* Tahun - UBAH: mb-2 -> mb-1, px-4 py-2 -> px-3 py-2, TAMBAH: text-sm */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Tahun <span className="text-red-500">*</span>
-          </label>
+        {/* ✅ CHECKBOX CUTI SETENGAH HARI */}
+        <div className="flex items-center gap-2">
           <input
-            type="number"
-            value={formData.tahun}
-            onChange={(e) => setFormData({ ...formData, tahun: e.target.value })}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            required
-            disabled={modalType === 'edit'}
+            type="checkbox"
+            name="cuti_setengah_hari"
+            checked={manualCutiData.cuti_setengah_hari || false}
+            onChange={handleManualCutiInputChange}
+            className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
           />
+          <label className="text-sm font-medium text-gray-700">
+            Cuti Setengah Hari (0.5 hari)
+          </label>
+         
         </div>
 
-        {/* Button Hitung Cuti - UBAH: px-4 py-2 -> px-3 py-2, TAMBAH: text-sm */}
-        {modalType === 'create' && formData.uid && formData.tahun && (
-          <button
-            type="button"
-            onClick={calculateCuti}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-          >
-            <Calculator className="w-4 h-4" />
-            Hitung Jatah Cuti Otomatis
-          </button>
+        {/* Tanggal Mulai & Selesai */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tanggal Mulai <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              name="tanggal_mulai"
+              value={manualCutiData.tanggal_mulai}
+              onChange={handleManualCutiInputChange}
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                !manualCutiData.tanggal_mulai 
+                  ? 'border-red-300 bg-red-50' 
+                  : 'border-gray-300'
+              }`}
+              required
+            />
+            {!manualCutiData.tanggal_mulai && (
+              <p className="text-xs text-red-600 mt-1">Wajib diisi</p>
+            )}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tanggal Selesai <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="date"
+              name="tanggal_selesai"
+              value={manualCutiData.tanggal_selesai}
+              onChange={handleManualCutiInputChange}
+              min={manualCutiData.tanggal_mulai}
+              disabled={manualCutiData.cuti_setengah_hari}
+              className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+                manualCutiData.cuti_setengah_hari 
+                  ? 'bg-gray-100 cursor-not-allowed'
+                  : !manualCutiData.tanggal_selesai 
+                  ? 'border-red-300 bg-red-50' 
+                  : 'border-gray-300'
+              }`}
+              required
+            />
+            {!manualCutiData.tanggal_selesai && !manualCutiData.cuti_setengah_hari && (
+              <p className="text-xs text-red-600 mt-1">Wajib diisi</p>
+            )}
+          </div>
+        </div>
+
+        {/* ✅ INFO DURASI */}
+        {manualCutiData.jumlah_hari > 0 ? (
+          <div className="bg-indigo-50 border border-indigo-200 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-indigo-900">Durasi Cuti:</span>
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-bold text-indigo-600">
+                  {manualCutiData.jumlah_hari === 0.5 ? '0.5 hari' : `${manualCutiData.jumlah_hari} hari`}
+                </span>
+                {manualCutiData.jumlah_hari === 0.5 && (
+                  <span className="px-2 py-1 bg-yellow-100 text-yellow-800 text-xs font-semibold rounded-full">
+                    Setengah Hari
+                  </span>
+                )}
+              </div>
+            </div>
+            {!manualCutiData.cuti_setengah_hari && manualCutiData.jumlah_hari > 0 && (
+              <p className="text-xs text-gray-600 mt-2">
+                ✓ Sabtu & Minggu tidak dihitung sebagai hari cuti
+              </p>
+            )}
+          </div>
+        ) : (
+          manualCutiData.tanggal_mulai && manualCutiData.tanggal_selesai && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+              <p className="text-sm text-red-700">
+                ⚠️ Tidak ada hari kerja pada rentang tanggal yang dipilih (mungkin hanya weekend)
+              </p>
+            </div>
+          )
         )}
 
-        {/* Tahun Ke- - UBAH: mb-2 -> mb-1, px-4 py-2 -> px-3 py-2, TAMBAH: text-sm */}
+        {/* Alasan */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Tahun Ke-
-          </label>
-          <input
-            type="number"
-            value={formData.tahun_ke}
-            readOnly
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg bg-gray-100"
-          />
-        </div>
-
-        {/* Jumlah Cuti - UBAH: mb-2 -> mb-1, px-4 py-2 -> px-3 py-2, TAMBAH: text-sm */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Jumlah Cuti (Hari) <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="number"
-            step="0.5"
-            value={formData.jumlah_cuti}
-            onChange={(e) => setFormData({ 
-              ...formData, 
-              jumlah_cuti: e.target.value,
-              sisa_cuti: e.target.value 
-            })}
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            required
-          />
-        </div>
-
-        {/* Keterangan - UBAH: mb-2 -> mb-1, rows="3" -> rows="2", px-4 py-2 -> px-3 py-2, TAMBAH: text-sm */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Keterangan
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Alasan Cuti <span className="text-red-500">*</span>
           </label>
           <textarea
-            value={formData.keterangan}
-            onChange={(e) => setFormData({ ...formData, keterangan: e.target.value })}
-            rows="2"
-            className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-            placeholder="Tambahkan catatan jika perlu..."
+            name="alasan"
+            value={manualCutiData.alasan}
+            onChange={handleManualCutiInputChange}
+            rows="3"
+            maxLength="500"
+            placeholder="Jelaskan alasan cuti..."
+            className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-indigo-500 ${
+              !manualCutiData.alasan.trim() 
+                ? 'border-red-300 bg-red-50' 
+                : 'border-gray-300'
+            }`}
+            required
           />
+          {!manualCutiData.alasan.trim() && (
+            <p className="text-xs text-red-600 mt-1">Wajib diisi</p>
+          )}
+          <p className="text-xs text-gray-500 mt-1">
+            {manualCutiData.alasan.length}/500 karakter
+          </p>
         </div>
-      </div>
 
-      {/* Footer - UBAH: p-6 -> p-4, px-4 py-2 -> px-3 py-2, TAMBAH: text-sm */}
-      <div className="flex gap-3 p-4 border-t border-gray-200">
-        <button
-          onClick={closeModal}
-          className="flex-1 px-3 py-2 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-        >
-          Batal
-        </button>
-        <button
-          onClick={handleSubmit}
-          className="flex-1 px-3 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          {modalType === 'create' ? 'Simpan' : 'Update'}
-        </button>
-      </div>
+        {/* Status */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Status <span className="text-red-500">*</span>
+          </label>
+          <select
+            name="status_final"
+            value={manualCutiData.status_final}
+            onChange={handleManualCutiInputChange}
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+            required
+          >
+            <option value="disetujui">Disetujui</option>
+            <option value="ditolak">Ditolak</option>
+            <option value="diproses">Diproses</option>
+          </select>
+        </div>
+
+        {/* Catatan */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Catatan (Opsional)
+          </label>
+          <textarea
+            name="catatan"
+            value={manualCutiData.catatan}
+            onChange={handleManualCutiInputChange}
+            rows="2"
+            maxLength="500"
+            placeholder="Tambahkan catatan jika perlu..."
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+          />
+          <p className="text-xs text-gray-500 mt-1">
+            {manualCutiData.catatan.length}/500 karakter
+          </p>
+        </div>
+
+        {/* ✅ Upload File */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Upload File Cuti (Opsional - PDF, JPG, PNG - Max 2MB)
+          </label>
+          <input
+            type="file"
+            name="file_cuti"
+            onChange={handleManualCutiInputChange}
+            accept=".pdf,.jpg,.jpeg,.png"
+            className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+          />
+          {manualCutiData.file_cuti && (
+            <div className="mt-2 flex items-center gap-2 text-sm text-green-600">
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+              File terpilih: <strong>{manualCutiData.file_cuti.name}</strong>
+            </div>
+          )}
+        </div>
+
+        {/* ✅ INFO WARNING jika ada yang belum diisi */}
+        {(!manualCutiData.jatah_cuti_id || 
+          !manualCutiData.tanggal_mulai || 
+          !manualCutiData.tanggal_selesai || 
+          !manualCutiData.alasan.trim() ||
+          manualCutiData.jumlah_hari <= 0) && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
+            <p className="text-sm text-yellow-800 font-medium">⚠️ Mohon lengkapi semua field yang wajib diisi:</p>
+            <ul className="text-xs text-yellow-700 mt-2 ml-4 list-disc space-y-1">
+              {!manualCutiData.jatah_cuti_id && <li>Pilih Jatah Cuti</li>}
+              {!manualCutiData.tanggal_mulai && <li>Tanggal Mulai</li>}
+              {!manualCutiData.tanggal_selesai && <li>Tanggal Selesai</li>}
+              {!manualCutiData.alasan.trim() && <li>Alasan Cuti</li>}
+              {(manualCutiData.tanggal_mulai && manualCutiData.tanggal_selesai && manualCutiData.jumlah_hari <= 0) && (
+                <li>Rentang tanggal tidak valid (hanya weekend)</li>
+              )}
+            </ul>
+          </div>
+        )}
+
+        {/* Buttons */}
+        <div className="flex gap-3 pt-4 border-t">
+          <button
+            type="button"
+            onClick={() => {
+              setShowManualCutiModal(false);
+              setSelectedUserForManual(null);
+            }}
+            className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+          >
+            Batal
+          </button>
+          <button
+            type="submit"
+            disabled={
+              !manualCutiData.jatah_cuti_id || 
+              !manualCutiData.tanggal_mulai || 
+              !manualCutiData.tanggal_selesai || 
+              !manualCutiData.alasan.trim() ||
+              manualCutiData.jumlah_hari <= 0
+            }
+            className={`flex-1 px-4 py-2 text-white rounded-lg transition-colors flex items-center justify-center gap-2 ${
+              !manualCutiData.jatah_cuti_id || 
+              !manualCutiData.tanggal_mulai || 
+              !manualCutiData.tanggal_selesai || 
+              !manualCutiData.alasan.trim() ||
+              manualCutiData.jumlah_hari <= 0
+                ? 'bg-gray-400 cursor-not-allowed'
+                : 'bg-indigo-600 hover:bg-indigo-700'
+            }`}
+          >
+            <Save className="w-4 h-4" />
+            Simpan Cuti Manual
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 )}
-{loadingOverlay && (
-  <div style={{margin:"0px", padding:"0px"}} className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center">
-    <div className="bg-white rounded-2xl p-8 shadow-2xl flex flex-col items-center space-y-4">
-      <div className="relative">
-        <div className="w-20 h-20 border-4 border-blue-200 rounded-full"></div>
-        <div className="w-20 h-20 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
-      </div>
-      <div className="text-center">
-        <p className="text-lg font-semibold text-gray-800 mb-1">Memproses</p>
-        <p className="text-sm text-gray-600">Mohon tunggu sebentar...</p>
-      </div>
-    </div>
-  </div>
-)}
+
     </LayoutTemplate>
   );
 }

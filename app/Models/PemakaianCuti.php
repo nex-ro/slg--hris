@@ -29,6 +29,8 @@ class PemakaianCuti extends Model
         'tanggal_pengajuan',
         'catatan',
         'id_penerima_tugas',
+         'is_manual',
+        'file_path',
         'tugas'
     ];
 

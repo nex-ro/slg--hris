@@ -875,7 +875,7 @@ private function calculateActivePeriod($tmk)
         'user', 'jatahCuti', 'penerimaTugas',
         'diketahuiAtasanUser', 'diketahuiHrdUser', 'disetujuiUser'
     ])
-    ->orderBy('tanggal_pengajuan', 'desc')
+    ->orderBy('created_at', 'desc') 
     ->get()
     ->map(function($item) {
         return [
@@ -887,6 +887,9 @@ private function calculateActivePeriod($tmk)
             'jumlah_hari' => floatval($item->jumlah_hari), // ✅ Cast to float
             'alasan' => $item->alasan,
             'catatan' => $item->catatan,
+                'is_manual' => $item->is_manual ?? false, // ✅ TAMBAHKAN
+            'file_path' => $item->file_path ?? null,   // ✅ TAMBAHKAN
+
             'cuti_setengah_hari' => $item->cuti_setengah_hari,
             'id_penerima_tugas' => $item->id_penerima_tugas,
             'tugas' => $item->tugas,
@@ -1683,9 +1686,156 @@ public function indexHead()
         'auth' => ['user' => $user]
     ]);
 }
-// ========================================
-// METHOD BARU: EDIT STATUS LANGSUNG (HRD)
-// ========================================
+
+// ✅ UPDATE: storeManualCuti method di Controller
+public function storeManualCuti(Request $request)
+{
+    try {
+        // ✅ Log untuk debug
+        \Log::info('Manual Cuti Request Data:', $request->all());
+        
+        $validated = $request->validate([
+            'uid' => 'required|exists:users,id',
+            'jatah_cuti_id' => 'required|exists:jatah_cuti,id',
+            'tanggal_mulai' => 'required|date',
+            'tanggal_selesai' => 'required|date|after_or_equal:tanggal_mulai',
+            'cuti_setengah_hari' => 'nullable|in:0,1,true,false', // ✅ Accept multiple formats
+            'alasan' => 'required|string|max:500',
+            'status_final' => 'required|in:diproses,disetujui,ditolak',
+            'catatan' => 'nullable|string|max:500',
+            'file_cuti' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:2048',
+        ]);
+
+        // ✅ Convert cuti_setengah_hari to boolean
+        $cutiSetengahHari = in_array($request->cuti_setengah_hari, [1, '1', 'true', true], true);
+        
+        \Log::info('Cuti Setengah Hari Converted:', [
+            'original' => $request->cuti_setengah_hari,
+            'converted' => $cutiSetengahHari,
+            'type' => gettype($cutiSetengahHari)
+        ]);
+
+        // Handle file upload
+        $filePath = null;
+        if ($request->hasFile('file_cuti')) {
+            $file = $request->file('file_cuti');
+            $fileName = time() . '_' . $file->getClientOriginalName();
+            $filePath = $file->storeAs('cuti_files', $fileName, 'public');
+        }
+
+        // ✅ HITUNG JUMLAH HARI (exclude weekend)
+        $tanggalMulai = \Carbon\Carbon::parse($validated['tanggal_mulai']);
+        $tanggalSelesai = \Carbon\Carbon::parse($validated['tanggal_selesai']);
+        
+        if ($cutiSetengahHari) {
+            $jumlahHari = 0.5;
+        } else {
+            $jumlahHari = 0;
+            $currentDate = $tanggalMulai->copy();
+            
+            while ($currentDate->lte($tanggalSelesai)) {
+                // ✅ HANYA HITUNG SENIN-JUMAT (1-5)
+                if ($currentDate->dayOfWeek >= 1 && $currentDate->dayOfWeek <= 5) {
+                    $jumlahHari++;
+                }
+                $currentDate->addDay();
+            }
+        }
+        
+        \Log::info('DEBUG: Manual Cuti - Perhitungan hari', [
+            'tanggal_mulai' => $tanggalMulai->format('Y-m-d'),
+            'tanggal_selesai' => $tanggalSelesai->format('Y-m-d'),
+            'cuti_setengah_hari' => $cutiSetengahHari,
+            'jumlah_hari' => $jumlahHari
+        ]);
+
+        // Cek sisa cuti
+        $jatahCuti = JatahCuti::findOrFail($validated['jatah_cuti_id']);
+        if ($validated['status_final'] === 'disetujui') {
+            if ($jatahCuti->sisa_cuti < $jumlahHari) {
+                return back()->withErrors(['error' => 'Sisa cuti tidak mencukupi']);
+            }
+        }
+
+        // Create pemakaian cuti
+        $pemakaianCuti = PemakaianCuti::create([
+            'uid' => $validated['uid'],
+            'jatah_cuti_id' => $validated['jatah_cuti_id'],
+            'tanggal_mulai' => $validated['tanggal_mulai'],
+            'tanggal_selesai' => $validated['tanggal_selesai'],
+            'jumlah_hari' => $jumlahHari,
+            'cuti_setengah_hari' => $cutiSetengahHari, // ✅ Simpan sebagai boolean
+            'alasan' => $validated['alasan'],
+            'tanggal_pengajuan' => now(),
+            'status_final' => $validated['status_final'],
+            'catatan' => $validated['catatan'] ?? null,
+            'file_path' => $filePath,
+            'is_manual' => true,
+        ]);
+
+        \Log::info('✅ Manual Cuti Created:', [
+            'id' => $pemakaianCuti->id,
+            'jumlah_hari' => $pemakaianCuti->jumlah_hari,
+            'cuti_setengah_hari' => $pemakaianCuti->cuti_setengah_hari
+        ]);
+
+        // Jika disetujui, update jatah cuti dan kehadiran
+        if ($validated['status_final'] === 'disetujui') {
+            $jatahCuti->cuti_dipakai = floatval($jatahCuti->cuti_dipakai) + $jumlahHari;
+            $jatahCuti->sisa_cuti = floatval($jatahCuti->sisa_cuti) - $jumlahHari;
+            $jatahCuti->save();
+
+            // Update kehadiran
+            $this->updateKehadiranForCuti($pemakaianCuti);
+        }
+
+        return redirect()->route('perizinan.cuti')
+            ->with('success', 'Cuti manual berhasil ditambahkan');
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        \Log::error('Validation Error in storeManualCuti:', [
+            'errors' => $e->errors(),
+            'request' => $request->all()
+        ]);
+        return back()->withErrors($e->errors());
+    } catch (\Exception $e) {
+        \Log::error('Error storing manual cuti:', [
+            'message' => $e->getMessage(),
+            'trace' => $e->getTraceAsString()
+        ]);
+        return back()->withErrors(['error' => 'Terjadi kesalahan: ' . $e->getMessage()]);
+    }
+}
+
+public function downloadFileCuti($id)
+{
+    try {
+        $cuti = PemakaianCuti::findOrFail($id);
+        
+        // ✅ CEK: Jika is_manual dan ada file_path, download file
+        if ($cuti->is_manual && $cuti->file_path) {
+            $filePath = storage_path('app/public/' . $cuti->file_path);
+            
+            if (!file_exists($filePath)) {
+                return back()->withErrors(['error' => 'File tidak ditemukan di server']);
+            }
+
+            return response()->download($filePath);
+        }
+        
+        // ✅ Jika tidak manual atau tidak ada file, redirect ke generate PDF
+        return $this->downloadPdf($id);
+        
+    } catch (\Exception $e) {
+        \Log::error('Error download file cuti:', [
+            'error' => $e->getMessage(),
+            'cuti_id' => $id
+        ]);
+        return back()->withErrors(['error' => 'Gagal mengunduh file']);
+    }
+}
+
+
 public function updateStatusDirect(Request $request, $id)
 {
     $validated = $request->validate([

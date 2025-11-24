@@ -1435,22 +1435,7 @@
             </div>
 
               {/* Tanggal */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tanggal <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="date"
-                  value={formData.tanggal}
-                  onChange={(e) => handleFormChange('tanggal', e.target.value)}
-                  className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none ${
-                    formErrors.tanggal ? 'border-red-500' : 'border-gray-300'
-                  }`}
-                />
-                {formErrors.tanggal && (
-                  <p className="mt-1 text-sm text-red-600">{formErrors.tanggal}</p>
-                )}
-              </div>
+             
   <div>
           
 

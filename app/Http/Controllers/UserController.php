@@ -334,7 +334,12 @@ class UserController extends Controller
 
         // Total kehadiran efektif (hadir + terlambat)
         $statistik['total_hadir'] = $statistik['hadir'] + $statistik['terlambat'];
-        
+        $statistik['total_hadir'] = $statistik['hadir'] + $statistik['terlambat'];
+
+        // Hitung persentase hadir tepat waktu dari total kehadiran
+        $statistik['persentase_hadir'] = $statistik['total_hadir'] > 0 
+            ? round(($statistik['hadir'] / $statistik['total_hadir']) * 100, 1)
+            : 0;
         // Total izin (semua jenis izin + sakit)
         $statistik['total_izin'] = $statistik['izin_full'] + 
                                     $statistik['izin_half'] + 

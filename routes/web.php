@@ -173,6 +173,9 @@ Route::middleware('hrd')->group(function () {
     Route::post('/hrd/cuti/update-status-direct/{id}', [CutiController::class, 'updateStatusDirect'])
     ->name('hrd.cuti.updateStatusDirect');
 
+    Route::post('/hrd/cuti/store-manual', [CutiController::class, 'storeManualCuti'])->name('hrd.cuti.storeManual');
+    Route::get('/cuti/download-file/{id}', [CutiController::class, 'downloadFileCuti'])->name('cuti.download-file');
+
     
 });
 Route::middleware('head')->group(function () {
@@ -181,7 +184,6 @@ Route::middleware('head')->group(function () {
     Route::get('/kehadiran/divisi', [HrdController::class, 'getByDateAndDivisi']);
     Route::get('/pegawai/{divisi}', [UserController::class, 'pegawaiHead'])->name('pegawai.head');
     Route::get('/head/cuti', [CutiController::class, 'indexHead'])->name('cuti.head');
-
 
 });
 
@@ -199,9 +201,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/izin/{id}/pdf', [IzinController::class, 'generatePdf'])->name('izin.pdf');
     Route::get('/api/kehadiran/by-user', [HrdController::class, 'getByUser']);
     Route::get('/cuti/download-pdf/{id}', [CutiController::class, 'downloadPdf'])->name('cuti.download-pdf');
-
-
-        Route::post('/cuti/store', [CutiController::class, 'storePengajuan'])->name('cuti.store');
+    
+    Route::post('/cuti/store', [CutiController::class, 'storePengajuan'])->name('cuti.store');
+    Route::get('/hrd/cuti/download-file/{id}', [CutiController::class, 'downloadFileCuti'])
+    ->name('cuti.download-Manual');
 
 });
 

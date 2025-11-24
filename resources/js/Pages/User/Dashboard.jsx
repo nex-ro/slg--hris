@@ -4,20 +4,24 @@ import { Calendar, Clock, Users, FileText, TrendingUp, AlertCircle, CheckCircle,
 import { Head } from '@inertiajs/react';
 
 function Dashboard({ auth, jatahCuti, statistik, pengajuanMenunggu, bulanTahun }) {
-  const [stats] = useState({
-    totalCuti: jatahCuti?.jumlah_cuti || 0,
-    cutiTerpakai: jatahCuti?.cuti_dipakai || 0,
-    sisaCuti: jatahCuti?.sisa_cuti || 0,
-    kehadiranBulanIni: statistik?.total_hadir || 0,
-    terlambat: statistik?.terlambat || 0,
-    izinBulanIni: statistik?.total_izin || 0,
-    sakitBulanIni: statistik?.sakit || 0,
-    alpaBulanIni: statistik?.alpa || 0,
-    cutiFullBulanIni: statistik?.cuti_full || 0,
-    cutiHalfBulanIni: statistik?.cuti_half || 0,
-    dinasLuar: statistik?.dinas_luar || 0,
-    wfh: statistik?.wfh || 0,
-  });
+  // Update bagian stats di useState
+const [stats] = useState({
+  totalCuti: jatahCuti?.jumlah_cuti || 0,
+  cutiTerpakai: jatahCuti?.cuti_dipakai || 0,
+  sisaCuti: jatahCuti?.sisa_cuti || 0,
+  kehadiranBulanIni: statistik?.total_hadir || 0,
+  hadirTepatWaktu: statistik?.hadir || 0,
+  terlambat: statistik?.terlambat || 0,
+  izinBulanIni: statistik?.total_izin || 0,
+  sakitBulanIni: statistik?.sakit || 0,
+  cutiFullBulanIni: statistik?.cuti_full || 0,
+  cutiHalfBulanIni: statistik?.cuti_half || 0,
+  dinasLuar: statistik?.dinas_luar || 0,
+  wfh: statistik?.wfh || 0,
+  persentaseHadir: statistik?.persentase_hadir || 0,
+});
+
+// Ganti perhitungan kehadiranPercentage
 
   // Hitung persentase cuti
   const cutiPercentage = stats.totalCuti > 0 
@@ -26,9 +30,7 @@ function Dashboard({ auth, jatahCuti, statistik, pengajuanMenunggu, bulanTahun }
 
   // Hitung total hari kerja bulan ini (asumsi 22 hari kerja)
   const totalHariKerja = 22;
-  const kehadiranPercentage = totalHariKerja > 0
-    ? ((stats.kehadiranBulanIni / totalHariKerja) * 100).toFixed(1)
-    : 0;
+  const kehadiranPercentage = stats.persentaseHadir;
 
   return (
     <DashboardLayouts>
@@ -55,7 +57,33 @@ function Dashboard({ auth, jatahCuti, statistik, pengajuanMenunggu, bulanTahun }
         )}
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+            {/* Kehadiran Bulan Ini */}
+          <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Kehadiran</p>
+                <p className="text-3xl font-bold text-gray-800 mt-2">{stats.kehadiranBulanIni}</p>
+                <p className="text-xs text-gray-500 mt-1">hari bulan ini</p>
+              </div>
+              <div className="bg-green-100 p-3 rounded-full">
+                <CheckCircle className="w-6 h-6 text-green-500" />
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="flex items-center justify-between text-xs mb-1">
+                <span className="text-gray-600">Persentase</span>
+                <span className="text-gray-600">{kehadiranPercentage}%</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-green-500 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${kehadiranPercentage}%` }}
+                ></div>
+              </div>
+            </div>
+          </div>
+
           {/* Sisa Cuti Card */}
           <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
             <div className="flex items-center justify-between">
@@ -82,32 +110,7 @@ function Dashboard({ auth, jatahCuti, statistik, pengajuanMenunggu, bulanTahun }
             </div>
           </div>
 
-          {/* Kehadiran Bulan Ini */}
-          <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-green-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Kehadiran</p>
-                <p className="text-3xl font-bold text-gray-800 mt-2">{stats.kehadiranBulanIni}</p>
-                <p className="text-xs text-gray-500 mt-1">hari bulan ini</p>
-              </div>
-              <div className="bg-green-100 p-3 rounded-full">
-                <CheckCircle className="w-6 h-6 text-green-500" />
-              </div>
-            </div>
-            <div className="mt-4">
-              <div className="flex items-center justify-between text-xs mb-1">
-                <span className="text-gray-600">Persentase</span>
-                <span className="text-gray-600">{kehadiranPercentage}%</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-green-500 h-2 rounded-full transition-all duration-300"
-                  style={{ width: `${kehadiranPercentage}%` }}
-                ></div>
-              </div>
-            </div>
-          </div>
-
+        
           {/* Izin Bulan Ini */}
           <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-yellow-500">
             <div className="flex items-center justify-between">
@@ -127,24 +130,7 @@ function Dashboard({ auth, jatahCuti, statistik, pengajuanMenunggu, bulanTahun }
           </div>
 
           {/* Alpa Bulan Ini */}
-          <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-red-500">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-gray-600 text-sm font-medium">Alpa</p>
-                <p className="text-3xl font-bold text-gray-800 mt-2">{stats.alpaBulanIni}</p>
-                <p className="text-xs text-gray-500 mt-1">hari bulan ini</p>
-              </div>
-              <div className="bg-red-100 p-3 rounded-full">
-                <XCircle className="w-6 h-6 text-red-500" />
-              </div>
-            </div>
-            {stats.alpaBulanIni > 0 && (
-              <div className="mt-4 flex items-center text-xs text-red-600">
-                <AlertCircle className="w-4 h-4 mr-1" />
-                <span>Perlu perhatian</span>
-              </div>
-            )}
-          </div>
+         
         </div>
 
         {/* Content Grid */}
@@ -234,16 +220,7 @@ function Dashboard({ auth, jatahCuti, statistik, pengajuanMenunggu, bulanTahun }
                 </div>
               )}
 
-              {/* Alpa */}
-              {stats.alpaBulanIni > 0 && (
-                <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-200">
-                  <div className="flex items-center">
-                    <div className="w-3 h-3 bg-red-500 rounded-full mr-3"></div>
-                    <span className="font-medium text-gray-700">Alpa</span>
-                  </div>
-                  <span className="text-2xl font-bold text-red-600">{stats.alpaBulanIni}</span>
-                </div>
-              )}
+            
             </div>
           </div>
 
