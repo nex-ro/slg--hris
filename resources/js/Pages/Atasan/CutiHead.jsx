@@ -17,7 +17,6 @@ function CutiHead({
   validasiPaginationLinks = [],
   users = [] 
 }) {
-  console.log(jatahCuti)
   const cutiSayaData = Array.isArray(cutiSaya) 
     ? cutiSaya 
     : (cutiSaya?.data || []);
@@ -80,7 +79,7 @@ const itemsPerPageValidasi = 10;
 const filteredCutiSaya = cutiSayaData.filter(cuti => {
   // PENTING: Pastikan HANYA cuti milik user yang login
   if (parseInt(cuti.uid) !== parseInt(currentUserId)) {
-    console.log('Filtered out:', cuti.id, 'uid:', cuti.uid, 'currentUserId:', currentUserId);
+    // console.log('Filtered out:', cuti.id, 'uid:', cuti.uid, 'currentUserId:', currentUserId);
     return false;
   }
   

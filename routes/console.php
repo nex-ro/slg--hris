@@ -14,3 +14,8 @@ Schedule::command('cuti:update-jatah')
     ->dailyAt('00:01')
     ->withoutOverlapping()
     ->appendOutputTo(storage_path('logs/jatah-cuti.log'));
+Schedule::command('app:emailterlambat')
+    ->dailyAt('12:00')
+    ->timezone('Asia/Jakarta')
+    ->withoutOverlapping()
+    ->appendOutputTo(storage_path('logs/email-terlambat.log'));
