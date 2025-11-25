@@ -889,7 +889,6 @@ private function calculateActivePeriod($tmk)
             'catatan' => $item->catatan,
                 'is_manual' => $item->is_manual ?? false, // ✅ TAMBAHKAN
             'file_path' => $item->file_path ?? null,   // ✅ TAMBAHKAN
-
             'cuti_setengah_hari' => $item->cuti_setengah_hari,
             'id_penerima_tugas' => $item->id_penerima_tugas,
             'tugas' => $item->tugas,

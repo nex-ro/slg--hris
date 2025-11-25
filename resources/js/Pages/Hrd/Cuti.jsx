@@ -3205,6 +3205,7 @@ const handlePageChangePengajuan = (page) => {
       </div>
     </div>
   )}
+
 {showManualCutiModal && selectedUserForManual && (
   <div style={{padding:"0px",margin:'0px'}} className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
   
@@ -3494,7 +3495,6 @@ const handlePageChangePengajuan = (page) => {
     </div>
   </div>
 )}
-
     </LayoutTemplate>
   );
 }

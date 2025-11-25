@@ -83,7 +83,6 @@ const [stats] = useState({
               </div>
             </div>
           </div>
-
           {/* Sisa Cuti Card */}
           <div className="bg-white rounded-lg shadow-md p-6 border-l-4 border-blue-500">
             <div className="flex items-center justify-between">
