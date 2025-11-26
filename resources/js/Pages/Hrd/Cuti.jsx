@@ -39,6 +39,30 @@ const [editStatusData, setEditStatusData] = useState({
   const [showSelectUserModal, setShowSelectUserModal] = useState(false);
   const [searchUser, setSearchUser] = useState('');
   
+  const calculateActivePeriod = (tmkDate) => {
+  const tmk = new Date(tmkDate);
+  const today = new Date();
+  
+  let years = 0;
+  let tempDate = new Date(tmk);
+  
+  while (true) {
+    let nextYear = new Date(tempDate);
+    nextYear.setFullYear(nextYear.getFullYear() + 1);
+    if (nextYear <= today) {
+      years++;
+      tempDate = nextYear;
+    } else {
+      break;
+    }
+  }
+  
+  if (years < 1) {
+    return 0;
+  } else {
+    return years + 1; // ✅ PERBAIKAN: periode = tahun penuh + 1
+  }
+};
   const currentUserRole = auth?.user?.role;
   const isHeadRole = currentUserRole === 'head';
 
@@ -60,17 +84,8 @@ const [selectedUserForManual, setSelectedUserForManual] = useState(null);
 const openManualCutiModal = (userGroup) => {
   setSelectedUserForManual(userGroup);
   
-  // Get available cuti
-  const tmk = new Date(userGroup.user.tmk);
-  const today = new Date();
-  const yearsDiff = today.getFullYear() - tmk.getFullYear();
-  const monthDiff = today.getMonth() - tmk.getMonth();
-  const dayDiff = today.getDate() - tmk.getDate();
-  
-  let activePeriod = yearsDiff;
-  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
-    activePeriod--;
-  }
+  const activePeriod = calculateActivePeriod(userGroup.user.tmk); 
+
   
   const availableCuti = userGroup.cutiList.filter(item => {
     const sisaCuti = parseFloat(item.sisa_cuti);
@@ -692,11 +707,8 @@ const handleSubmitManualCuti = (e) => {
   const monthDiff = today.getMonth() - tmk.getMonth();
   const dayDiff = today.getDate() - tmk.getDate();
   
-  let activePeriod = yearsDiff;
-  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
-    activePeriod--;
-  }
-  
+    const activePeriod = calculateActivePeriod(userGroup.user.tmk); // ✅ Ganti perhitungan manual
+
   
 const availableCuti = userGroup.cutiList.filter(item => {
   const sisaCuti = parseFloat(item.sisa_cuti);
@@ -1382,17 +1394,7 @@ const handlePageChangePengajuan = (page) => {
             
               return paginatedData.length > 0 ? (
                 paginatedData.map((userGroup, idx) => {
-                  const tmk = new Date(userGroup.user.tmk);
-                  const today = new Date();
-                  const yearsDiff = today.getFullYear() - tmk.getFullYear();
-                  const monthDiff = today.getMonth() - tmk.getMonth();
-                  const dayDiff = today.getDate() - tmk.getDate();
-                
-                  let activePeriod = yearsDiff;
-                  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
-                    activePeriod--;
-                  }
-                
+                   const activePeriod = calculateActivePeriod(userGroup.user.tmk); // ✅ Ganti perhitungan manual
                   const aktiveCuti = userGroup.cutiList.find(item => item.tahun_ke === activePeriod);
                   const cutiData = aktiveCuti || userGroup.cutiList[userGroup.cutiList.length - 1];
                 
@@ -2236,17 +2238,7 @@ const handlePageChangePengajuan = (page) => {
         {/* Summary Cards */}
        {/* TAMBAHAN: Informasi User dalam bentuk tabel - Periode Aktif */}
 {(() => {
-  const tmk = new Date(selectedUserGroup.user.tmk);
-  const today = new Date();
-  const yearsDiff = today.getFullYear() - tmk.getFullYear();
-  const monthDiff = today.getMonth() - tmk.getMonth();
-  const dayDiff = today.getDate() - tmk.getDate();
-  
-  let activePeriod = yearsDiff;
-  if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
-    activePeriod--;
-  }
-  
+    const activePeriod = calculateActivePeriod(selectedUserGroup.user.tmk); // ✅ Ganti perhitungan manual
   const aktiveCuti = selectedUserGroup.cutiList.find(item => item.tahun_ke === activePeriod);
   const nextYearCuti = selectedUserGroup.cutiList.find(item => item.tahun_ke === (activePeriod + 1));
   

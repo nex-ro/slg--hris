@@ -148,8 +148,6 @@ Route::middleware('hrd')->group(function () {
     Route::delete('/admin/sakit/{id}', [SakitController::class, 'adminDestroy'])->name('sakit.adminDestroy');
 
     Route::get('/perizinan/keluar-kantor', [IzinController::class, 'hrd'])->middleware(['auth', 'verified'])->name('perizinan.keluar');
-    Route::post('/perizinan/{id}/approve', [IzinController::class, 'approve'])->name('hrd.perizinan.approve');
-    Route::post('/perizinan/{id}/reject', [IzinController::class, 'reject'])->name('hrd.perizinan.reject');
     Route::get('/hrd/perizinan', [IzinController::class, 'hrd']);
     Route::post('/hrd/perizinan/store', [IzinController::class, 'storeByHrd']);
 
@@ -202,6 +200,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/api/kehadiran/by-user', [HrdController::class, 'getByUser']);
     Route::get('/cuti/download-pdf/{id}', [CutiController::class, 'downloadPdf'])->name('cuti.download-pdf');
     
+        Route::post('/perizinan/{id}/approve', [IzinController::class, 'approve'])->name('izin.approve');
+    Route::post('/perizinan/{id}/reject', [IzinController::class, 'reject'])->name('izin.reject');
+
     Route::post('/cuti/store', [CutiController::class, 'storePengajuan'])->name('cuti.store');
     Route::get('/hrd/cuti/download-file/{id}', [CutiController::class, 'downloadFileCuti'])
     ->name('cuti.download-Manual');

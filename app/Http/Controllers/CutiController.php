@@ -45,8 +45,7 @@ class CutiController extends Controller
             // Belum genap 1 tahun = periode 0
             $currentPeriod = 0;
         } else {
-            // Sudah 1 tahun atau lebih = periode sesuai tahun penuh
-            $currentPeriod = $years;
+          $currentPeriod = $years + 1;
         }
         
         // Hitung tahun anniversary
@@ -1394,7 +1393,7 @@ public function indexHead()
     if ($years < 1) {
         $currentPeriod = 0;
     } else {
-        $currentPeriod = $years;
+            $currentPeriod = $years + 1;
     }
     
     // Hitung tahun anniversary

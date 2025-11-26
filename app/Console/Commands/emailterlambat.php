@@ -68,15 +68,14 @@ class emailterlambat extends Command
                 ->whereNotNull('jam_kedatangan')
                 ->where('jam_kedatangan', '>', $jamMasukStandar)
                 ->count();
-            
-            // Hitung durasi keterlambatan hari ini
             $jamKedatangan = Carbon::parse($kehadiran->jam_kedatangan);
             $jamStandar = Carbon::parse($jamMasukStandar);
-            $durasiTerlambat = $jamStandar->diff($jamKedatangan);
+            $durasiTerlambat = $jamStandar->diff($jamKedatangan);   
             $menitTerlambat = ($durasiTerlambat->h * 60) + $durasiTerlambat->i;
-            
-            // Kirim email
             try {
+                $logo_src = asset('asset/LogoEtica.png'); // atau URL lengkap
+                $logo_etica_src = asset('asset/LogoEtica.png');
+
                 Mail::send('pdf.keterlambatan', [
                     'nama' => $user->name,
                     'tanggal' => Carbon::parse($kehadiran->tanggal)->format('d F Y'),
@@ -84,14 +83,15 @@ class emailterlambat extends Command
                     'jam_masuk_standar' => $jamMasukStandar,
                     'menit_terlambat' => $menitTerlambat,
                     'jumlah_terlambat_bulan_ini' => $jumlahTerlambatBulanIni,
-                    'bulan' => Carbon::now()->format('F Y')
+                    'bulan' => Carbon::now()->format('F Y'),
+                    'logo_src' => $logo_src,
+                    'logo_etica_src' => $logo_etica_src,
+
                 ], function ($message) use ($user) {
                     $message->to($user->email)
                             ->subject('Notifikasi Keterlambatan - ' . Carbon::now()->format('d F Y'));
                 });
-                
                 $this->info("✓ Email berhasil dikirim ke: {$user->name} ({$user->email})");
-                
             } catch (\Exception $e) {
                 $this->error("✗ Gagal mengirim email ke {$user->name}: " . $e->getMessage());
             }
