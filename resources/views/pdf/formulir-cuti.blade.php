@@ -154,7 +154,7 @@
             <img src="{{ public_path('asset/logo.png') }}" alt="Logo">
         </div>
         <div class="company-info">
-            <div class="company-name">PT. Bengkulu Sawit Lestari</div>
+            <div class="company-name">Sawit Lestari Group</div>
             <div class="company-address">Pantai Indah Kapuk St, RT.6/RW.2, Kamal Muara, Penjaringan, North Jakarta City, Jakarta 14470</div>
         </div>
     </div>

@@ -2241,11 +2241,12 @@ const handlePageChangePengajuan = (page) => {
     const activePeriod = calculateActivePeriod(selectedUserGroup.user.tmk); // ✅ Ganti perhitungan manual
   const aktiveCuti = selectedUserGroup.cutiList.find(item => item.tahun_ke === activePeriod);
   const nextYearCuti = selectedUserGroup.cutiList.find(item => item.tahun_ke === (activePeriod + 1));
+    const tmk = new Date(selectedUserGroup.user.tmk);
+  const today = new Date();
   
-  // Hitung masa kerja detail
-  let totalYears = yearsDiff;
-  let totalMonths = monthDiff;
-  let totalDays = dayDiff;
+  let totalYears = today.getFullYear() - tmk.getFullYear();
+  let totalMonths = today.getMonth() - tmk.getMonth();
+  let totalDays = today.getDate() - tmk.getDate();
   
   if (totalDays < 0) {
     totalMonths--;

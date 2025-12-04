@@ -1392,7 +1392,7 @@ public function indexHead()
     // Tentukan periode berdasarkan tahun penuh yang sudah dilalui
     if ($years < 1) {
         $currentPeriod = 0;
-    } else {
+    } else {    
             $currentPeriod = $years + 1;
     }
     
