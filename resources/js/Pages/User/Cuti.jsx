@@ -329,7 +329,7 @@ const formatHari = (hari) => {
   
   <tr>
     <td className="py-2 text-sm text-gray-700">Telah terpakai</td>
-    <td className="py-2 text-sm text-gray-900 font-medium">: {formatHari(jatahCuti[0].cuti_dipakai) || '0'} hari</td>
+    <td className="py-2 text-sm text-gray-900 font-medium">: {formatHari(jatahCuti[0].cuti_dipakai -jatahCuti[0].cuti_reserved ) || '0'} hari</td>
   </tr>
   
   <tr className="bg-blue-50">

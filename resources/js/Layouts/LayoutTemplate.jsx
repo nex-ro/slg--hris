@@ -192,8 +192,7 @@ useEffect(() => {
 
     const headMenu = [
       { icon: LayoutDashboard, label: 'Dashboard', href: '/HEAD/dashboard' },
-      { icon: Users, label: 'Anggota', href: '/pegawai/list'},
-      { icon: Calendar, label: 'List Absensi', href: userDivisi ? `/absensi/list/${userDivisi.toLowerCase().replace(/\s+/g, '-')}` : '/absensi/list'},
+      { icon: Users, label: 'Pegawai', href: userDivisi ? `/pegawai/${userDivisi.toLowerCase().replace(/\s+/g, '-')}` : '/pegawai/list'},      { icon: Calendar, label: 'List Absensi', href: userDivisi ? `/absensi/list/${userDivisi.toLowerCase().replace(/\s+/g, '-')}` : '/absensi/list'},
       {
         icon: FileText,
         label: 'Perizinan',

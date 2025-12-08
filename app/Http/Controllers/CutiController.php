@@ -75,6 +75,7 @@ class CutiController extends Controller
                 'tahun' => $periodStartDate->year,
                 'jumlah_cuti' => $jumlahCuti,
                 'sisa_cuti' => $jumlahCuti,
+                
                 'cuti_dipakai' => 0,
                 'tmk' => $user->tmk,
                 'pinjam_tahun_prev' => 0,
@@ -99,6 +100,8 @@ class CutiController extends Controller
                 'tahun' => $nextPeriodStart->year,
                 'jumlah_cuti' => $jumlahCutiNext,
                 'sisa_cuti' => $jumlahCutiNext,
+                'cuti_reserved' => $nextJatahCuti->cuti_reserved ?? 0, // ✅ TAMBAHKAN INI
+
                 'cuti_dipakai' => 0,
                 'keterangan' => "Periode {$nextPeriod}" . ($currentPeriod == 0 ? " (Akan Aktif Setelah 1 Tahun)" : " (Dapat Dipinjam)"),
                 'tmk' => $user->tmk,
@@ -266,65 +269,40 @@ class CutiController extends Controller
         'disetujui' => 'nullable|exists:users,id',
     ]);
 
-        $user = auth()->user();
+    $user = auth()->user();
     $jatahCuti = JatahCuti::findOrFail($validated['jatah_cuti_id']);
     
-    $jatahCutiUid = (string) trim($jatahCuti->uid); 
-    $currentUserId = (string) trim($user->id);
-
-    
-    \Log::info('Validasi Ownership Jatah Cuti', [
-        'jatah_cuti_id' => $validated['jatah_cuti_id'],
-        'jatah_cuti_uid' => $jatahCutiUid,
-        'current_user_id' => $currentUserId,
-        'is_match' => $jatahCutiUid === $currentUserId
-    ]);
-    
-    if ($jatahCutiUid !== $currentUserId) {
-        \Log::warning('Jatah cuti tidak valid - Ownership mismatch');
+    // Validasi ownership
+    if ((string)trim($jatahCuti->uid) !== (string)trim($user->id)) {
         return back()->withErrors([
             'error' => 'Jatah cuti tidak valid. Silakan pilih periode cuti yang sesuai.'
         ]);
     }
     
     // Validasi periode
-    $tmkDate = \Carbon\Carbon::parse($user->tmk);
-    $today = \Carbon\Carbon::now();
-    $years = 0;
-    $tempDate = $tmkDate->copy();
-    
-    while ($tempDate->copy()->addYear()->lte($today)) {
-        $years++;
-        $tempDate->addYear();
-    }
-    
-    $activePeriod = $years;
+    $activePeriod = $this->calculateActivePeriod($user->tmk);
     
     if ($jatahCuti->tahun_ke < $activePeriod) {
         return back()->withErrors([
-            'error' => 'Tidak dapat menggunakan cuti dari periode yang sudah lewat. Gunakan periode aktif atau periode masa depan.'
+            'error' => 'Tidak dapat menggunakan cuti dari periode yang sudah lewat.'
         ]);
     }
     
     if ($jatahCuti->tahun_ke > $activePeriod && $activePeriod == 0) {
         return back()->withErrors([
-            'error' => 'Anda masih dalam periode percobaan (belum 1 tahun). Tidak dapat meminjam cuti periode masa depan.'
+            'error' => 'Anda masih dalam periode percobaan. Tidak dapat meminjam cuti periode masa depan.'
         ]);
     }
 
+    // Hitung jumlah hari
     $tanggalMulai = \Carbon\Carbon::parse($validated['tanggal_mulai']);
     $tanggalSelesai = \Carbon\Carbon::parse($validated['tanggal_selesai']);
     
-    // ✅ PERBAIKAN: Hitung jumlah hari dengan benar
     $jumlahHari = 0;
-    
     if ($request->cuti_setengah_hari) {
-        // ✅ Jika setengah hari, langsung set 0.5
         $jumlahHari = 0.5;
     } else {
-        // ✅ Hitung hari kerja (Senin-Jumat)
         $currentDate = $tanggalMulai->copy();
-        
         while ($currentDate->lte($tanggalSelesai)) {
             if ($currentDate->dayOfWeek >= 1 && $currentDate->dayOfWeek <= 5) {
                 $jumlahHari++;
@@ -333,36 +311,18 @@ class CutiController extends Controller
         }
     }
     
-    \Log::info('DEBUG: Perhitungan jumlah hari cuti', [
-        'tanggal_mulai' => $tanggalMulai->format('Y-m-d'),
-        'tanggal_selesai' => $tanggalSelesai->format('Y-m-d'),
-        'cuti_setengah_hari' => $request->cuti_setengah_hari ?? false,
-        'jumlah_hari_dihitung' => $jumlahHari
-    ]);
-
-    // Validasi sisa cuti
-    $sisaCuti = floatval($jatahCuti->sisa_cuti);
-    if ($sisaCuti < $jumlahHari) {
+    // ✅ PERUBAHAN UTAMA: Validasi sisa cuti (sudah termasuk reserved)
+    $sisaCutiEfektif = floatval($jatahCuti->sisa_cuti);
+    if ($sisaCutiEfektif < $jumlahHari) {
         return back()->withErrors([
-            'error' => 'Sisa cuti tidak mencukupi. Sisa cuti Anda: ' . $sisaCuti . ' hari, Dibutuhkan: ' . $jumlahHari . ' hari'
+            'error' => 'Sisa cuti tidak mencukupi. Sisa tersedia: ' . $sisaCutiEfektif . ' hari, Dibutuhkan: ' . $jumlahHari . ' hari'
         ]);
     }
 
     // Pengecekan bentrok
-    $bentrok = PemakaianCuti::where('uid', $currentUserId)
+    $bentrok = PemakaianCuti::where('uid', $user->id)
         ->where(function($query) {
-            $query->where(function($q) {
-                $q->where('status_diketahui_atasan', '!=', 'ditolak')
-                  ->orWhereNull('status_diketahui_atasan');
-            })
-            ->where(function($q) {
-                $q->where('status_diketahui_hrd', '!=', 'ditolak')
-                  ->orWhereNull('status_diketahui_hrd');
-            })
-            ->where(function($q) {
-                $q->where('status_disetujui', '!=', 'ditolak')
-                  ->orWhereNull('status_disetujui');
-            });
+            $query->where('status_final', '!=', 'ditolak');
         })
         ->where(function($query) use ($tanggalMulai, $tanggalSelesai) {
             $query->whereBetween('tanggal_mulai', [$tanggalMulai, $tanggalSelesai])
@@ -378,15 +338,21 @@ class CutiController extends Controller
         return back()->withErrors(['error' => 'Tanggal yang dipilih bentrok dengan pengajuan cuti lainnya']);
     }
 
-    // Create pengajuan cuti
+    \DB::beginTransaction();
     try {
+        // ✅ RESERVE CUTI: Potong sisa_cuti dan tambah cuti_reserved
+        $jatahCuti->sisa_cuti = $sisaCutiEfektif - $jumlahHari;
+        $jatahCuti->cuti_reserved = floatval($jatahCuti->cuti_reserved) + $jumlahHari;
+        $jatahCuti->save();
+        
+        // Create pengajuan cuti
         $pengajuan = PemakaianCuti::create([
-            'uid' => $currentUserId,
+            'uid' => $user->id,
             'jatah_cuti_id' => $validated['jatah_cuti_id'],
             'tanggal_mulai' => $validated['tanggal_mulai'],
             'tanggal_selesai' => $validated['tanggal_selesai'],
             'cuti_setengah_hari' => $request->cuti_setengah_hari ?? false,
-            'jumlah_hari' => $jumlahHari, // ✅ Sudah benar (0.5 atau jumlah hari penuh)
+            'jumlah_hari' => $jumlahHari,
             'alasan' => $validated['alasan'],
             'tanggal_pengajuan' => now(),
             'id_penerima_tugas' => $validated['id_penerima_tugas'] ?? null,
@@ -399,25 +365,29 @@ class CutiController extends Controller
             'status_disetujui' => $validated['disetujui'] ? 'diproses' : null,
         ]);
         
-        \Log::info('✅ Pengajuan cuti berhasil dibuat', [
+        \DB::commit();
+        
+        \Log::info('✅ Cuti berhasil di-reserve', [
             'pengajuan_id' => $pengajuan->id,
-            'user_id' => $currentUserId,
+            'user_id' => $user->id,
             'jumlah_hari' => $jumlahHari,
-            'cuti_setengah_hari' => $request->cuti_setengah_hari ?? false
+            'sisa_cuti_sebelum' => $sisaCutiEfektif,
+            'sisa_cuti_sesudah' => floatval($jatahCuti->sisa_cuti),
+            'cuti_reserved' => floatval($jatahCuti->cuti_reserved)
         ]);
         
-        return redirect()->back()->with('success', 'Pengajuan cuti berhasil diajukan dan menunggu persetujuan');
+        return redirect()->back()->with('success', 'Pengajuan cuti berhasil diajukan. Jatah cuti telah di-reserve dan menunggu persetujuan.');
         
     } catch (\Exception $e) {
-        \Log::error('❌ Error saat membuat pengajuan cuti', [
+        \DB::rollBack();
+        \Log::error('❌ Error saat reserve cuti', [
             'error' => $e->getMessage(),
-            'user_id' => $currentUserId,
-            'jatah_cuti_id' => $validated['jatah_cuti_id']
+            'user_id' => $user->id
         ]);
-        
         return back()->withErrors(['error' => 'Gagal mengajukan cuti. Silakan coba lagi.']);
     }
 }
+
 
     public function pinjamCutiNext(Request $request)
     {
@@ -523,14 +493,11 @@ public function approval(Request $request)
     $user = auth()->user();
     $pemakaianCuti = PemakaianCuti::with('jatahCuti.user')->findOrFail($validated['pemakaian_cuti_id']);
 
-    if ($pemakaianCuti->status_final === 'ditolak') {
-        return back()->withErrors(['error' => 'Pengajuan ini sudah ditolak, tidak dapat diubah lagi']);
+    if ($pemakaianCuti->status_final === 'ditolak' || $pemakaianCuti->status_final === 'disetujui') {
+        return back()->withErrors(['error' => 'Status pengajuan ini sudah final']);
     }
 
-    if ($pemakaianCuti->status_final === 'disetujui') {
-        return back()->withErrors(['error' => 'Pengajuan ini sudah disetujui sepenuhnya']);
-    }
-
+    // Validasi hak approval
     $canApprove = false;
     $statusField = '';
 
@@ -554,7 +521,7 @@ public function approval(Request $request)
         $statusFinalSebelumnya = $pemakaianCuti->status_final;
         $pemakaianCuti->$statusField = $validated['status'];
 
-        // ✅ SIMPAN CATATAN
+        // Simpan catatan
         if (!empty($validated['catatan'])) {
             $approvalLabel = match($validated['approval_type']) {
                 'atasan' => 'Atasan',
@@ -562,129 +529,60 @@ public function approval(Request $request)
                 'pimpinan' => 'Pimpinan',
                 default => 'User'
             };
-
             $timestamp = now()->format('d/m/Y H:i');
-            $catatanBaru = "[{$approvalLabel} - {$timestamp}]\n";
-            $catatanBaru .= $validated['catatan'] . "\n\n";
+            $catatanBaru = "[{$approvalLabel} - {$timestamp}]\n{$validated['catatan']}\n\n";
             $pemakaianCuti->catatan = $catatanBaru . ($pemakaianCuti->catatan ?? '');
         }
 
         $statusFinalBaru = $pemakaianCuti->updateStatusFinal();
         $pemakaianCuti->save();
 
+        $jatahCuti = $pemakaianCuti->jatahCuti;
+        $jumlahHari = floatval($pemakaianCuti->jumlah_hari);
+
         // ✅ JIKA STATUS FINAL BERUBAH MENJADI DISETUJUI
         if ($statusFinalSebelumnya !== 'disetujui' && $statusFinalBaru === 'disetujui') {
-            $jatahCutiDipakai = $pemakaianCuti->jatahCuti;
-            $pemakaiCuti = $jatahCutiDipakai->user;
+            // Pindahkan dari reserved ke cuti_dipakai
+            $jatahCuti->cuti_reserved = max(0, floatval($jatahCuti->cuti_reserved) - $jumlahHari);
+            $jatahCuti->cuti_dipakai = floatval($jatahCuti->cuti_dipakai) + $jumlahHari;
+            $jatahCuti->save();
             
-            $activePeriod = $this->calculateActivePeriod($pemakaiCuti->tmk);
-            $isPeriodeAktif = ($jatahCutiDipakai->tahun_ke == $activePeriod);
-            
-            // ✅ PERBAIKAN: Cast jumlah_hari ke float untuk support 0.5 (setengah hari)
-            $jumlahHariDikurangi = floatval($pemakaianCuti->jumlah_hari);
-            
-            \Log::info('DEBUG: Cuti akan dikurangi', [
-                'jumlah_hari_raw' => $pemakaianCuti->jumlah_hari,
-                'jumlah_hari_float' => $jumlahHariDikurangi,
-                'cuti_setengah_hari' => $pemakaianCuti->cuti_setengah_hari,
-                'sisa_cuti_sebelum' => floatval($jatahCutiDipakai->sisa_cuti)
-            ]);
-            
-            if ($isPeriodeAktif) {
-                // ✅ PERIODE AKTIF: Kurangi langsung dari periode ini
-                $sisaCutiSebelum = floatval($jatahCutiDipakai->sisa_cuti);
-                
-                if ($sisaCutiSebelum >= $jumlahHariDikurangi) {
-                    $jatahCutiDipakai->cuti_dipakai = floatval($jatahCutiDipakai->cuti_dipakai) + $jumlahHariDikurangi;
-                    $jatahCutiDipakai->sisa_cuti = $sisaCutiSebelum - $jumlahHariDikurangi;
-                    $jatahCutiDipakai->save();
-                    
-                    \Log::info('✅ Cuti disetujui - jatah dikurangi (periode aktif)', [
-                        'user_id' => $pemakaiCuti->id,
-                        'user_name' => $pemakaiCuti->name,
-                        'periode' => $activePeriod,
-                        'jumlah_dikurangi' => $jumlahHariDikurangi,
-                        'sisa_cuti_sebelum' => $sisaCutiSebelum,
-                        'sisa_cuti_sesudah' => floatval($jatahCutiDipakai->sisa_cuti),
-                        'cuti_dipakai_sesudah' => floatval($jatahCutiDipakai->cuti_dipakai),
-                        'cuti_setengah_hari' => $pemakaianCuti->cuti_setengah_hari
-                    ]);
-                } else {
-                    \DB::rollBack();
-                    return back()->withErrors([
-                        'error' => 'Sisa cuti periode aktif tidak mencukupi. Sisa: ' . $sisaCutiSebelum . ' hari, Dibutuhkan: ' . $jumlahHariDikurangi . ' hari'
-                    ]);
-                }
-            } else {
-                // ✅ BUKAN PERIODE AKTIF: Peminjaman dari periode lain
-                
-                // Ambil data jatah cuti periode aktif
-                $jatahCutiAktif = JatahCuti::where('uid', $pemakaiCuti->id)
-                    ->where('tahun_ke', $activePeriod)
-                    ->first();
-                
-                if (!$jatahCutiAktif) {
-                    \DB::rollBack();
-                    return back()->withErrors(['error' => 'Data jatah cuti periode aktif tidak ditemukan']);
-                }
-                
-                // Cek apakah menggunakan cuti dari periode sebelumnya (prev) atau berikutnya (next)
-                if ($jatahCutiDipakai->tahun_ke < $activePeriod) {
-                    // ❌ TIDAK BOLEH: Pakai cuti dari periode lalu
-                    \DB::rollBack();
-                    return back()->withErrors(['error' => 'Tidak dapat menggunakan cuti dari periode yang sudah lewat']);
-                    
-                } elseif ($jatahCutiDipakai->tahun_ke > $activePeriod) {
-                    // ✅ MEMINJAM DARI PERIODE MASA DEPAN (NEXT)
-                    
-                    $sisaCutiPeriodeDepan = floatval($jatahCutiDipakai->sisa_cuti);
-                    
-                    // Validasi sisa cuti periode masa depan
-                    if ($sisaCutiPeriodeDepan < $jumlahHariDikurangi) {
-                        \DB::rollBack();
-                        return back()->withErrors([
-                            'error' => 'Sisa cuti periode masa depan tidak mencukupi. Sisa: ' . $sisaCutiPeriodeDepan . ' hari, Dibutuhkan: ' . $jumlahHariDikurangi . ' hari'
-                        ]);
-                    }
-                    
-                    // Update periode masa depan (yang dipinjam)
-                    $jatahCutiDipakai->cuti_dipakai = floatval($jatahCutiDipakai->cuti_dipakai) + $jumlahHariDikurangi;
-                    $jatahCutiDipakai->sisa_cuti = $sisaCutiPeriodeDepan - $jumlahHariDikurangi;
-                    $jatahCutiDipakai->pinjam_tahun_prev = floatval($jatahCutiDipakai->pinjam_tahun_prev) + $jumlahHariDikurangi;
-                    $jatahCutiDipakai->save();
-                    
-                    // Update periode aktif (yang meminjam)
-                    $jatahCutiAktif->pinjam_tahun_next = floatval($jatahCutiAktif->pinjam_tahun_next) + $jumlahHariDikurangi;
-                    $jatahCutiAktif->save();
-                    
-                    \Log::info('✅ Cuti disetujui - meminjam dari periode depan', [
-                        'user_id' => $pemakaiCuti->id,
-                        'user_name' => $pemakaiCuti->name,
-                        'periode_aktif' => $activePeriod,
-                        'periode_dipinjam' => $jatahCutiDipakai->tahun_ke,
-                        'jumlah_dikurangi' => $jumlahHariDikurangi,
-                        'sisa_cuti_periode_depan_sebelum' => $sisaCutiPeriodeDepan,
-                        'sisa_cuti_periode_depan_sesudah' => floatval($jatahCutiDipakai->sisa_cuti),
-                        'cuti_setengah_hari' => $pemakaianCuti->cuti_setengah_hari
-                    ]);
-                }
-            }
-
-            // ✅ UPDATE KEHADIRAN SETELAH CUTI DISETUJUI
+            // Update kehadiran
             $this->updateKehadiranForCuti($pemakaianCuti);
+            
+            \Log::info('✅ Cuti disetujui - dipindahkan dari reserved ke dipakai', [
+                'user' => $jatahCuti->user->name,
+                'jumlah_hari' => $jumlahHari,
+                'cuti_reserved' => floatval($jatahCuti->cuti_reserved),
+                'cuti_dipakai' => floatval($jatahCuti->cuti_dipakai),
+                'sisa_cuti' => floatval($jatahCuti->sisa_cuti)
+            ]);
+        }
+        
+        // ✅ JIKA STATUS FINAL BERUBAH MENJADI DITOLAK
+        if ($statusFinalSebelumnya !== 'ditolak' && $statusFinalBaru === 'ditolak') {
+            // Kembalikan dari reserved ke sisa_cuti
+            $jatahCuti->cuti_reserved = max(0, floatval($jatahCuti->cuti_reserved) - $jumlahHari);
+            $jatahCuti->sisa_cuti = floatval($jatahCuti->sisa_cuti) + $jumlahHari;
+            $jatahCuti->save();
+            
+            \Log::info('✅ Cuti ditolak - dikembalikan dari reserved ke sisa', [
+                'user' => $jatahCuti->user->name,
+                'jumlah_hari' => $jumlahHari,
+                'cuti_reserved' => floatval($jatahCuti->cuti_reserved),
+                'sisa_cuti' => floatval($jatahCuti->sisa_cuti)
+            ]);
         }
 
         \DB::commit();
 
-        if ($statusFinalBaru === 'disetujui') {
-            $message = 'Pengajuan cuti telah disetujui oleh semua pihak. Jatah cuti telah dikurangi sebesar ' . $jumlahHariDikurangi . ' hari dan kehadiran telah diupdate.';
-        } elseif ($statusFinalBaru === 'ditolak') {
-            $message = 'Pengajuan cuti telah ditolak. Status tidak dapat diubah lagi.';
-        } else {
-            $message = $validated['status'] === 'disetujui' 
+        $message = match($statusFinalBaru) {
+            'disetujui' => 'Pengajuan cuti telah disetujui. Cuti dipindahkan ke terpakai dan kehadiran telah diupdate.',
+            'ditolak' => 'Pengajuan cuti telah ditolak. Jatah cuti telah dikembalikan.',
+            default => $validated['status'] === 'disetujui' 
                 ? 'Persetujuan berhasil. Menunggu persetujuan dari pihak lainnya.' 
-                : 'Pengajuan berhasil ditolak.';
-        }
+                : 'Pengajuan berhasil ditolak.'
+        };
 
         return redirect()->back()->with('success', $message);
 
@@ -697,6 +595,7 @@ public function approval(Request $request)
         return back()->withErrors(['error' => 'Gagal mengupdate status: ' . $e->getMessage()]);
     }
 }
+
 private function updateKehadiranForCuti($pemakaianCuti)
 {
     $tanggalMulai = \Carbon\Carbon::parse($pemakaianCuti->tanggal_mulai);
@@ -786,7 +685,6 @@ public function updateStatusFinal()
     return 'diproses';
 }
 
-// ✅ Pastikan fungsi ini sudah ada di controller
 private function calculateActivePeriod($tmk)
 {
     $tmkDate = \Carbon\Carbon::parse($tmk);
@@ -800,7 +698,7 @@ private function calculateActivePeriod($tmk)
         $tempDate->addYear();
     }
     
-    return $years; 
+    return $years; // ✅ Tanpa +1
 }
     private function calculateCutiByPeriod($period, $yearDecimal = null)
     {
@@ -820,20 +718,24 @@ private function calculateActivePeriod($tmk)
 
    public function Admin(Request $request)
 {
+    // Query dasar dengan relasi
     $query = JatahCuti::with(['user', 'pemakaian' => function($q) {
         $q->where('status_final', 'disetujui')->orderBy('tanggal_mulai', 'asc');
     }]);
     
+    // Filter berdasarkan pencarian nama user
     if ($request->has('search') && $request->search) {
         $query->whereHas('user', function ($q) use ($request) {
             $q->where('name', 'like', '%' . $request->search . '%');
         });
     }
 
+    // Filter berdasarkan tahun
     if ($request->has('tahun') && $request->tahun) {
         $query->where('tahun', $request->tahun);
     }
 
+    // Ambil semua data jatah cuti
     $jatahCutiRaw = $query->orderBy('created_at', 'desc')->get();
     
     // ✅ FILTER: Hanya tampilkan periode aktif dan masa depan
@@ -847,32 +749,34 @@ private function calculateActivePeriod($tmk)
         return false;
     })->values();
 
-    // Manual pagination
-    $page = $request->input('page', 1);
-    $perPage = 10;
-    $total = $jatahCutiFiltered->count();
-    $jatahCutiPaginated = $jatahCutiFiltered->slice(($page - 1) * $perPage, $perPage)->values();
+    // ✅ KIRIM SEMUA DATA TANPA PAGINATION
+    // Format data agar kompatibel dengan frontend yang expect jatahCuti.data
+    $jatahCuti = [
+        'data' => $jatahCutiFiltered,
+        'total' => $jatahCutiFiltered->count(),
+        'current_page' => 1,
+        'per_page' => $jatahCutiFiltered->count(),
+        'last_page' => 1
+    ];
 
-    $jatahCuti = new \Illuminate\Pagination\LengthAwarePaginator(
-        $jatahCutiPaginated,
-        $total,
-        $perPage,
-        $page,
-        ['path' => $request->url(), 'query' => $request->query()]
-    );
-
+    // Ambil semua user aktif untuk dropdown
     $users = User::where('active', 1)
         ->orderBy('name')
-        ->get(['id', 'name', 'tmk']);
+        ->get(['id', 'name', 'email', 'tmk', 'jabatan']);
 
+    // Ambil daftar tahun unik untuk filter
     $tahunList = JatahCuti::distinct()
         ->orderBy('tahun', 'desc')
         ->pluck('tahun');
 
-    // ✅ Ambil semua pengajuan cuti dengan relasi
+    // ✅ Ambil semua pengajuan cuti dengan relasi lengkap
     $pemakaianCuti = PemakaianCuti::with([
-        'user', 'jatahCuti', 'penerimaTugas',
-        'diketahuiAtasanUser', 'diketahuiHrdUser', 'disetujuiUser'
+        'user', 
+        'jatahCuti', 
+        'penerimaTugas',
+        'diketahuiAtasanUser', 
+        'diketahuiHrdUser', 
+        'disetujuiUser'
     ])
     ->orderBy('created_at', 'desc') 
     ->get()
@@ -880,51 +784,72 @@ private function calculateActivePeriod($tmk)
         return [
             'id' => $item->id,
             'uid' => $item->uid,
+            'jatah_cuti_id' => $item->jatah_cuti_id,
             'tanggal_pengajuan' => $item->tanggal_pengajuan,
             'tanggal_mulai' => $item->tanggal_mulai,
             'tanggal_selesai' => $item->tanggal_selesai,
-            'jumlah_hari' => floatval($item->jumlah_hari), // ✅ Cast to float
+            'jumlah_hari' => floatval($item->jumlah_hari),
+            'cuti_reserved' => $item->cuti_reserved ?? 0,
+            'sisa_cuti' => $item->sisa_cuti,
             'alasan' => $item->alasan,
             'catatan' => $item->catatan,
-                'is_manual' => $item->is_manual ?? false, // ✅ TAMBAHKAN
-            'file_path' => $item->file_path ?? null,   // ✅ TAMBAHKAN
-            'cuti_setengah_hari' => $item->cuti_setengah_hari,
+            'is_manual' => $item->is_manual ?? false,
+            'file_path' => $item->file_path ?? null,
+            'cuti_setengah_hari' => $item->cuti_setengah_hari ?? false,
             'id_penerima_tugas' => $item->id_penerima_tugas,
             'tugas' => $item->tugas,
+            
+            // User yang mengajukan cuti
             'user' => $item->user ? [
                 'id' => $item->user->id,
                 'name' => $item->user->name,
                 'email' => $item->user->email,
+                'tmk' => $item->user->tmk,
             ] : null,
+            
+            // Penerima tugas delegasi
             'penerima_tugas' => $item->penerimaTugas ? [
                 'id' => $item->penerimaTugas->id,
                 'name' => $item->penerimaTugas->name,
             ] : null,
+            
+            // ID approver
             'diketahui_atasan' => $item->diketahui_atasan,
             'diketahui_hrd' => $item->diketahui_hrd,
             'disetujui' => $item->disetujui,
+            
+            // Data approver lengkap
             'diketahui_atasan_user' => $item->diketahuiAtasanUser ? [
                 'id' => $item->diketahuiAtasanUser->id,
                 'name' => $item->diketahuiAtasanUser->name,
-                'jabatan' => $item->diketahuiAtasanUser->jabatan,
+                'jabatan' => $item->diketahuiAtasanUser->jabatan ?? null,
             ] : null,
+            
             'diketahui_hrd_user' => $item->diketahuiHrdUser ? [
                 'id' => $item->diketahuiHrdUser->id,
                 'name' => $item->diketahuiHrdUser->name,
-                'jabatan' => $item->diketahuiHrdUser->jabatan,
+                'jabatan' => $item->diketahuiHrdUser->jabatan ?? null,
             ] : null,
+            
             'disetujui_user' => $item->disetujuiUser ? [
                 'id' => $item->disetujuiUser->id,
                 'name' => $item->disetujuiUser->name,
-                'jabatan' => $item->disetujuiUser->jabatan,
+                'jabatan' => $item->disetujuiUser->jabatan ?? null,
             ] : null,
+            
+            // Status approval
             'status_diketahui_atasan' => $item->status_diketahui_atasan,
             'status_diketahui_hrd' => $item->status_diketahui_hrd,
             'status_disetujui' => $item->status_disetujui,
             'status_final' => $item->status_final,
+            
+            // Timestamps
+            'created_at' => $item->created_at,
+            'updated_at' => $item->updated_at,
         ];
     });
 
+    // Return data ke Inertia view
     return Inertia::render('Hrd/Cuti', [
         'jatahCuti' => $jatahCuti,
         'pemakaianCuti' => $pemakaianCuti,
@@ -932,9 +857,11 @@ private function calculateActivePeriod($tmk)
         'tahunList' => $tahunList,
         'filters' => [
             'search' => $request->input('search', ''),
+            'tahun' => $request->input('tahun', ''),
         ],
     ]);
 }
+
 public function storePengajuanAdmin(Request $request)
 {
     $validated = $request->validate([
@@ -1127,34 +1054,47 @@ public function storePengajuanAdmin(Request $request)
 public function destroyPengajuan($id)
 {
     try {
-        $pemakaianCuti = PemakaianCuti::findOrFail($id);
+        $pemakaianCuti = PemakaianCuti::with('jatahCuti')->findOrFail($id);
         $user = auth()->user();
         
-        // Validasi: Hanya user yang mengajukan atau admin/hrd yang bisa delete
+        // Validasi hak hapus
         if ($pemakaianCuti->uid !== $user->id && !in_array($user->role, ['admin', 'hrd'])) {
             return back()->withErrors(['error' => 'Anda tidak memiliki hak untuk menghapus pengajuan ini']);
         }
         
-        // Validasi: Tidak bisa delete jika sudah disetujui
+        // Tidak bisa delete jika sudah disetujui
         if ($pemakaianCuti->status_final === 'disetujui') {
             return back()->withErrors(['error' => 'Tidak dapat menghapus pengajuan cuti yang sudah disetujui']);
         }
         
         \DB::beginTransaction();
         try {
-            // Hapus pengajuan cuti
+            $jatahCuti = $pemakaianCuti->jatahCuti;
+            $jumlahHari = floatval($pemakaianCuti->jumlah_hari);
+            
+            // ✅ KEMBALIKAN JATAH DARI RESERVED
+            if ($pemakaianCuti->status_final === 'diproses') {
+                // Cuti sedang diproses (reserved) - kembalikan ke sisa_cuti
+                $jatahCuti->cuti_reserved = max(0, floatval($jatahCuti->cuti_reserved) - $jumlahHari);
+                $jatahCuti->sisa_cuti = floatval($jatahCuti->sisa_cuti) + $jumlahHari;
+                $jatahCuti->save();
+                
+                \Log::info('✅ Pengajuan dihapus - reserved dikembalikan', [
+                    'pengajuan_id' => $id,
+                    'user' => $jatahCuti->user->name,
+                    'jumlah_dikembalikan' => $jumlahHari,
+                    'cuti_reserved' => floatval($jatahCuti->cuti_reserved),
+                    'sisa_cuti' => floatval($jatahCuti->sisa_cuti)
+                ]);
+            }
+            // Jika status 'ditolak', tidak perlu kembalikan karena sudah dikembalikan saat ditolak
+            
+            // Hapus pengajuan
             $pemakaianCuti->delete();
             
             \DB::commit();
             
-            \Log::info('✅ Pengajuan cuti berhasil dihapus', [
-                'id' => $id,
-                'user_id' => $pemakaianCuti->uid,
-                'deleted_by' => $user->id,
-                'status_final' => $pemakaianCuti->status_final
-            ]);
-            
-            return redirect()->back()->with('success', 'Pengajuan cuti berhasil dihapus');
+            return redirect()->back()->with('success', 'Pengajuan cuti berhasil dihapus dan jatah cuti telah dikembalikan');
             
         } catch (\Exception $e) {
             \DB::rollBack();
@@ -1170,6 +1110,7 @@ public function destroyPengajuan($id)
         return back()->withErrors(['error' => 'Gagal menghapus pengajuan cuti: ' . $e->getMessage()]);
     }
 }
+
 public function update(Request $request, $id)
 {
     $jatahCuti = JatahCuti::findOrFail($id);

@@ -212,7 +212,6 @@
                 </table>
             </td>
         </tr>
-
         @if($riwayatCuti->count() > 0)
         <tr>
             <td style="vertical-align: top;"></td>

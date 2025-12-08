@@ -63,6 +63,20 @@ const [editStatusData, setEditStatusData] = useState({
     return years + 1; // ✅ PERBAIKAN: periode = tahun penuh + 1
   }
 };
+
+const calculatePendingCuti = (userId, jatahCutiId) => {
+  const pendingCutiList = pemakaianCutiArray.filter(cuti => 
+    parseInt(cuti.uid) === parseInt(userId) && 
+    parseInt(cuti.jatah_cuti_id) === parseInt(jatahCutiId) &&
+    cuti.status_final === 'diproses' // Hanya hitung yang masih diproses
+  );
+  
+  const totalPending = pendingCutiList.reduce((sum, cuti) => 
+    sum + parseFloat(cuti.jumlah_hari || 0), 0
+  );
+  
+  return totalPending;
+};
   const currentUserRole = auth?.user?.role;
   const isHeadRole = currentUserRole === 'head';
 
@@ -85,18 +99,28 @@ const openManualCutiModal = (userGroup) => {
   setSelectedUserForManual(userGroup);
   
   const activePeriod = calculateActivePeriod(userGroup.user.tmk); 
-
   
   const availableCuti = userGroup.cutiList.filter(item => {
     const sisaCuti = parseFloat(item.sisa_cuti);
+    const cutiDiproses = calculatePendingCuti(userGroup.user.id, item.id); // ✅ HITUNG PENDING
+    const sisaEfektif = sisaCuti - cutiDiproses;
     const tahunKe = parseInt(item.tahun_ke);
     
-    if (sisaCuti > 0) {
+    if (sisaEfektif > 0) {
       if (tahunKe < activePeriod) return true;
       if (tahunKe === activePeriod) return true;
       if (tahunKe === activePeriod + 1 && activePeriod >= 1) return true;
     }
     return false;
+  }).map(item => {
+    const cutiDiproses = calculatePendingCuti(userGroup.user.id, item.id);
+    const sisaEfektif = parseFloat(item.sisa_cuti) - cutiDiproses;
+    
+    return {
+      ...item,
+      cuti_diproses: cutiDiproses,
+      sisa_efektif: sisaEfektif
+    };
   });
   
   setJatahCutiForUser(availableCuti);
@@ -108,8 +132,7 @@ const openManualCutiModal = (userGroup) => {
     jumlah_hari: 0,
     alasan: '',
     status_final: 'disetujui',
-    cuti_setengah_hari: false, // ✅ RESET
-
+    cuti_setengah_hari: false,
     catatan: '',
     file_cuti: null
   });
@@ -350,10 +373,30 @@ const handleSubmitEditStatus = () => {
 const handleSearchJatah = (value) => {
   setSearchJatah(value);
   setCurrentPageJatah(1);
+  
+  // ✅ TAMBAHKAN: Reload data dari backend
+  router.get(route('perizinan.cuti'), { 
+    search: value,
+    page: 1
+  }, { 
+    preserveState: true,
+    preserveScroll: true,        
+    only: ['jatahCuti']         
+  });
 };
-
 const handlePageChangeJatah = (page) => {
   setCurrentPageJatah(page);
+  
+  // ✅ TAMBAHKAN: Reload data dari backend
+  router.get(route('perizinan.cuti'), { 
+    search: searchJatah,
+    page: page
+  }, { 
+    preserveState: true,
+    preserveScroll: true,        
+    only: ['jatahCuti']         
+  });
+  
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 
@@ -389,7 +432,19 @@ const handlePageChangeJatah = (page) => {
     setShowModal(false);
     setSelectedData(null);
   };
-
+const getReservedCuti = (userId, jatahCutiId) => {
+  const reservedCutiList = pemakaianCutiArray.filter(cuti => 
+    parseInt(cuti.uid) === parseInt(userId) && 
+    parseInt(cuti.jatah_cuti_id) === parseInt(jatahCutiId) &&
+    cuti.status_final === 'diproses' // Hanya yang masih diproses
+  );
+  
+  const totalReserved = reservedCutiList.reduce((sum, cuti) => 
+    sum + parseFloat(cuti.jumlah_hari || 0), 0
+  );
+  
+  return totalReserved;
+};
 const calculateCuti = async () => {
   if (!formData.uid || !formData.tahun) {
     showToast('Pilih user dan tahun terlebih dahulu', 'warning'); // ← UBAH INI
@@ -638,17 +693,16 @@ const handleSubmitManualCuti = (e) => {
   }
   
   // ✅ VALIDASI: Cek sisa cuti mencukupi jika status disetujui
-  if (manualCutiData.status_final === 'disetujui') {
-    const selectedJatah = jatahCutiForUser.find(j => j.id == manualCutiData.jatah_cuti_id);
-    if (selectedJatah && parseFloat(selectedJatah.sisa_cuti) < manualCutiData.jumlah_hari) {
-      showToast(
-        `Sisa cuti tidak mencukupi. Sisa: ${selectedJatah.sisa_cuti} hari, Dibutuhkan: ${manualCutiData.jumlah_hari} hari`,
-        'warning'
-      );
-      return;
-    }
+if (manualCutiData.status_final === 'disetujui') {
+  const selectedJatah = jatahCutiForUser.find(j => j.id == manualCutiData.jatah_cuti_id);
+  if (selectedJatah && parseFloat(selectedJatah.sisa_efektif) < manualCutiData.jumlah_hari) {
+    showToast(
+      `Sisa cuti tidak mencukupi. Tersedia: ${selectedJatah.sisa_efektif} hari (termasuk ${formatCutiNumber(selectedJatah.cuti_diproses)} hari sedang diproses), Dibutuhkan: ${manualCutiData.jumlah_hari} hari`,
+      'warning'
+    );
+    return;
   }
-  
+}
   setLoadingOverlay(true);
   
   const formData = new FormData();
@@ -697,7 +751,7 @@ const handleSubmitManualCuti = (e) => {
   });
 };
 
-  const openFormModalAdmin = async (userGroup) => {
+const openFormModalAdmin = async (userGroup) => {
   setSelectedUserForCuti(userGroup);
   
   // Filter jatah cuti yang tersedia
@@ -707,32 +761,40 @@ const handleSubmitManualCuti = (e) => {
   const monthDiff = today.getMonth() - tmk.getMonth();
   const dayDiff = today.getDate() - tmk.getDate();
   
-    const activePeriod = calculateActivePeriod(userGroup.user.tmk); // ✅ Ganti perhitungan manual
+  const activePeriod = calculateActivePeriod(userGroup.user.tmk);
 
-  
-const availableCuti = userGroup.cutiList.filter(item => {
-  const sisaCuti = parseFloat(item.sisa_cuti);
-  const tahunKe = parseInt(item.tahun_ke);
-  
-  // Izinkan semua periode yang masih punya sisa cuti
-  if (sisaCuti > 0) {
-    // Periode sebelumnya (jika ada sisa, boleh dipakai)
-    if (tahunKe < activePeriod) return true;
+  const availableCuti = userGroup.cutiList.filter(item => {
+    const sisaCuti = parseFloat(item.sisa_cuti);
+    const cutiDiproses = calculatePendingCuti(userGroup.user.id, item.id); // ✅ HITUNG CUTI PENDING
+    const sisaEfektif = sisaCuti - cutiDiproses; // ✅ KURANGI DENGAN PENDING
+    const tahunKe = parseInt(item.tahun_ke);
     
-    // Periode aktif (selalu boleh)
-    if (tahunKe === activePeriod) return true;
+    // Izinkan semua periode yang masih punya sisa cuti EFEKTIF
+    if (sisaEfektif > 0) {
+      // Periode sebelumnya (jika ada sisa, boleh dipakai)
+      if (tahunKe < activePeriod) return true;
+      
+      // Periode aktif (selalu boleh)
+      if (tahunKe === activePeriod) return true;
+      
+      // Periode depan (pinjam cuti tahun depan, hanya jika sudah tahun ke-1 atau lebih)
+      if (tahunKe === activePeriod + 1 && activePeriod >= 1) return true;
+    }
     
-    // Periode depan (pinjam cuti tahun depan, hanya jika sudah tahun ke-1 atau lebih)
-    if (tahunKe === activePeriod + 1 && activePeriod >= 1) return true;
-  }
-  
-  return false;
-}).map(item => ({
-  ...item,
-  is_current: parseInt(item.tahun_ke) === activePeriod,
-  is_previous: parseInt(item.tahun_ke) < activePeriod, 
-  is_borrowable: parseInt(item.tahun_ke) === activePeriod + 1 && activePeriod >= 1
-}));
+    return false;
+  }).map(item => {
+    const cutiDiproses = calculatePendingCuti(userGroup.user.id, item.id);
+    const sisaEfektif = parseFloat(item.sisa_cuti) - cutiDiproses;
+    
+    return {
+      ...item,
+      cuti_diproses: cutiDiproses, // ✅ TAMBAHKAN INFO PENDING
+      sisa_efektif: sisaEfektif, // ✅ SISA SETELAH DIKURANGI PENDING
+      is_current: parseInt(item.tahun_ke) === activePeriod,
+      is_previous: parseInt(item.tahun_ke) < activePeriod, 
+      is_borrowable: parseInt(item.tahun_ke) === activePeriod + 1 && activePeriod >= 1
+    };
+  });
   
   setJatahCutiForUser(availableCuti);
   const initialFormData = {
@@ -811,11 +873,10 @@ const handleSubmitAdmin = (e) => {
   }
   
   const selectedJatahCuti = jatahCutiForUser.find(j => j.id == formData.jatah_cuti_id);
-  if (selectedJatahCuti && parseFloat(selectedJatahCuti.sisa_cuti) < workDays) {
-    showToast(`Sisa cuti tidak mencukupi. Sisa: ${selectedJatahCuti.sisa_cuti} hari, Dibutuhkan: ${workDays} hari`, 'warning'); // ← UBAH INI
-    return;
-  }
-
+if (selectedJatahCuti && parseFloat(selectedJatahCuti.sisa_efektif) < workDays) {
+  showToast(`Sisa cuti tidak mencukupi. Tersedia: ${selectedJatahCuti.sisa_efektif} hari (termasuk ${formatCutiNumber(selectedJatahCuti.cuti_diproses)} hari sedang diproses), Dibutuhkan: ${workDays} hari`, 'warning');
+  return;
+}
   setLoadingOverlay(true); // ← TAMBAH INI
   
   const submitData = {
@@ -1398,9 +1459,14 @@ const handlePageChangePengajuan = (page) => {
                   const aktiveCuti = userGroup.cutiList.find(item => item.tahun_ke === activePeriod);
                   const cutiData = aktiveCuti || userGroup.cutiList[userGroup.cutiList.length - 1];
                 
-                  const totalJatah = parseFloat(cutiData?.jumlah_cuti || 0);
+                 const totalJatah = parseFloat(cutiData?.jumlah_cuti || 0);
                   const totalTerpakai = parseFloat(cutiData?.cuti_dipakai || 0);
                   const totalSisa = parseFloat(cutiData?.sisa_cuti || 0);
+                                  
+                  // ✅ HITUNG CUTI YANG SEDANG DIPROSES
+                  const cutiReserved = getReservedCuti(userGroup.user.id, cutiData?.id);
+                  const sisaCuti = totalSisa - cutiReserved; // ✅ Sisa efektif setelah dikurangi reserved
+
                 
                   return (
                     <div 
@@ -1437,14 +1503,14 @@ const handlePageChangePengajuan = (page) => {
                               {formatCutiNumber(totalTerpakai)} hari
                             </p>
                           </div>
-                          <div className="bg-green-50 rounded-lg p-3 text-center">
-                            <p className="text-xs text-gray-600 mb-1">Sisa</p>
-                            <p className="text-lg font-bold text-green-600">
-                              {formatCutiNumber(totalSisa)} hari
-                            </p>
-                          </div>
+                                      <div className="bg-green-50 rounded-lg p-3 text-center">
+              <p className="text-xs text-gray-600 mb-1">Tersedia</p>
+              <p className="text-lg font-bold text-green-600">
+                {formatCutiNumber(sisaCuti)} hari 
+              </p>
+            </div>
+
                         </div>
-                  
                         <div className="mt-4 text-center">
                           <span className="text-xs text-blue-600 font-medium">
                             Klik untuk melihat detail →
@@ -2294,12 +2360,27 @@ const handlePageChangePengajuan = (page) => {
               : {formatCutiNumber(aktiveCuti?.cuti_dipakai || 0)} hari
             </td>
           </tr>
+          {(() => {
+            const cutiDiproses = calculatePendingCuti(selectedUserGroup.user.id, aktiveCuti?.id);
+            if (cutiDiproses > 0) {
+              return (
+                <tr className="bg-yellow-50">
+                  <td className="py-2 text-gray-600">Sedang diproses</td>
+                  <td className="py-2 text-yellow-700">
+                    : <strong>{formatCutiNumber(cutiDiproses)} hari</strong> <span className="text-xs italic">(belum terpotong)</span>
+                  </td>
+                </tr>
+              );
+            }
+            return null;
+          })()}
           <tr className="bg-blue-50 border-b border-gray-200">
             <td className="py-2 text-gray-700 font-semibold">Sisa cuti</td>
             <td className="py-2 font-bold text-blue-600">
               : {formatCutiNumber(aktiveCuti?.sisa_cuti || 0)} hari
             </td>
           </tr>
+          
           <tr>
             <td className="py-2 text-gray-600 align-top">Detail pemakaian</td>
             <td className="py-2 text-gray-900">
@@ -2308,27 +2389,47 @@ const handlePageChangePengajuan = (page) => {
                   parseInt(c.uid) === parseInt(selectedUserGroup.user.id) && 
                   c.status_final === 'disetujui'
                 );
-                if (approvedCuti.length === 0) {
-                  return 'Belum ada cuti terpakai';
+                const pendingCuti = pemakaianCuti.filter(c => 
+                  parseInt(c.uid) === parseInt(selectedUserGroup.user.id) && 
+                  c.status_final === 'diproses'
+                );
+                
+                if (approvedCuti.length === 0 && pendingCuti.length === 0) {
+                  return 'Belum ada cuti terpakai atau diproses';
                 }
                 
                 return (
-                  <div className="space-y-1 ml-2">
-                    {approvedCuti.map((cuti, idx) => (
-                      <div key={idx} className="text-sm">
-                        • {formatCutiNumber(cuti.jumlah_hari)} hari ({formatDate(cuti.tanggal_mulai)} - {formatDate(cuti.tanggal_selesai)})
+                  <div className="space-y-2 ml-2">
+                    {approvedCuti.length > 0 && (
+                      <div>
+                        <p className="font-semibold text-sm text-green-700 mb-1">✓ Disetujui:</p>
+                        {approvedCuti.map((cuti, idx) => (
+                          <div key={idx} className="text-sm">
+                            • {formatCutiNumber(cuti.jumlah_hari)} hari ({formatDate(cuti.tanggal_mulai)} - {formatDate(cuti.tanggal_selesai)})
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
+                    {pendingCuti.length > 0 && (
+                      <div>
+                        <p className="font-semibold text-sm text-yellow-700 mb-1">⏳ Sedang Diproses:</p>
+                        {pendingCuti.map((cuti, idx) => (
+                          <div key={idx} className="text-sm text-yellow-800">
+                            • {formatCutiNumber(cuti.jumlah_hari)} hari ({formatDate(cuti.tanggal_mulai)} - {formatDate(cuti.tanggal_selesai)})
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })()}
             </td>
           </tr>
-        </tbody>
-      </table>
-    </div>
-  );
-})()}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })()}
 
         {/* Tabel Jatah Cuti per Periode */}
         <div className="mb-6">
@@ -2475,7 +2576,7 @@ const handlePageChangePengajuan = (page) => {
                               {cuti.jumlah_hari} hari
                             </span>
                             {/* ✅ TAMBAHAN: Badge untuk cuti manual */}
-                            {cuti.is_manual && (
+                            {cuti.is_manual == 1 && (
                               <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs font-semibold rounded-full">
                                 Manual Entry
                               </span>
@@ -2723,14 +2824,16 @@ const handlePageChangePengajuan = (page) => {
               .filter(j => j.is_current)
               .map((jatah) => (
                 <option key={jatah.id} value={jatah.id}>
-                  Tahun ke-{jatah.tahun_ke} - Sisa: {formatCutiNumber(jatah.sisa_cuti)} hari
+                  Tahun ke-{jatah.tahun_ke} - Tersedia: {formatCutiNumber(jatah.sisa_efektif)} hari
+                  {jatah.cuti_diproses > 0 && ` (${formatCutiNumber(jatah.cuti_diproses)} hari sedang diproses)`}
                 </option>
               ))}
             {jatahCutiForUser
               .filter(j => j.is_borrowable)
               .map((jatah) => (
                 <option key={jatah.id} value={jatah.id}>
-                  Tahun ke-{jatah.tahun_ke} - Sisa: {formatCutiNumber(jatah.sisa_cuti)} hari (Pinjam periode depan)
+                  Tahun ke-{jatah.tahun_ke} - Tersedia: {formatCutiNumber(jatah.sisa_efektif)} hari (Pinjam periode depan)
+                  {jatah.cuti_diproses > 0 && ` (${formatCutiNumber(jatah.cuti_diproses)} hari sedang diproses)`}
                 </option>
               ))}
           </select>

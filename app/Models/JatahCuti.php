@@ -16,11 +16,11 @@ class JatahCuti extends Model
         'tahun_ke',
         'tahun',
         'jumlah_cuti',
+        'cuti_reserved', 
         'cuti_dipakai',
         'sisa_cuti',
         'pinjam_tahun_prev',
         'pinjam_tahun_next',
-       
         'keterangan',
     ];
     
