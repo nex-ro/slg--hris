@@ -663,6 +663,7 @@ const paginatedValidasiCuti = filteredValidasiCuti.slice(
       <div className=" max-w-7xl mx-auto">
        
        {/* Informasi Jatah Cuti */}
+{/* Informasi Jatah Cuti */}
 {jatahCuti.length > 0 && jatahCuti[0] && (
   <div className="mb-6 bg-white rounded-lg shadow-md overflow-hidden">
     <div className="px-6 py-3 bg-blue-600 text-white">
@@ -701,25 +702,61 @@ const paginatedValidasiCuti = filteredValidasiCuti.slice(
           <tr>
             <td className="py-2 text-sm text-gray-700">Dapat dipinjam cuti tahun ke 2</td>
             <td className="py-2 text-sm text-gray-900">
-              : {formatHari(jatahCuti[1].sisa_cuti || 0)} hari
+              : {formatHari(jatahCuti[1]?.sisa_cuti || 0)} hari
             </td>
           </tr>
+          
+          {/* ✅ TAMPILKAN: Cuti yang sudah disetujui */}
           <tr>
             <td className="py-2 text-sm text-gray-700">Telah terpakai</td>
             <td className="py-2 text-sm text-gray-900">
               : {formatHari(jatahCuti[0].cuti_dipakai || 0)} hari
             </td>
           </tr>
+          
+          {/* ✅ TAMBAHKAN: Cuti yang sedang diproses (reserved) */}
+          <tr>
+            <td className="py-2 text-sm text-gray-700">Sedang diproses (menunggu approval)</td>
+            <td className="py-2 text-sm text-orange-600 font-medium">
+              : {formatHari(jatahCuti[0].cuti_reserved || 0)} hari
+            </td>
+          </tr>
+          
+          {/* ✅ SISA CUTI: Sudah dikurangi reserved dari backend */}
           <tr className="bg-blue-50">
-            <td className="py-2 text-sm font-semibold text-gray-900">Sisa cuti</td>
+            <td className="py-2 text-sm font-semibold text-gray-900">Sisa cuti (tersedia)</td>
             <td className="py-2 text-sm font-bold text-blue-600">
               : {formatHari(jatahCuti[0].sisa_cuti)} hari
             </td>
           </tr>
+          
           <tr>
             <td className="py-2 text-sm text-gray-700">Detail pemakaian</td>
             <td className="py-2 text-sm text-gray-900">
-              : {jatahCuti[0].cuti_dipakai > 0 ? 'Ada cuti terpakai' : 'Belum ada cuti terpakai'}
+              : {jatahCuti[0].cuti_dipakai > 0 ? (
+                <span className="text-[13px]">
+                  {/* Tampilkan detail cuti yang sudah disetujui */}
+                  {cutiSayaData
+                    .filter(c => 
+                      c.status_final === 'disetujui' && 
+                      c.jatah_cuti?.tahun_ke === jatahCuti[0].tahun_ke
+                    )
+                    .map((cuti, idx) => (
+                      <span key={idx} className="inline-flex items-center gap-1 mr-2">
+                        <span className="text-blue-600 text-sm">•</span>
+                        <span className="font-semibold">{formatHari(cuti.jumlah_hari)}</span>
+                        <span>hari</span>
+                        <span>
+                          ({formatDate(cuti.tanggal_mulai)}
+                          {cuti.tanggal_mulai !== cuti.tanggal_selesai && 
+                            ` - ${formatDate(cuti.tanggal_selesai)}`})
+                        </span>
+                      </span>
+                    ))}
+                </span>
+              ) : (
+                'Belum ada cuti terpakai'
+              )}
             </td>
           </tr>
         </tbody>

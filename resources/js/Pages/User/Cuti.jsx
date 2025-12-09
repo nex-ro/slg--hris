@@ -274,7 +274,7 @@ const formatHari = (hari) => {
       </div>
       <div className="p-6">
         <table className="w-full">
-          <tbody className="divide-y divide-gray-200">
+         <tbody className="divide-y divide-gray-200">
   <tr>
     <td className="py-2 text-sm text-gray-700 w-1/3">Tahun ke</td>
     <td className="py-2 text-sm text-gray-900 font-medium">: {jatahCuti[0].tahun_ke || '1'}</td>
@@ -327,14 +327,28 @@ const formatHari = (hari) => {
     </td>
   </tr>
   
+  {/* ✅ TAMPILKAN: Cuti yang sudah disetujui saja (tidak termasuk reserved) */}
   <tr>
     <td className="py-2 text-sm text-gray-700">Telah terpakai</td>
-    <td className="py-2 text-sm text-gray-900 font-medium">: {formatHari(jatahCuti[0].cuti_dipakai -jatahCuti[0].cuti_reserved ) || '0'} hari</td>
+    <td className="py-2 text-sm text-gray-900 font-medium">
+      : {formatHari(jatahCuti[0].cuti_dipakai) || '0'} hari
+    </td>
   </tr>
   
+  {/* ✅ TAMPILKAN: Cuti yang sedang menunggu approval */}
+  <tr>
+    <td className="py-2 text-sm text-gray-700">Sedang diproses (menunggu approval)</td>
+    <td className="py-2 text-sm text-orange-600 font-medium">
+      : {formatHari(jatahCuti[0].cuti_reserved || 0)} hari
+    </td>
+  </tr>
+  
+  {/* ✅ SISA CUTI: Sudah dikurangi reserved dari backend */}
   <tr className="bg-blue-50">
-    <td className="py-2 text-sm font-semibold text-gray-900">Sisa cuti</td>
-    <td className="py-2 text-sm font-bold text-blue-600">: {formatHari(jatahCuti[0].sisa_cuti)} hari</td>
+    <td className="py-2 text-sm font-semibold text-gray-900">Sisa cuti (tersedia)</td>
+    <td className="py-2 text-sm font-bold text-blue-600">
+      : {formatHari(jatahCuti[0].sisa_cuti)} hari
+    </td>
   </tr>
   
   <tr>

@@ -29,51 +29,48 @@ class emailterlambat extends Command
      */
     public function handle()
     {
-        $this->info('Memulai proses pengecekan keterlambatan...');
-        
-        // Ambil tanggal hari ini
+        info('Memulai proses pengecekan keterlambatan...');
         $today = Carbon::today()->format('Y-m-d');
-        
-        // Tentukan jam masuk standar (misalnya 08:00:00)
-        $jamMasukStandar = '08:00:00';
-        
-        // Ambil data kehadiran hari ini yang terlambat
+        // Ambil data kehadiran berdasarkan status "Terlambat"
         $kehadiranTerlambat = Kehadiran::whereDate('tanggal', $today)
+            ->where('status', 'Terlambat') // Cek berdasarkan status
             ->whereNotNull('jam_kedatangan')
-            ->where('jam_kedatangan', '>', $jamMasukStandar)
             ->with('user')
             ->get();
-        
+
         if ($kehadiranTerlambat->isEmpty()) {
             $this->info('Tidak ada karyawan yang terlambat hari ini.');
             return 0;
         }
-        
+
         $this->info("Ditemukan {$kehadiranTerlambat->count()} karyawan yang terlambat.");
-        
+
         foreach ($kehadiranTerlambat as $kehadiran) {
             $user = $kehadiran->user;
-            
+
             if (!$user || !$user->email) {
                 $this->warn("User tidak ditemukan atau tidak memiliki email untuk kehadiran ID: {$kehadiran->id}");
                 continue;
             }
-            
-            // Hitung total keterlambatan bulan ini
+        
+            // Hitung total keterlambatan bulan ini berdasarkan status
             $firstDayOfMonth = Carbon::now()->startOfMonth()->format('Y-m-d');
             $lastDayOfMonth = Carbon::now()->endOfMonth()->format('Y-m-d');
-            
+
             $jumlahTerlambatBulanIni = Kehadiran::where('uid', $user->id)
                 ->whereBetween('tanggal', [$firstDayOfMonth, $lastDayOfMonth])
-                ->whereNotNull('jam_kedatangan')
-                ->where('jam_kedatangan', '>', $jamMasukStandar)
+                ->where('status', 'Terlambat') // Hitung berdasarkan status
                 ->count();
+        
+            // Hitung durasi keterlambatan jika diperlukan
+            $jamMasukStandar = '08:01:00';
             $jamKedatangan = Carbon::parse($kehadiran->jam_kedatangan);
             $jamStandar = Carbon::parse($jamMasukStandar);
-            $durasiTerlambat = $jamStandar->diff($jamKedatangan);   
+            $durasiTerlambat = $jamStandar->diff($jamKedatangan);
             $menitTerlambat = ($durasiTerlambat->h * 60) + $durasiTerlambat->i;
+        
             try {
-                $logo_src = asset('asset/LogoEtica.png'); // atau URL lengkap
+                $logo_src = asset('asset/LogoEtica.png');
                 $logo_etica_src = asset('asset/LogoEtica.png');
 
                 Mail::send('pdf.keterlambatan', [
@@ -86,17 +83,18 @@ class emailterlambat extends Command
                     'bulan' => Carbon::now()->format('F Y'),
                     'logo_src' => $logo_src,
                     'logo_etica_src' => $logo_etica_src,
-
                 ], function ($message) use ($user) {
                     $message->to($user->email)
-                            ->subject('Notifikasi Keterlambatan - ' . Carbon::now()->format('d F Y'));
+                        ->subject('Notifikasi Keterlambatan - ' . Carbon::now()->format('d F Y'));
                 });
+            
                 $this->info("✓ Email berhasil dikirim ke: {$user->name} ({$user->email})");
+
             } catch (\Exception $e) {
                 $this->error("✗ Gagal mengirim email ke {$user->name}: " . $e->getMessage());
             }
         }
-        
+
         $this->info('Proses selesai.');
         return 0;
     }
