@@ -76,6 +76,7 @@ useEffect(() => {
     { value: 'WFH', label: 'Work From Home', desc: 'Bekerja dari rumah', color: 'bg-orange-500', textColor: 'text-white', borderColor: 'border-orange-500' },
     { value: 'FP-TR', label: 'FP Tidak Ter-Record', desc: 'Fingerprint tidak terekam sistem', color: 'bg-red-500', textColor: 'text-white', borderColor: 'border-red-500' },
     { value: 'LK', label: 'Libur Kerja', desc: 'Hari libur resmi/nasional', color: 'bg-gray-500', textColor: 'text-white', borderColor: 'border-gray-500' },
+    { value: 'Marein', label: 'Marein', desc: 'Absen di Marein', color: 'bg-teal-500', textColor: 'text-white', borderColor: 'border-teal-500' },
   ];
 
   // Fetch users dari backend

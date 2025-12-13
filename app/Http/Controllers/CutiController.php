@@ -47,7 +47,6 @@ class CutiController extends Controller
         } else {
           $currentPeriod = $years + 1;
         }
-        
         // Hitung tahun anniversary
         $currentAnniversary = $tmk->copy()->setYear($today->year);
         if ($today->lt($currentAnniversary)) {

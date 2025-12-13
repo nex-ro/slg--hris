@@ -553,18 +553,20 @@ private function getYearlyTableData($year, $tower, $divisi)
         // Tentukan apakah hari libur 
         $isHoliday = $isSaturdayOrSunday || $isNationalHoliday; 
          
-        // ✅ PENTING: Tambahkan 'role' di SELECT
+        // ✅ PERBAIKAN LENGKAP: Filter berdasarkan TMK dan Tanggal Keluar
         $users = User::where('active', true) 
             ->where('role', '!=', 'eksekutif') 
+            // ✅ FILTER TMK: Hanya user yang SUDAH MULAI KERJA pada tanggal yang dipilih
             ->where(function ($query) use ($tanggal) {
-                $query->where('tmk', '<=', $tanggal)
-                      ->orWhereNull('tmk');
+                $query->where('tmk', '<=', $tanggal)  // TMK harus <= tanggal (sudah mulai kerja)
+                      ->orWhereNull('tmk');            // ATAU belum ada TMK (legacy data)
             })
+            // ✅ FILTER TANGGAL KELUAR: Hanya user yang MASIH BEKERJA pada tanggal yang dipilih
             ->where(function ($query) use ($tanggal) {
-                $query->where('tanggal_keluar', '>=', $tanggal)
-                      ->orWhereNull('tanggal_keluar');
+                $query->where('tanggal_keluar', '>', $tanggal)  // Tanggal keluar > tanggal (belum resign)
+                      ->orWhereNull('tanggal_keluar');          // ATAU belum resign
             })
-            ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk', 'tanggal_keluar', 'role') // ✅ SUDAH ADA 'role'
+            ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk', 'tanggal_keluar', 'role')
             ->orderBy('tower', 'asc') 
             ->orderBy('name', 'asc') 
             ->get(); 
@@ -637,7 +639,7 @@ private function getYearlyTableData($year, $tower, $divisi)
                     'tmk' => $user->tmk, 
                     'tanggal_keluar' => $user->tanggal_keluar,
                     'tower' => $user->tower ?? 'Tanpa Tower',
-                    'role' => $user->role, // ✅ KIRIM ROLE KE FRONTEND
+                    'role' => $user->role,
                 ] 
             ]; 
         }); 

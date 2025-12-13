@@ -89,7 +89,7 @@ Route::middleware('pegawai')->group(function () {
     Route::get('/cuti/create', [CutiController::class, 'create'])->name('cuti.create');
     Route::get('/cuti/rekan-kerja', [CutiController::class, 'getRekanKerja'])->name('cuti.rekan-kerja');
 
-    Route::get('/cuti/approvers', [CutiController::class, 'getApprovers'])->name('cuti.approvers'); // Route baru
+    Route::get('/cuti/approvers', [UserController::class, 'getApprovers'])->name('cuti.approvers'); // Route baru
 
 });
 
@@ -183,7 +183,6 @@ Route::middleware('head')->group(function () {
     Route::get('/kehadiran/divisi', [HrdController::class, 'getByDateAndDivisi']);
     Route::get('/pegawai/{divisi}', [UserController::class, 'pegawaiHead'])->name('pegawai.head');
     Route::get('/head/cuti', [CutiController::class, 'indexHead'])->name('cuti.head');
-
 });
 
 Route::middleware('auth')->group(function () {

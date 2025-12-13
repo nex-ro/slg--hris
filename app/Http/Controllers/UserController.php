@@ -365,6 +365,74 @@ class UserController extends Controller
         ]);
     }
 
+public function getApprovers()
+{
+    $user = auth()->user();
+    
+    // Ambil user dengan role 'hrd' saja
+    $hrdUsers = User::where('role', 'hrd')
+        ->where('active', 1)
+        ->whereNull('tanggal_keluar')  // ✅ Posisi benar
+        ->where('id', '!=', $user->id)
+        ->select('id', 'name', 'jabatan', 'divisi')
+        ->orderBy('name')
+        ->get();
+    
+    // Ambil atasan dari divisi yang sama
+    $atasanUsers = User::where('divisi', $user->divisi)
+        ->where('role', '!=', 'hrd')
+        ->where('active', 1)
+        ->whereNull('tanggal_keluar')  // ✅ Posisi benar
+        ->where('id', '!=', $user->id)
+        ->whereIn('jabatan', ['Manager', 'Supervisor', 'Kepala Divisi', 'Team Leader'])
+        ->select('id', 'name', 'jabatan', 'divisi')
+        ->orderBy('name')
+        ->get();
+    
+    // Gabungkan keduanya
+    $approvers = [
+        'hrd' => $hrdUsers->map(function($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'jabatan' => $user->jabatan,
+                'divisi' => $user->divisi,
+                'category' => 'HRD'
+            ];
+        }),
+        'atasan' => $atasanUsers->map(function($user) {
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'jabatan' => $user->jabatan,
+                'divisi' => $user->divisi,
+                'category' => 'Atasan'
+            ];
+        })
+    ];
+    
+    return response()->json($approvers);
+}
+
+public function getPimpinan()
+{
+    $user = auth()->user();
+    
+    // Ambil user dengan jabatan pimpinan
+    $pimpinan = User::where('active', 1)
+        ->whereNull('tanggal_keluar') 
+        ->where('id', '!=', $user->id)
+        ->where(function($query) {
+            $query->whereIn('jabatan', ['head', 'direksi', 'ceo', 'cfo', 'coo', 'cto'])
+                  ->orWhereIn('role', ['eksekutif', 'head']);  // ✅ Pakai whereIn untuk array
+        })
+        ->select('id', 'name', 'jabatan', 'divisi')
+        ->orderBy('name')
+        ->get();
+    
+    return response()->json($pimpinan);
+}
+
 
     
 }

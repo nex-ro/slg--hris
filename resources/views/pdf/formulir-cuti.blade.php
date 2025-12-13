@@ -97,7 +97,7 @@
             text-align: center;
             padding: 8px;
             vertical-align: top;
-            width: 33.33%;
+            width: 25%; /* Ubah dari 33.33% menjadi 25% untuk 4 kolom */
         }
         .signature-title {
             font-weight: bold;
@@ -259,74 +259,107 @@
     @endif
 
     <div class="signature-section">
-        <div class="signature-row">
-            <div class="signature-col">
-                <div class="signature-title">Pemohon</div>
-                <div class="signature-box">
-                    @if($user->ttd && file_exists(public_path('storage/ttd/' . $user->ttd)))
-                        <img src="{{ public_path('storage/ttd/' . $user->ttd) }}" alt="TTD">
-                    @endif
-                </div>
-                <div class="signature-name">{{ $user->name }}</div>
-                <div class="signature-date">{{ \Carbon\Carbon::parse($pemakaianCuti->tanggal_pengajuan)->format('d/m/Y') }}</div>
-            </div>
-
-            @if($pemakaianCuti->diketahui_atasan)
-            <div class="signature-col">
-                <div class="signature-title">Diketahui Oleh</div>
-                <div class="signature-box">
-                    @if($pemakaianCuti->status_diketahui_atasan == 'disetujui')
-                        @if($pemakaianCuti->diketahuiAtasanUser && $pemakaianCuti->diketahuiAtasanUser->ttd && file_exists(public_path('storage/ttd/' . $pemakaianCuti->diketahuiAtasanUser->ttd)))
-                            <img src="{{ public_path('storage/ttd/' . $pemakaianCuti->diketahuiAtasanUser->ttd) }}" alt="TTD">
-                        @else
-                            <img src="{{ public_path('asset/acc.png') }}" alt="Disetujui">
-                        @endif
-                    @elseif($pemakaianCuti->status_diketahui_atasan == 'ditolak')
-                        <img src="{{ public_path('asset/rejected.png') }}" alt="Ditolak">
-                    @endif
-                </div>
-                <div class="signature-name">{{ $pemakaianCuti->diketahuiAtasanUser->name ?? 'Atasan' }}</div>
-                <div class="signature-date">
-                    @if($pemakaianCuti->tanggal_diketahui_atasan)
-                        {{ \Carbon\Carbon::parse($pemakaianCuti->tanggal_diketahui_atasan)->format('d/m/Y') }}
-                    @endif
-                </div>
-                @if($pemakaianCuti->status_diketahui_atasan)
-                    <div class="status-badge status-{{ $pemakaianCuti->status_diketahui_atasan }}">
-                        {{ strtoupper($pemakaianCuti->status_diketahui_atasan) }}
-                    </div>
+    <div class="signature-row">
+        <!-- 1. Pemohon -->
+        <div class="signature-col">
+            <div class="signature-title">Pemohon</div>
+            <div class="signature-box">
+                @if($user->ttd && file_exists(public_path('storage/ttd/' . $user->ttd)))
+                    <img src="{{ public_path('storage/ttd/' . $user->ttd) }}" alt="TTD">
                 @endif
             </div>
-            @endif
+            <div class="signature-name">{{ $user->name }}</div>
+            <div class="signature-date">{{ \Carbon\Carbon::parse($pemakaianCuti->tanggal_pengajuan)->format('d/m/Y') }}</div>
+        </div>
 
-            @if($pemakaianCuti->disetujui)
-            <div class="signature-col">
-                <div class="signature-title">Disetujui Oleh</div>
-                <div class="signature-box">
-                    @if($pemakaianCuti->status_disetujui == 'disetujui')
-                        @if($pemakaianCuti->disetujuiUser && $pemakaianCuti->disetujuiUser->ttd && file_exists(public_path('storage/ttd/' . $pemakaianCuti->disetujuiUser->ttd)))
-                            <img src="{{ public_path('storage/ttd/' . $pemakaianCuti->disetujuiUser->ttd) }}" alt="TTD">
-                        @else
-                            <img src="{{ public_path('asset/acc.png') }}" alt="Disetujui">
-                        @endif
-                    @elseif($pemakaianCuti->status_disetujui == 'ditolak')
-                        <img src="{{ public_path('asset/rejected.png') }}" alt="Ditolak">
+        <!-- 2. Diketahui Atasan -->
+        @if($pemakaianCuti->diketahui_atasan)
+        <div class="signature-col">
+            <div class="signature-title">Diketahui Atasan</div>
+            <div class="signature-box">
+                @if($pemakaianCuti->status_diketahui_atasan == 'disetujui')
+                    @if($pemakaianCuti->diketahuiAtasanUser && $pemakaianCuti->diketahuiAtasanUser->ttd && file_exists(public_path('storage/ttd/' . $pemakaianCuti->diketahuiAtasanUser->ttd)))
+                        <img src="{{ public_path('storage/ttd/' . $pemakaianCuti->diketahuiAtasanUser->ttd) }}" alt="TTD">
+                    @else
+                        <img src="{{ public_path('asset/acc.png') }}" alt="Disetujui">
                     @endif
-                </div>
-                <div class="signature-name">{{ $pemakaianCuti->disetujuiUser->name ?? 'Direktur' }}</div>
-                <div class="signature-date">
-                    @if($pemakaianCuti->tanggal_disetujui)
-                        {{ \Carbon\Carbon::parse($pemakaianCuti->tanggal_disetujui)->format('d/m/Y') }}
-                    @endif
-                </div>
-                @if($pemakaianCuti->status_disetujui)
-                    <div class="status-badge status-{{ $pemakaianCuti->status_disetujui }}">
-                        {{ strtoupper($pemakaianCuti->status_disetujui) }}
-                    </div>
+                @elseif($pemakaianCuti->status_diketahui_atasan == 'ditolak')
+                    <img src="{{ public_path('asset/rejected.png') }}" alt="Ditolak">
                 @endif
             </div>
+            <div class="signature-name">{{ $pemakaianCuti->diketahuiAtasanUser->name ?? 'Atasan' }}</div>
+            <div class="signature-date">
+                @if($pemakaianCuti->tanggal_diketahui_atasan)
+                    {{ \Carbon\Carbon::parse($pemakaianCuti->tanggal_diketahui_atasan)->format('d/m/Y') }}
+                @endif
+            </div>
+            @if($pemakaianCuti->status_diketahui_atasan)
+                <div class="status-badge status-{{ $pemakaianCuti->status_diketahui_atasan }}">
+                    {{ strtoupper($pemakaianCuti->status_diketahui_atasan) }}
+                </div>
             @endif
         </div>
+        @endif
+
+        <!-- 3. Diketahui HRD (YANG HILANG INI) -->
+        @if($pemakaianCuti->diketahui_hrd)
+        <div class="signature-col">
+            <div class="signature-title">Diketahui HRD</div>
+            <div class="signature-box">
+                @if($pemakaianCuti->status_diketahui_hrd == 'disetujui')
+                    @if($pemakaianCuti->diketahuiHrdUser && $pemakaianCuti->diketahuiHrdUser->ttd && file_exists(public_path('storage/ttd/' . $pemakaianCuti->diketahuiHrdUser->ttd)))
+                        <img src="{{ public_path('storage/ttd/' . $pemakaianCuti->diketahuiHrdUser->ttd) }}" alt="TTD">
+                    @else
+                        <img src="{{ public_path('asset/acc.png') }}" alt="Disetujui">
+                    @endif
+                @elseif($pemakaianCuti->status_diketahui_hrd == 'ditolak')
+                    <img src="{{ public_path('asset/rejected.png') }}" alt="Ditolak">
+                @endif
+            </div>
+            <div class="signature-name">{{ $pemakaianCuti->diketahuiHrdUser->name ?? 'HRD' }}</div>
+            <div class="signature-date">
+                @if($pemakaianCuti->tanggal_diketahui_hrd)
+                    {{ \Carbon\Carbon::parse($pemakaianCuti->tanggal_diketahui_hrd)->format('d/m/Y') }}
+                @endif
+            </div>
+            @if($pemakaianCuti->status_diketahui_hrd)
+                <div class="status-badge status-{{ $pemakaianCuti->status_diketahui_hrd }}">
+                    {{ strtoupper($pemakaianCuti->status_diketahui_hrd) }}
+                </div>
+            @endif
+        </div>
+        @endif
+
+        <!-- 4. Disetujui Pimpinan -->
+        @if($pemakaianCuti->disetujui)
+        <div class="signature-col">
+            <div class="signature-title">Disetujui Oleh</div>
+            <div class="signature-box">
+                @if($pemakaianCuti->status_disetujui == 'disetujui')
+                    @if($pemakaianCuti->disetujuiUser && $pemakaianCuti->disetujuiUser->ttd && file_exists(public_path('storage/ttd/' . $pemakaianCuti->disetujuiUser->ttd)))
+                        <img src="{{ public_path('storage/ttd/' . $pemakaianCuti->disetujuiUser->ttd) }}" alt="TTD">
+                    @else
+                        <img src="{{ public_path('asset/acc.png') }}" alt="Disetujui">
+                    @endif
+                @elseif($pemakaianCuti->status_disetujui == 'ditolak')
+                    <img src="{{ public_path('asset/rejected.png') }}" alt="Ditolak">
+                @endif
+            </div>
+            <div class="signature-name">{{ $pemakaianCuti->disetujuiUser->name ?? 'Direktur' }}</div>
+            <div class="signature-date">
+                @if($pemakaianCuti->tanggal_disetujui)
+                    {{ \Carbon\Carbon::parse($pemakaianCuti->tanggal_disetujui)->format('d/m/Y') }}
+                @endif
+            </div>
+            @if($pemakaianCuti->status_disetujui)
+                <div class="status-badge status-{{ $pemakaianCuti->status_disetujui }}">
+                    {{ strtoupper($pemakaianCuti->status_disetujui) }}
+                </div>
+            @endif
+        </div>
+        @endif
     </div>
+</div>
+
 </body>
 </html>

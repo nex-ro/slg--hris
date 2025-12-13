@@ -764,6 +764,8 @@ const ModalYangMakan = () => {
   { value: 'FP-TR', label: 'FP Tidak Ter-Record', desc: 'Fingerprint tidak terekam sistem', color: 'bg-red-500', textColor: 'text-white', borderColor: 'border-red-500' },
   { value: 'LK', label: 'Libur Kerja', desc: 'Hari libur resmi/nasional', color: 'bg-green-500', textColor: 'text-white', borderColor: 'border-gray-500' },
   { value: 'Site', label: 'Site', desc: 'Bertugas di lokasi site', color: 'bg-yellow-500', textColor: 'text-white', borderColor: 'border-yellow-500' }, // ✅ TAMBAH INI
+    { value: 'Marein', label: 'Marein', desc: 'Absen di Marein', color: 'bg-teal-500', textColor: 'text-white', borderColor: 'border-teal-500' },
+
 ];
 
   useEffect(() => {

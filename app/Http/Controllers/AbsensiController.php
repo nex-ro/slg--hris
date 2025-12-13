@@ -182,7 +182,7 @@ public function storeInputTidak(Request $request)
     $validated = $request->validate([
         'tanggal' => 'required|date',
         'tanggalSelesai' => 'nullable|date|after_or_equal:tanggal',
-        'status' => 'required|string|in:P1,P2,P3,C1,C2,DL,WFH,FP-TR,LK',
+        'status' => 'required|string|in:P1,P2,P3,C1,C2,DL,WFH,FP-TR,LK,Marein',
         'users' => 'required|array|min:1',
         'users.*' => 'exists:users,id'
     ]);
@@ -655,7 +655,7 @@ public function printKateringPDF(Request $request)
     $validator = Validator::make($request->all(), [
         'tanggal' => 'required|date',
         'user_id' => 'required|exists:users,id',
-        'status' => 'required|in:Hadir,Sakit,P1,P2,P3,C1,C2,DL,WFH,FP-TR,LK',
+        'status' => 'required|in:Hadir,Sakit,P1,P2,P3,C1,C2,DL,WFH,FP-TR,LK,Marein',
         'jam_kedatangan' => 'nullable|date_format:H:i',
         'jam_pulang' => 'nullable|date_format:H:i',
     ]);

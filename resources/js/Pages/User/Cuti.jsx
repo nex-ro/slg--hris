@@ -12,7 +12,10 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = {}, paginationLinks = [] }) 
   const [showFormModal, setShowFormModal] = useState(false);
   const [rekanKerja, setRekanKerja] = useState([]);
   const [processing, setProcessing] = useState(false);
-  const [approvers, setApprovers] = useState([]);
+const [approvers, setApprovers] = useState({
+  hrd: [],
+  atasan: []
+});
   const [formData, setFormData] = useState({
     jatah_cuti_id: '',
     tanggal_mulai: '',
@@ -25,6 +28,8 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = {}, paginationLinks = [] }) 
   diketahui_hrd: '',
   disetujui: ''
   });
+
+  
   const [loadingOverlay, setLoadingOverlay] = useState(false);
   const handlePageChange = (url) => {
   if (url) {
@@ -70,11 +75,17 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = {}, paginationLinks = [] }) 
     });
   }
 };
- const fetchApprovers = async () => {
+
+const fetchApprovers = async () => {
   try {
     const response = await fetch('/cuti/approvers');
     const data = await response.json();
-    setApprovers(data);
+    
+    // Pisahkan HRD dan Atasan
+    setApprovers({
+      hrd: data.hrd || [],
+      atasan: data.atasan || []
+    });
   } catch (error) {
     console.error('Error fetching approvers:', error);
     toast.error('Gagal memuat data approver.', {
@@ -82,7 +93,7 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = {}, paginationLinks = [] }) 
       autoClose: 3000,
     });
   }
-};  
+};
 
 const openFormModal = () => {
   // Cari periode aktif
@@ -321,7 +332,8 @@ const formatHari = (hari) => {
   </tr>
   
   <tr>
-    <td className="py-2 text-sm text-gray-700">Dapat dipinjam cuti tahun ke {jatahCuti[0].tahun_ke + 1}</td>
+    <td className="py-2 text-sm text-gray-700">Dapat dipinjam cuti tahun ke {Number(jatahCuti[0].tahun_ke) + 1}
+</td>
     <td className="py-2 text-sm text-gray-900 font-medium">
       : {formatHari(jatahCuti[1].sisa_cuti) || '0'} hari
     </td>
@@ -731,11 +743,16 @@ const formatHari = (hari) => {
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="">Pilih Atasan</option>
-                        {approvers.map((approver) => (
-                          <option key={approver.id} value={approver.id}>
-                            {approver.name} {approver.jabatan ? `- ${approver.jabatan}` : ''}
-                          </option>
-                        ))}
+                          {approvers.atasan && approvers.atasan.length > 0 ? (
+                            approvers.atasan.map((approver) => (
+                              <option key={approver.id} value={approver.id}>
+                                {approver.name} - {approver.jabatan} ({approver.divisi})
+                              </option>
+                            ))
+                          ) : (
+                            <option disabled>Tidak ada atasan tersedia</option>
+                          )}
+
                       </select>
                       {errors.diketahui_atasan && (
                         <p className="text-red-500 text-sm mt-1">{errors.diketahui_atasan}</p>
@@ -753,12 +770,17 @@ const formatHari = (hari) => {
                         onChange={handleInputChange}
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
-                        <option value="">Pilih HRD</option>
-                        {approvers.map((approver) => (
-                          <option key={approver.id} value={approver.id}>
-                            {approver.name} {approver.jabatan ? `- ${approver.jabatan}` : ''}
-                          </option>
-                        ))}
+                          <option value="">Pilih HRD</option>
+                          {approvers.hrd && approvers.hrd.length > 0 ? (
+                            approvers.hrd.map((approver) => (
+                              <option key={approver.id} value={approver.id}>
+                                {approver.name} - {approver.jabatan}
+                              </option>
+                            ))
+                          ) : (
+                            <option disabled>Tidak ada HRD tersedia</option>
+                          )}
+
                       </select>
                       {errors.diketahui_hrd && (
                         <p className="text-red-500 text-sm mt-1">{errors.diketahui_hrd}</p>
@@ -777,11 +799,33 @@ const formatHari = (hari) => {
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="">Pilih Pimpinan</option>
-                        {approvers.map((approver) => (
-                          <option key={approver.id} value={approver.id}>
-                            {approver.name} {approver.jabatan ? `- ${approver.jabatan}` : ''}
-                          </option>
-                        ))}
+                          {approvers.atasan && approvers.atasan.length > 0 && (
+                              <>
+                                {approvers.atasan
+                                  .filter(a => a.jabatan && ['head', 'direksi', 'ceo', 'cfo', 'coo', 'cto', 'direktur', 'director'].some(title => 
+                                    a.jabatan.toLowerCase().includes(title.toLowerCase())
+                                  ))
+                                  .map((approver) => (
+                                    <option key={`atasan-${approver.id}`} value={approver.id}>
+                                      {approver.name} - {approver.jabatan}
+                                    </option>
+                                  ))}
+                              </>
+                            )}
+                            {approvers.hrd && approvers.hrd.length > 0 && (
+                              <>
+                                {approvers.hrd
+                                  .filter(a => a.jabatan && ['head', 'direksi', 'ceo', 'cfo', 'coo', 'cto', 'direktur', 'director'].some(title => 
+                                    a.jabatan.toLowerCase().includes(title.toLowerCase())
+                                  ))
+                                  .map((approver) => (
+                                    <option key={`hrd-${approver.id}`} value={approver.id}>
+                                      {approver.name} - {approver.jabatan}
+                                    </option>
+                                  ))}
+                              </>
+                            )}
+
                       </select>
                       {errors.disetujui && (
                         <p className="text-red-500 text-sm mt-1">{errors.disetujui}</p>
