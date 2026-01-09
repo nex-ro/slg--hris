@@ -693,6 +693,8 @@ const paginatedValidasiCuti = filteredValidasiCuti.slice(
               : {formatHari(jatahCuti[0].jumlah_cuti)} hari
             </td>
           </tr>
+                    
+
           <tr>
             <td className="py-2 text-sm text-gray-700">Dipinjam untuk tahun ke 0</td>
             <td className="py-2 text-sm text-gray-900">
@@ -705,7 +707,12 @@ const paginatedValidasiCuti = filteredValidasiCuti.slice(
               : {formatHari(jatahCuti[1]?.sisa_cuti || 0)} hari
             </td>
           </tr>
-          
+          <tr>
+            <td className="py-2 text-sm text-gray-700">Cuti Bersama</td>
+            <td className="py-2 text-sm text-gray-900">
+              : {formatHari(jatahCuti[0].cuti_bersama)} hari
+            </td>
+          </tr>
           {/* ✅ TAMPILKAN: Cuti yang sudah disetujui */}
           <tr>
             <td className="py-2 text-sm text-gray-700">Telah terpakai</td>

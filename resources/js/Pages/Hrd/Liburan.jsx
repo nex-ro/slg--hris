@@ -9,6 +9,8 @@ export default function Index({flash, auth, holidays, allHolidays }) {
     const [currentMonth, setCurrentMonth] = useState(new Date().getMonth() + 1);
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [showAddModal, setShowAddModal] = useState(false);
+    const [editJenisLiburan, setEditJenisLiburan] = useState('tanggal_merah');
+
     const [editModalOpen, setEditModalOpen] = useState(false);
     const [editingId, setEditingId] = useState(null);
     const [editName, setEditName] = useState('');
@@ -25,7 +27,9 @@ export default function Index({flash, auth, holidays, allHolidays }) {
         name: '',
         start_date: new Date().toISOString().split('T')[0],
         end_date: new Date().toISOString().split('T')[0],
+        jenis_liburan: 'tanggal_merah', // TAMBAH INI
     });
+
     useEffect(() => {
         if (flash?.success) {
             showToast(flash.success, 'success');
@@ -177,50 +181,56 @@ export default function Index({flash, auth, holidays, allHolidays }) {
         });
     };
 
-    const handleEdit = (id, name) => {
+    const handleEdit = (id, name, jenisLiburan) => {
         setEditingId(id);
         setEditName(name);
+        setEditJenisLiburan(jenisLiburan); 
         setEditModalOpen(true);
     };
 
+
     const handleSaveEdit = () => {
-    if (!editName.trim()) {
-        showToast('Nama libur tidak boleh kosong', 'warning'); // TAMBAH ini
-        return;
-    }
-    
-    setLoadingOverlay(true); // TAMBAH ini
-    
-    router.put(`/holidays/${editingId}`, 
-        { name: editName },
-        {
-            preserveScroll: true,
-            onSuccess: () => {
-                setEditModalOpen(false);
-                setEditingId(null);
-                setEditName('');
-                setLoadingOverlay(false); // TAMBAH ini
-                showToast('Hari libur berhasil diperbarui!', 'success'); // TAMBAH ini
-            },
-            onError: (errors) => {
-                setLoadingOverlay(false); // TAMBAH ini
-                let errorMessage = "Gagal memperbarui hari libur";
-                
-                if (errors.message) {
-                    errorMessage = errors.message;
-                } else if (typeof errors === 'object') {
-                    const errorArray = Object.values(errors).flat();
-                    errorMessage = errorArray.join(', ');
-                }
-                
-                showToast(errorMessage, 'error'); // TAMBAH ini
-            },
-            onFinish: () => {
-                setLoadingOverlay(false); // TAMBAH ini
-            }
+        if (!editName.trim()) {
+            showToast('Nama libur tidak boleh kosong', 'warning');
+            return;
         }
-    );
-};
+
+        setLoadingOverlay(true);
+
+        router.put(`/holidays/${editingId}`, 
+            { 
+                name: editName,
+                jenis_liburan: editJenisLiburan // TAMBAH INI
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setEditModalOpen(false);
+                    setEditingId(null);
+                    setEditName('');
+                    setEditJenisLiburan('tanggal_merah'); // TAMBAH INI
+                    setLoadingOverlay(false);
+                    showToast('Hari libur berhasil diperbarui!', 'success');
+                },
+                onError: (errors) => {
+                    setLoadingOverlay(false);
+                    let errorMessage = "Gagal memperbarui hari libur";
+
+                    if (errors.message) {
+                        errorMessage = errors.message;
+                    } else if (typeof errors === 'object') {
+                        const errorArray = Object.values(errors).flat();
+                        errorMessage = errorArray.join(', ');
+                    }
+
+                    showToast(errorMessage, 'error');
+                },
+                onFinish: () => {
+                    setLoadingOverlay(false);
+                }
+            }
+        );  
+    };
 
     const handleDelete = (id) => {
         if (confirm('Hapus hari libur ini?')) {
@@ -394,10 +404,11 @@ export default function Index({flash, auth, holidays, allHolidays }) {
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {allHolidays.map((holiday) => {
+                                           {allHolidays.map((holiday) => {
                                                 const date = new Date(holiday.date);
                                                 const dayName = dayNames[date.getDay()];
                                                 const isPast = date < new Date();
+                                                const isTanggalMerah = holiday.jenis_liburan === 'tanggal_merah'; // TAMBAH INI
                                                 return (
                                                     <div
                                                         key={holiday.id}
@@ -408,12 +419,13 @@ export default function Index({flash, auth, holidays, allHolidays }) {
                                                         <div className="flex items-start justify-between gap-3">
                                                             <div className="flex-1 min-w-0">
                                                                 <div className="flex items-center gap-2 mb-2">
-                                                                    <div className={`w-3 h-3 rounded-full ${isPast ? 'bg-gray-400' : 'bg-red-500'}`}></div>
+                                                                    {/* UBAH INI - warna dot berdasarkan jenis */}
+                                                                    <div className={`w-3 h-3 rounded-full ${isPast ? 'bg-gray-400' : isTanggalMerah ? 'bg-red-500' : 'bg-orange-500'}`}></div>
                                                                     <h4 className="font-bold text-gray-800 truncate">
                                                                         {holiday.name}
                                                                     </h4>
                                                                 </div>
-                                                                <div className="flex items-center gap-2 text-sm text-gray-600">
+                                                                <div className="flex items-center gap-2 text-sm text-gray-600 mb-2">
                                                                     <svg className="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                                                                     </svg>
@@ -421,10 +433,18 @@ export default function Index({flash, auth, holidays, allHolidays }) {
                                                                     <span>•</span>
                                                                     <span>{date.getDate()} {monthNames[date.getMonth()]} {date.getFullYear()}</span>
                                                                 </div>
+                                                                {/* TAMBAH BADGE INI */}
+                                                                <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-semibold ${
+                                                                    isTanggalMerah 
+                                                                        ? 'bg-red-100 text-red-700' 
+                                                                        : 'bg-orange-100 text-orange-700'
+                                                                }`}>
+                                                                    {isTanggalMerah ? '🔴 Tanggal Merah' : '🟠 Cuti Bersama (Auto C1)'}
+                                                                </span>
                                                             </div>
                                                             <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                                                                 <button
-                                                                    onClick={() => handleEdit(holiday.id, holiday.name)}
+                                                                    onClick={() => handleEdit(holiday.id, holiday.name, holiday.jenis_liburan)} 
                                                                     className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                                     title="Edit"
                                                                 >
@@ -446,6 +466,7 @@ export default function Index({flash, auth, holidays, allHolidays }) {
                                                     </div>
                                                 );
                                             })}
+
                                         </div>
                                     )}
                                 </div>
@@ -482,6 +503,25 @@ export default function Index({flash, auth, holidays, allHolidays }) {
                                     required
                                 />
                                 {errors.name && <div className="text-red-500 text-sm mt-1.5 font-medium">{errors.name}</div>}
+                            </div>
+                            <div>   
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Jenis Liburan
+                                </label>
+                                <select
+                                    value={data.jenis_liburan}
+                                    onChange={(e) => setData('jenis_liburan', e.target.value)}
+                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent transition-all"
+                                >
+                                    <option value="tanggal_merah">🔴 Tanggal Merah</option>
+                                    <option value="cuti_bersama">🟠 Cuti Bersama (Auto C1)</option>
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {data.jenis_liburan === 'cuti_bersama' 
+                                        ? '* Akan otomatis membuat kehadiran C1 untuk semua karyawan aktif' 
+                                        : '* Karyawan bisa mengajukan cuti atau masuk kerja'}
+                                </p>
+                                {errors.jenis_liburan && <div className="text-red-500 text-sm mt-1.5 font-medium">{errors.jenis_liburan}</div>}
                             </div>
                             
                             <div>
@@ -548,23 +588,44 @@ export default function Index({flash, auth, holidays, allHolidays }) {
                                 <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                 </svg>
-                                Edit Nama Libur
+                                Edit Libur
                             </h3>
                         </div>
-                        
-                        <div className="p-6">
-                            <label className="block text-sm font-bold text-gray-700 mb-2">
-                                Nama Libur
-                            </label>
-                            <input
-                                type="text"
-                                value={editName}
-                                onChange={(e) => setEditName(e.target.value)}
-                                className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                                placeholder="Masukkan nama libur"
-                            />
+
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Nama Libur
+                                </label>
+                                <input
+                                    type="text"
+                                    value={editName}
+                                    onChange={(e) => setEditName(e.target.value)}
+                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                    placeholder="Masukkan nama libur"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Jenis Liburan
+                                </label>
+                                <select
+                                    value={editJenisLiburan}
+                                    onChange={(e) => setEditJenisLiburan(e.target.value)}
+                                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                                >
+                                    <option value="tanggal_merah">🔴 Tanggal Merah</option>
+                                    <option value="cuti_bersama">🟠 Cuti Bersama (Auto C1)</option>
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {editJenisLiburan === 'cuti_bersama' 
+                                        ? '* Akan otomatis membuat kehadiran C1 untuk semua karyawan aktif' 
+                                        : '* Karyawan bisa mengajukan cuti atau masuk kerja'}
+                                </p>
+                            </div>
                         </div>
-                        
+                                    
                         <div className="flex gap-3 p-6 pt-0">
                             <button
                                 onClick={handleSaveEdit}

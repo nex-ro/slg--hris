@@ -1654,12 +1654,6 @@ const handlePageChangePengajuan = (page) => {
         </p>
       )}
     </div>
-
-      {searchPengajuan && (
-        <p className="text-sm text-gray-600 mt-2">
-          Ditemukan {filteredPengajuanCuti.length} hasil dari pencarian "{searchPengajuan}"
-        </p>
-      )}
     </div>
 
             <div className="overflow-x-auto">
@@ -1779,12 +1773,9 @@ const handlePageChangePengajuan = (page) => {
     </button>
     <button
       onClick={() => {
-        {console.log(cuti.is_manual && cuti.file_path)}
         if (cuti.is_manual && cuti.file_path) {
           window.open(route('cuti.download-Manual', cuti.id), '_blank');
         } else {
-          // Generate PDF
-                        {console.log("tsesss")}
 
           handleDownloadPdf(cuti.id);
           
@@ -2305,11 +2296,12 @@ const handlePageChangePengajuan = (page) => {
        {/* TAMBAHAN: Informasi User dalam bentuk tabel - Periode Aktif */}
 {(() => {
     const activePeriod = calculateActivePeriod(selectedUserGroup.user.tmk); // ✅ Ganti perhitungan manual
-  const aktiveCuti = selectedUserGroup.cutiList.find(item => item.tahun_ke === activePeriod);
+  const aktiveCuti = selectedUserGroup.cutiList.find(item => parseInt(item.tahun_ke) === parseInt(activePeriod));
   const nextYearCuti = selectedUserGroup.cutiList.find(item => item.tahun_ke === (activePeriod + 1));
+  const cutibersama=aktiveCuti ? aktiveCuti.cuti_bersama : 0; 
     const tmk = new Date(selectedUserGroup.user.tmk);
   const today = new Date();
-  
+  console.log(aktiveCuti);
   let totalYears = today.getFullYear() - tmk.getFullYear();
   let totalMonths = today.getMonth() - tmk.getMonth();
   let totalDays = today.getDate() - tmk.getDate();
@@ -2345,6 +2337,13 @@ const handlePageChangePengajuan = (page) => {
             </td>
           </tr>
           <tr className="border-b border-gray-200">
+            <td className="py-2 text-gray-600">Cuti Bersama</td>
+            <td className="py-2 text-gray-900">
+              : {formatCutiNumber(aktiveCuti?.cuti_bersama || 0)} hari
+            </td>
+          </tr>
+
+          <tr className="border-b border-gray-200">
             <td className="py-2 text-gray-600">Dipinjam utk tahun ke 0</td>
             <td className="py-2 text-gray-900">: 0 hari</td>
           </tr>
@@ -2377,7 +2376,7 @@ const handlePageChangePengajuan = (page) => {
           <tr className="bg-blue-50 border-b border-gray-200">
             <td className="py-2 text-gray-700 font-semibold">Sisa cuti</td>
             <td className="py-2 font-bold text-blue-600">
-              : {formatCutiNumber(aktiveCuti?.sisa_cuti || 0)} hari
+              : {formatCutiNumber((aktiveCuti?.sisa_cuti ) || 0)} hari
             </td>
           </tr>
           
@@ -2455,21 +2454,13 @@ const handlePageChangePengajuan = (page) => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {selectedUserGroup.cutiList
-                  .sort((a, b) => b.tahun_ke - a.tahun_ke)
-                  .map((cuti) => {
-                    // Hitung periode aktif
-                    const tmk = new Date(selectedUserGroup.user.tmk);
-                    const today = new Date();
-                    const yearsDiff = today.getFullYear() - tmk.getFullYear();
-                    const monthDiff = today.getMonth() - tmk.getMonth();
-                    const dayDiff = today.getDate() - tmk.getDate();
-                    let activePeriod = yearsDiff;
-                    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
-                      activePeriod--;
-                    }
-                    const isActive = cuti.tahun_ke === activePeriod;
-                    
+               {selectedUserGroup.cutiList
+                .sort((a, b) => b.tahun_ke - a.tahun_ke)
+                .map((cuti) => {
+                  // ✅ GUNAKAN FUNCTION calculateActivePeriod YANG SAMA
+                  const activePeriod = calculateActivePeriod(selectedUserGroup.user.tmk);
+                  const isActive = cuti.tahun_ke === activePeriod;
+                
                     return (
                       <tr key={cuti.id} className={isActive ? 'bg-blue-50' : 'hover:bg-gray-50'}>
                         <td className="px-4 py-3 whitespace-nowrap">

@@ -182,41 +182,82 @@ public function storeInputTidak(Request $request)
     $validated = $request->validate([
         'tanggal' => 'required|date',
         'tanggalSelesai' => 'nullable|date|after_or_equal:tanggal',
-        'status' => 'required|string|in:P1,P2,P3,C1,C2,DL,WFH,FP-TR,LK,Marein',
+        'status' => 'required|string|in:P1,P2,P3,C1,C2,DL,WFH,FP-TR,LK,Marein,Sakit',
         'users' => 'required|array|min:1',
         'users.*' => 'exists:users,id'
     ]);
 
     try {
-        // tentukan tanggal mulai dan akhir
+        // Tentukan tanggal mulai dan akhir
         $startDate = \Carbon\Carbon::parse($validated['tanggal']);
         $endDate = $validated['tanggalSelesai'] 
             ? \Carbon\Carbon::parse($validated['tanggalSelesai']) 
             : $startDate;
 
+        $created = 0;
+        $skipped = 0;
+        $skippedDetails = [];
+
         for ($date = $startDate->copy(); $date->lte($endDate); $date->addDay()) {
             foreach ($validated['users'] as $userId) {
-                Kehadiran::updateOrCreate(
-                    [
+                // Cek apakah data sudah ada
+                $exists = Kehadiran::where('tanggal', $date->format('Y-m-d'))
+                    ->where('uid', $userId)
+                    ->exists();
+
+                if ($exists) {
+                    // Skip jika data sudah ada
+                    $skipped++;
+                    
+                    // Ambil nama user untuk detail
+                    $user = \App\Models\User::find($userId);
+                    $skippedDetails[] = [
+                        'nama' => $user->name ?? 'Unknown',
+                        'tanggal' => $date->format('d-m-Y')
+                    ];
+                } else {
+                    // Buat data baru jika belum ada
+                    Kehadiran::create([
                         'tanggal' => $date->format('Y-m-d'),
                         'uid' => $userId,
-                    ],
-                    [
                         'status' => $validated['status'],
                         'jam_kedatangan' => '00:00:00',
                         'jam_pulang' => '00:00:00',
-                    ]
-                );
+                    ]);
+                    $created++;
+                }
             }
         }
 
-        return redirect()->back()->with(
-            'success', 
-            'Data kehadiran berhasil disimpan dari ' 
-            . $startDate->format('d-m-Y') . ' hingga ' 
-            . $endDate->format('d-m-Y') . ' untuk ' . count($validated['users']) . ' karyawan'
-        );
+        // Buat pesan response
+        $message = '';
+        
+        if ($created > 0 && $skipped === 0) {
+            // Semua data berhasil dibuat
+            $message = "Berhasil menyimpan {$created} data kehadiran dari " 
+                . $startDate->format('d-m-Y') . ' hingga ' 
+                . $endDate->format('d-m-Y');
+        } elseif ($created === 0 && $skipped > 0) {
+            // Semua data di-skip
+            $message = "Tidak ada data baru yang disimpan. {$skipped} data sudah ada sebelumnya.";
+        } else {
+            // Ada data yang dibuat dan ada yang di-skip
+            $message = "Berhasil menyimpan {$created} data baru. {$skipped} data di-skip karena sudah ada.";
+        }
+
+        // Jika ada data yang di-skip dan jumlahnya tidak terlalu banyak, tampilkan detail
+        if ($skipped > 0 && $skipped <= 10) {
+            $detailMessage = "\n\nData yang di-skip:\n";
+            foreach ($skippedDetails as $detail) {
+                $detailMessage .= "- {$detail['nama']} pada {$detail['tanggal']}\n";
+            }
+            $message .= $detailMessage;
+        }
+
+        return redirect()->back()->with('success', $message);
+
     } catch (\Exception $e) {
+        \Log::error('Error in storeInputTidak: ' . $e->getMessage());
         return redirect()->back()->with('error', 'Gagal menyimpan data: ' . $e->getMessage());
     }
 }
@@ -695,7 +736,7 @@ public function printKateringPDF(Request $request)
         if ($request->status === 'Hadir') {
             // Cek jam kedatangan untuk menentukan On Time atau Terlambat
             $waktuKedatangan = \Carbon\Carbon::createFromFormat('H:i', $request->jam_kedatangan);
-            $batasOnTime = \Carbon\Carbon::createFromFormat('H:i', '08:01');
+            $batasOnTime = \Carbon\Carbon::createFromFormat('H:i', '08:00');
             $batasBawah = \Carbon\Carbon::createFromFormat('H:i', '04:00');
             
             // Jika jam kedatangan antara 04:00 - 08:00

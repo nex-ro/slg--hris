@@ -339,6 +339,12 @@ const formatHari = (hari) => {
     </td>
   </tr>
   
+  <tr>
+    <td className="py-2 text-sm text-gray-700">Cuti bersama</td>
+    <td className="py-2 text-sm text-gray-900 font-medium">
+      : {formatHari(jatahCuti[0].cuti_bersama) || '0'} hari
+    </td>
+  </tr>
   {/* ✅ TAMPILKAN: Cuti yang sudah disetujui saja (tidak termasuk reserved) */}
   <tr>
     <td className="py-2 text-sm text-gray-700">Telah terpakai</td>
@@ -833,9 +839,6 @@ const formatHari = (hari) => {
                     </div>
                   </div>
                 </div>
-
-
-
                 {/* Delegasi Tugas */}
                 <div className="border-t pt-4">
                   <h4 className="text-sm font-semibold text-gray-700 mb-3">Delegasi Tugas (Opsional)</h4>

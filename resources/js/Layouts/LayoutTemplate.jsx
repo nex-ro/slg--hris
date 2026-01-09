@@ -173,7 +173,7 @@ useEffect(() => {
           { icon: List, label: 'List Absensi', href: '/absensi/list' },
           { icon: ClipboardCheck, label: 'Input Absensi Harian', href: '/absensi/input-harian' },
           { icon: XCircle, label: 'Input Absensi Tidak Hadir', href: '/absensi/input-tidak-hadir' },
-          { icon: Calendar1, label: 'Atur Liburan', href: '/holidays' },
+          { icon: Calendar1, label: 'Atur Hari Libur', href: '/holidays' },
           { icon: FolderOpen, label: 'Dokumen Absensi', href: '/absensi/dokumen' },
         ]
       },

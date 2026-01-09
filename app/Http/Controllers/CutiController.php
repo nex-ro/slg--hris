@@ -207,6 +207,7 @@ class CutiController extends Controller
                 'catatan' => $item->catatan,
                 'cuti_setengah_hari' => $item->cuti_setengah_hari,
                 'id_penerima_tugas' => $item->id_penerima_tugas,
+                
                 'tugas' => $item->tugas,
                 'jatah_cuti' => [
                     'tahun' => $item->jatahCuti->tahun ?? null,
@@ -749,6 +750,8 @@ private function calculateActivePeriod($tmk)
         return false;
     })->values();
 
+        
+
     // ✅ KIRIM SEMUA DATA TANPA PAGINATION
     // Format data agar kompatibel dengan frontend yang expect jatahCuti.data
     $jatahCuti = [
@@ -790,6 +793,7 @@ private function calculateActivePeriod($tmk)
             'tanggal_selesai' => $item->tanggal_selesai,
             'jumlah_hari' => floatval($item->jumlah_hari),
             'cuti_reserved' => $item->cuti_reserved ?? 0,
+            'cuti_bersama'=>$item->cuti_bersama ?? 0,
             'sisa_cuti' => $item->sisa_cuti,
             'alasan' => $item->alasan,
             'catatan' => $item->catatan,
@@ -1250,29 +1254,23 @@ public function downloadPdf($id)
     $user = auth()->user();
     
     // Hitung riwayat cuti yang sudah diambil + permohonan ini
-    // Hanya tampilkan yang disetujui atau sedang diproses (bukan ditolak)
-    // Dan hanya tampilkan yang tanggalnya <= tanggal dokumen ini
     $riwayatCuti = PemakaianCuti::where('uid', $pemakaianCuti->uid)
         ->where('jatah_cuti_id', $pemakaianCuti->jatah_cuti_id)
         ->where(function($query) use ($id) {
             $query->where('status_final', 'disetujui')
                   ->orWhere(function($subQuery) use ($id) {
-                      // Tampilkan permohonan ini meskipun masih diproses
                       $subQuery->where('id', $id)
                                ->where('status_final', '!=', 'ditolak');
                   })
                   ->orWhere(function($subQuery) {
-                      // Tampilkan yang masih diproses (belum ada keputusan final)
                       $subQuery->whereIn('status_final', ['diproses', 'menunggu', 'pending'])
                                ->orWhereNull('status_final');
                   });
         })
-        // Jangan tampilkan yang ditolak (kecuali dokumen ini sendiri jika sedang diproses)
         ->where(function($query) use ($id) {
             $query->where('status_final', '!=', 'ditolak')
                   ->orWhere('id', $id);
         })
-        // Hanya tampilkan yang tanggal mulainya <= tanggal mulai dokumen ini
         ->where('tanggal_mulai', '<=', $pemakaianCuti->tanggal_mulai)
         ->orderBy('tanggal_mulai')
         ->get();
@@ -1290,12 +1288,38 @@ public function downloadPdf($id)
         $tmkFormatted = $tmkDate->format('d F Y') . ' (' . $years . ' tahun ' . $months . ' bulan ' . $days . ' hari)';
     }
 
+    // === TAMBAHAN BARU: Hitung total dan available ===
+    $jatahCuti = $pemakaianCuti->jatahCuti;
+    
+    // Total jatah cuti (termasuk pinjaman dan gabungan)
+    $totalJatahCuti = $jatahCuti->jumlah_cuti 
+                    + ($jatahCuti->pinjam_tahun_next ?? 0) 
+                    + ($jatahCuti->gabung_tahun_lalu ?? 0);
+    
+    // Cuti yang direserve (sedang diproses/pending)
+    $cutiReserved = $jatahCuti->cuti_reserved ?? 0;
+    
+    // Cuti yang sudah dipakai (approved)
+    $cutiDipakai = $jatahCuti->cuti_dipakai ?? 0;
+    
+    // Sisa cuti = Total - Dipakai - Reserved
+    $sisaCuti = $totalJatahCuti - $cutiDipakai - $cutiReserved;
+    
+    // Cuti yang tersedia untuk diajukan = Total - Dipakai - Reserved
+    $cutiTersedia = $sisaCuti;
+    
     $data = [
         'pemakaianCuti' => $pemakaianCuti,
         'riwayatCuti' => $riwayatCuti,
-        'jatahCuti' => $pemakaianCuti->jatahCuti,
+        'jatahCuti' => $jatahCuti,
         'user' => $pemakaianCuti->user,
         'tmkFormatted' => $tmkFormatted,
+        // Data tambahan untuk perhitungan
+        'totalJatahCuti' => $totalJatahCuti,
+        'cutiReserved' => $cutiReserved,
+        'cutiDipakai' => $cutiDipakai,
+        'sisaCuti' => $sisaCuti,
+        'cutiTersedia' => $cutiTersedia,
     ];
 
     $pdf = Pdf::loadView('pdf.formulir-cuti', $data);
@@ -1305,6 +1329,7 @@ public function downloadPdf($id)
     
     return $pdf->stream($filename);
 }
+
 
 public function indexHead()
 {
@@ -1464,6 +1489,8 @@ public function indexHead()
             'jumlah_cuti' => $prevJatahCuti->jumlah_cuti,
             'cuti_dipakai' => $prevJatahCuti->cuti_dipakai,
             'sisa_cuti' => $prevJatahCuti->sisa_cuti,
+            'cuti_reserved' => $prevJatahCuti->cuti_reserved,
+            'cuti_bersama' => $prevJatahCuti->cuti_bersama,
             'is_current' => false,
             'is_borrowable' => false,
             'label' => "Periode {$prevPeriod} (Sebelumnya)",
@@ -1565,6 +1592,9 @@ public function indexHead()
             'jumlah_hari' => floatval($item->jumlah_hari),
             'alasan' => $item->alasan,
             'catatan' => $item->catatan,
+            'cuti_reserved' => $item->cuti_reserved ?? 0,
+            'cuti_bersama'=>$item->cuti_bersama ?? 0,
+
             'cuti_setengah_hari' => $item->cuti_setengah_hari,
             'id_penerima_tugas' => $item->id_penerima_tugas,
             'tugas' => $item->tugas,

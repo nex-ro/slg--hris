@@ -109,7 +109,6 @@ Route::middleware('hrd')->group(function () {
     Route::post('/kehadiran/manual', [AbsensiController::class, 'ManualInput'])->name('kehadiran.manual');
     Route::get('/absensi/input-tidak-hadir', [AbsensiController::class, 'inputTidak'])->name('absensi.tidak');
     Route::post('/hrd/absen/input-tidak', [AbsensiController::class, 'storeInputTidak'])->name('hrd.absen.input-tidak.store');
-    Route::post('/hrd/absen/input-tidak', [AbsensiController::class, 'storeInputTidak'])->name('hrd.absen.input-tidak.store');
     Route::get('/absensi/dokumen', [AbsensiController::class, 'dokumen'])->name('hrd.absen.dokument');
     Route::post('/print-absensi', [AbsensiController::class, 'printAbsensi'])->name('print.absensi');
     Route::post('/print-absensi-pdf', [AbsensiController::class, 'printAbsensiPDF'])->name('print.absensiPDF');

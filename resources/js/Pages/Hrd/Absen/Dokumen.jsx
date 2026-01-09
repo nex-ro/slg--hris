@@ -21,8 +21,8 @@ const [loadingOverlay, setLoadingOverlay] = useState(false);
     "Juli", "Agustus", "September", "Oktober", "November", "Desember"
   ];
 
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 2 }, (_, i) => (currentYear + i).toString());
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 2 }, (_, i) => (currentYear - i).toString());
 
   // Function untuk download hari ini (khusus katering)
   const handleDownloadToday = (fileType) => {

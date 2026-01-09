@@ -189,48 +189,55 @@
     </table>
 
     <table class="info-table" style="margin-bottom: 0px;">
-        <tr>
-            <td style="width: 35%;">Keterangan Cuti</td>
-            <td>
-                <table style="margin: 0; width: 100%;">
-                    <tr>
-                        <td style="padding: 2px 10px 2px 0; width: 200px;">Periode Cuti</td>
-                        <td style="padding: 2px;">: Tahun {{ $jatahCuti->tahun }}</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 2px 10px 2px 0;">Jumlah Hak Cuti</td>
-                        <td style="padding: 2px;">: {{ $jatahCuti->jumlah_cuti + ($jatahCuti->pinjam_tahun_next ?? 0) + ($jatahCuti->gabung_tahun_lalu ?? 0) }} hari</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 2px 10px 2px 0;">Cuti Diambil</td>
-                        <td style="padding: 2px;">: {{ number_format($jatahCuti->cuti_dipakai ?? 0, 2) }} hari</td>
-                    </tr>
-                    <tr>
-                        <td style="padding: 2px 10px 2px 0;">Sisa Hak Cuti</td>
-                        <td style="padding: 2px;">: <strong>{{ number_format($jatahCuti->sisa_cuti ?? 0, 2) }} hari</strong></td>
-                    </tr>
-                </table>
-            </td>
-        </tr>
-        @if($riwayatCuti->count() > 0)
-        <tr>
-            <td style="vertical-align: top;"></td>
-            <td>
-                <div style="font-weight: bold; font-size: 10px; margin: 12px 0 5px 0;">Rincian Pengambilan Cuti:</div>
-                @foreach($riwayatCuti as $riwayat)
-                <div style="margin-left: 10px; margin-bottom: 4px; font-size: 10px;">
-                    • {{ number_format($riwayat->jumlah_hari, 2) }} hari 
-                    ({{ \Carbon\Carbon::parse($riwayat->tanggal_mulai)->format('d F Y') }} s/d 
-                    {{ \Carbon\Carbon::parse($riwayat->tanggal_selesai)->format('d F Y') }})
-                    @if($riwayat->id == $pemakaianCuti->id)
-                        <span class="highlight" style="color: #2196F3;">-- Permohonan Ini</span>
-                    @endif
-                </div>
-                @endforeach
-            </td>
-        </tr>
-        @endif
-    </table>
+    <tr>
+        <td style="width: 35%;">Keterangan Cuti</td>
+        <td>
+            <table style="margin: 0; width: 100%;">
+                <tr>
+                    <td style="padding: 2px 10px 2px 0; width: 200px;">Periode Cuti</td>
+                    <td style="padding: 2px;">: Tahun {{ $jatahCuti->tahun }}</td>
+                </tr>
+                <tr>
+                    <td style="padding: 2px 10px 2px 0;">Jumlah Hak Cuti</td>
+                    <td style="padding: 2px;">: {{ $totalJatahCuti }} hari</td>
+                </tr>
+                <tr>
+                    <td style="padding: 2px 10px 2px 0;">Cuti Diambil (Approved)</td>
+                    <td style="padding: 2px;">: {{ number_format($cutiDipakai, 2) }} hari</td>
+                </tr>
+                <tr>
+                    <td style="padding: 2px 10px 2px 0;">Cuti Reserved (Pending)</td>
+                    <td style="padding: 2px;">: {{ number_format($cutiReserved, 2) }} hari</td>
+                </tr>
+                <tr>
+                    <td style="padding: 2px 10px 2px 0; border-top: 1px solid #ddd; padding-top: 5px;">Sisa Hak Cuti</td>
+                    <td style="padding: 2px; border-top: 1px solid #ddd; padding-top: 5px;">
+                        : <strong>{{ number_format($sisaCuti, 2) }} hari</strong>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+    @if($riwayatCuti->count() > 0)
+    <tr>
+        <td style="vertical-align: top;"></td>
+        <td>
+            <div style="font-weight: bold; font-size: 10px; margin: 12px 0 5px 0;">Rincian Pengambilan Cuti:</div>
+            @foreach($riwayatCuti as $riwayat)
+            <div style="margin-left: 10px; margin-bottom: 4px; font-size: 10px;">
+                • {{ number_format($riwayat->jumlah_hari, 2) }} hari 
+                ({{ \Carbon\Carbon::parse($riwayat->tanggal_mulai)->format('d F Y') }} s/d 
+                {{ \Carbon\Carbon::parse($riwayat->tanggal_selesai)->format('d F Y') }})
+                @if($riwayat->id == $pemakaianCuti->id)
+                    <span class="highlight" style="color: #2196F3;">-- Permohonan Ini</span>
+                @endif
+            </div>
+            @endforeach
+        </td>
+    </tr>
+    @endif
+</table>
+
 
     <table class="info-table" style="margin-top: 20px; margin-bottom: 15px;">
         <tr>
