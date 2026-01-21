@@ -300,11 +300,6 @@
                     {{ \Carbon\Carbon::parse($pemakaianCuti->tanggal_diketahui_atasan)->format('d/m/Y') }}
                 @endif
             </div>
-            @if($pemakaianCuti->status_diketahui_atasan)
-                <div class="status-badge status-{{ $pemakaianCuti->status_diketahui_atasan }}">
-                    {{ strtoupper($pemakaianCuti->status_diketahui_atasan) }}
-                </div>
-            @endif
         </div>
         @endif
 
@@ -329,11 +324,6 @@
                     {{ \Carbon\Carbon::parse($pemakaianCuti->tanggal_diketahui_hrd)->format('d/m/Y') }}
                 @endif
             </div>
-            @if($pemakaianCuti->status_diketahui_hrd)
-                <div class="status-badge status-{{ $pemakaianCuti->status_diketahui_hrd }}">
-                    {{ strtoupper($pemakaianCuti->status_diketahui_hrd) }}
-                </div>
-            @endif
         </div>
         @endif
 
@@ -358,11 +348,6 @@
                     {{ \Carbon\Carbon::parse($pemakaianCuti->tanggal_disetujui)->format('d/m/Y') }}
                 @endif
             </div>
-            @if($pemakaianCuti->status_disetujui)
-                <div class="status-badge status-{{ $pemakaianCuti->status_disetujui }}">
-                    {{ strtoupper($pemakaianCuti->status_disetujui) }}
-                </div>
-            @endif
         </div>
         @endif
     </div>

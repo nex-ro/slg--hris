@@ -9,11 +9,10 @@ import { Pencil, Trash2, Plus, X, Upload, Search, Filter, ChevronLeft, ChevronRi
     const [currentUser, setCurrentUser] = useState(null);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
     const [users, setUsers] = useState({ data: [], links: [], total: 0, from: 0, to: 0, last_page: 1 });
-  const [divisiList, setDivisiList] = useState([]);
-  const [jabatanList, setJabatanList] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState('active'); 
-    // Search & Filter State
+    const [divisiList, setDivisiList] = useState([]);
+    const [jabatanList, setJabatanList] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [activeTab, setActiveTab] = useState('active'); 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDivisi, setSelectedDivisi] = useState('');
   const [selectedJabatan, setSelectedJabatan] = useState('');

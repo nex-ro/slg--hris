@@ -10,6 +10,8 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use Maatwebsite\Excel\Concerns\WithColumnWidths;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 use PhpOffice\PhpSpreadsheet\Style\Color;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
 use Carbon\Carbon;
 
 class AbsensiDailySheet implements FromCollection, WithHeadings, WithTitle, WithStyles, WithColumnWidths
@@ -25,6 +27,31 @@ class AbsensiDailySheet implements FromCollection, WithHeadings, WithTitle, With
         $this->hari = $hari;
     }
 
+    /**
+     * Mapping status ke keterangan lengkap
+     */
+    protected function getStatusKeterangan($status)
+    {
+        $statusMap = [
+            'On Time' => 'On Time',
+            'Terlambat' => 'Terlambat',
+            'Sakit' => 'Sakit',
+            'P1' => 'Ijin Full Day',
+            'P2' => 'Ijin Setengah Hari',
+            'P3' => 'Ijin Keluar Kantor',
+            'C1' => 'Cuti Full Day',
+            'C2' => 'Cuti Setengah Hari',
+            'C3' => 'Cuti Setengah Hari',
+            'DL' => 'Dinas Luar',
+            'WFH' => 'Work From Home',
+            'FP-TR' => 'FP Tidak Ter-Record',
+            'LK' => 'Libur Kerja',
+            'Libur Kerja' => 'Libur Kerja',
+        ];
+
+        return $statusMap[$status] ?? $status;
+    }
+
     public function collection()
     {
         return collect($this->data)->map(function($item, $index) {
@@ -37,7 +64,7 @@ class AbsensiDailySheet implements FromCollection, WithHeadings, WithTitle, With
                 'jabatan' => $item['jabatan'],
                 'jam_kedatangan' => $item['jam_kedatangan'],
                 'jam_pulang' => $item['jam_pulang'],
-                'keterangan' => $item['status'], // Ganti dari keterangan ke status
+                'keterangan' => $this->getStatusKeterangan($item['status']),
             ];
         });
     }
@@ -57,7 +84,7 @@ class AbsensiDailySheet implements FromCollection, WithHeadings, WithTitle, With
                 'Jabatan',
                 'Jam Datang',
                 'Jam Pulang',
-                'Keterangan' // Header tetap Keterangan
+                'Keterangan'
             ]
         ];
     }
@@ -72,13 +99,42 @@ class AbsensiDailySheet implements FromCollection, WithHeadings, WithTitle, With
     {
         $sheet->mergeCells('A1:I1');
         $sheet->mergeCells('A2:I2');
+        
         $styles = [
-            1 => ['font' => ['bold' => true, 'size' => 14]],
-            2 => ['font' => ['bold' => true]],
-            4 => ['font' => ['bold' => true], 'fill' => [
-                'fillType' => Fill::FILL_SOLID,
-                'startColor' => ['rgb' => 'E0E0E0']
-            ]],
+            // Style untuk judul (baris 1)
+            1 => [
+                'font' => ['bold' => true, 'size' => 14],
+                'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_CENTER,
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                ]
+            ],
+            // Style untuk tanggal (baris 2)
+            2 => [
+                'font' => ['bold' => true],
+                'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_CENTER,
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                ]
+            ],
+            // Style untuk header tabel (baris 4)
+            4 => [
+                'font' => ['bold' => true],
+                'fill' => [
+                    'fillType' => Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => 'E0E0E0']
+                ],
+                'alignment' => [
+                    'horizontal' => Alignment::HORIZONTAL_CENTER,
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                ],
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000'],
+                    ],
+                ],
+            ],
         ];
 
         // Styling untuk baris data berdasarkan status
@@ -86,27 +142,52 @@ class AbsensiDailySheet implements FromCollection, WithHeadings, WithTitle, With
         foreach ($this->data as $item) {
             $status = $item['status'];
             
+            // Border untuk semua baris data
+            $styles[$rowNumber] = [
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => '000000'],
+                    ],
+                ],
+                'alignment' => [
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                ]
+            ];
+            
             // Warna merah untuk Terlambat
             if ($status === 'Terlambat') {
-                $styles[$rowNumber] = [
-                    'fill' => [
-                        'fillType' => Fill::FILL_SOLID,
-                        'startColor' => ['rgb' => 'FFB3B3'] // Merah muda
-                    ]
+                $styles[$rowNumber]['fill'] = [
+                    'fillType' => Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => 'FFB3B3'] // Merah muda
                 ];
             }
             // Warna kuning untuk DL, C1, C2, C3, P1, P2, P3, FP-TR
             elseif (in_array($status, ['DL', 'C1', 'C2', 'C3', 'P1', 'P2', 'P3', 'FP-TR'])) {
-                $styles[$rowNumber] = [
-                    'fill' => [
-                        'fillType' => Fill::FILL_SOLID,
-                        'startColor' => ['rgb' => 'FFFF00'] // Kuning muda
-                    ]
+                $styles[$rowNumber]['fill'] = [
+                    'fillType' => Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => 'FFFF99'] // Kuning muda
+                ];
+            }
+            // Warna kuning untuk Libur Kerja
+            elseif (in_array($status, ['LK', 'Libur Kerja'])) {
+                $styles[$rowNumber]['fill'] = [
+                    'fillType' => Fill::FILL_SOLID,
+                    'startColor' => ['rgb' => 'FFF2CC'] // Kuning muda
                 ];
             }
             
             $rowNumber++;
         }
+
+        // Center alignment untuk kolom tertentu
+        $lastRow = count($this->data) + 4;
+        $sheet->getStyle('A5:A' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('B5:B' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('C5:C' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('G5:G' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('H5:H' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        $sheet->getStyle('I5:I' . $lastRow)->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
 
         return $styles;
     }
@@ -114,15 +195,15 @@ class AbsensiDailySheet implements FromCollection, WithHeadings, WithTitle, With
     public function columnWidths(): array
     {
         return [
-            'A' => 5,
-            'B' => 15,
-            'C' => 15,
-            'D' => 25,
-            'E' => 20,
-            'F' => 20,
-            'G' => 12,
-            'H' => 12,
-            'I' => 20,
+            'A' => 5,   // No
+            'B' => 15,  // Tower
+            'C' => 15,  // TMK
+            'D' => 25,  // Nama
+            'E' => 20,  // Divisi
+            'F' => 20,  // Jabatan
+            'G' => 12,  // Jam Datang
+            'H' => 12,  // Jam Pulang
+            'I' => 25,  // Keterangan (diperlebar untuk teks panjang)
         ];
     }
 }

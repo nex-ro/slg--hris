@@ -13,8 +13,7 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = {}, paginationLinks = [] }) 
   const [rekanKerja, setRekanKerja] = useState([]);
   const [processing, setProcessing] = useState(false);
 const [approvers, setApprovers] = useState({
-  hrd: [],
-  atasan: []
+  users: []  // Ganti dengan users saja
 });
   const [formData, setFormData] = useState({
     jatah_cuti_id: '',
@@ -50,6 +49,115 @@ const [approvers, setApprovers] = useState({
     });
   }
 };
+
+// Komponen SearchableSelect untuk mobile-friendly
+const SearchableSelect = ({ 
+  name, 
+  value, 
+  onChange, 
+  options, 
+  placeholder = "Pilih...",
+  displayKey = "name",
+  valueKey = "id",
+  disabled = false,
+  error = null
+}) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const dropdownRef = React.useRef(null);
+
+  const filteredOptions = options.filter(option => 
+    option[displayKey]?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    option.jabatan?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    option.divisi?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const selectedOption = options.find(opt => opt[valueKey] === value);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+        setSearchTerm('');
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelect = (optionValue) => {
+    onChange({ target: { name, value: optionValue } });
+    setIsOpen(false);
+    setSearchTerm('');
+  };
+
+  return (
+    <div ref={dropdownRef} className="relative">
+      <button
+        type="button"
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
+        className={`w-full px-4 py-2 border rounded-lg text-left flex items-center justify-between focus:ring-2 focus:ring-blue-500 focus:border-transparent ${
+          disabled ? 'bg-gray-100 cursor-not-allowed' : 'bg-white hover:bg-gray-50'
+        } ${error ? 'border-red-500' : 'border-gray-300'}`}
+      >
+        <span className={selectedOption ? 'text-gray-900' : 'text-gray-500'}>
+          {selectedOption 
+            ? `${selectedOption[displayKey]}${selectedOption.jabatan ? ` - ${selectedOption.jabatan}` : ''}` 
+            : placeholder}
+        </span>
+        <ChevronRight className={`w-4 h-4 text-gray-400 transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div className="absolute z-50 w-full mt-1 bg-white border border-gray-300 rounded-lg shadow-lg max-h-60 overflow-hidden">
+          <div className="p-2 border-b border-gray-200 sticky top-0 bg-white">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Cari nama, jabatan, atau divisi..."
+              className="w-full px-3 py-2 border border-gray-300 rounded focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+              autoFocus
+            />
+          </div>
+          
+          <div className="overflow-y-auto max-h-48">
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map((option) => (
+                <button
+                  key={option[valueKey]}
+                  type="button"
+                  onClick={() => handleSelect(option[valueKey])}
+                  className={`w-full px-4 py-2 text-left hover:bg-blue-50 transition-colors ${
+                    value === option[valueKey] ? 'bg-blue-100 text-blue-700 font-medium' : 'text-gray-900'
+                  }`}
+                >
+                  <div className="text-sm font-medium">{option[displayKey]}</div>
+                  {option.jabatan && (
+                    <div className="text-xs text-gray-600">
+                      {option.jabatan}
+                      {option.divisi && ` • ${option.divisi}`}
+                    </div>
+                  )}
+                </button>
+              ))
+            ) : (
+              <div className="px-4 py-3 text-sm text-gray-500 text-center">
+                Tidak ada hasil ditemukan
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <p className="text-red-500 text-sm mt-1">{error}</p>
+      )}
+    </div>
+  );
+};
   const MAX_PINJAM_HARI = 4;
 
   const [errors, setErrors] = useState({});
@@ -81,10 +189,8 @@ const fetchApprovers = async () => {
     const response = await fetch('/cuti/approvers');
     const data = await response.json();
     
-    // Pisahkan HRD dan Atasan
     setApprovers({
-      hrd: data.hrd || [],
-      atasan: data.atasan || []
+      users: data.users || []
     });
   } catch (error) {
     console.error('Error fetching approvers:', error);
@@ -92,7 +198,7 @@ const fetchApprovers = async () => {
       position: "top-right",
       autoClose: 3000,
     });
-  }
+  } 
 };
 
 const openFormModal = () => {
@@ -742,27 +848,14 @@ const formatHari = (hari) => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Diketahui Atasan (Supervisor/Manager)
                       </label>
-                      <select
+                      <SearchableSelect
                         name="diketahui_atasan"
                         value={formData.diketahui_atasan}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">Pilih Atasan</option>
-                          {approvers.atasan && approvers.atasan.length > 0 ? (
-                            approvers.atasan.map((approver) => (
-                              <option key={approver.id} value={approver.id}>
-                                {approver.name} - {approver.jabatan} ({approver.divisi})
-                              </option>
-                            ))
-                          ) : (
-                            <option disabled>Tidak ada atasan tersedia</option>
-                          )}
-
-                      </select>
-                      {errors.diketahui_atasan && (
-                        <p className="text-red-500 text-sm mt-1">{errors.diketahui_atasan}</p>
-                      )}
+                        options={approvers.users || []}
+                        placeholder="Pilih Atasan"
+                        error={errors.diketahui_atasan}
+                      />
                     </div>
                     
                     {/* Diketahui HRD */}
@@ -770,72 +863,28 @@ const formatHari = (hari) => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Diketahui HRD
                       </label>
-                      <select
+                      <SearchableSelect
                         name="diketahui_hrd"
                         value={formData.diketahui_hrd}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                          <option value="">Pilih HRD</option>
-                          {approvers.hrd && approvers.hrd.length > 0 ? (
-                            approvers.hrd.map((approver) => (
-                              <option key={approver.id} value={approver.id}>
-                                {approver.name} - {approver.jabatan}
-                              </option>
-                            ))
-                          ) : (
-                            <option disabled>Tidak ada HRD tersedia</option>
-                          )}
-
-                      </select>
-                      {errors.diketahui_hrd && (
-                        <p className="text-red-500 text-sm mt-1">{errors.diketahui_hrd}</p>
-                      )}
+                        options={approvers.users || []}
+                        placeholder="Pilih HRD"
+                        error={errors.diketahui_hrd}
+                      />
                     </div>
-                    
                     {/* Disetujui */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Disetujui (Direktur/Pimpinan)
                       </label>
-                      <select
+                      <SearchableSelect
                         name="disetujui"
                         value={formData.disetujui}
                         onChange={handleInputChange}
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">Pilih Pimpinan</option>
-                          {approvers.atasan && approvers.atasan.length > 0 && (
-                              <>
-                                {approvers.atasan
-                                  .filter(a => a.jabatan && ['head', 'direksi', 'ceo', 'cfo', 'coo', 'cto', 'direktur', 'director'].some(title => 
-                                    a.jabatan.toLowerCase().includes(title.toLowerCase())
-                                  ))
-                                  .map((approver) => (
-                                    <option key={`atasan-${approver.id}`} value={approver.id}>
-                                      {approver.name} - {approver.jabatan}
-                                    </option>
-                                  ))}
-                              </>
-                            )}
-                            {approvers.hrd && approvers.hrd.length > 0 && (
-                              <>
-                                {approvers.hrd
-                                  .filter(a => a.jabatan && ['head', 'direksi', 'ceo', 'cfo', 'coo', 'cto', 'direktur', 'director'].some(title => 
-                                    a.jabatan.toLowerCase().includes(title.toLowerCase())
-                                  ))
-                                  .map((approver) => (
-                                    <option key={`hrd-${approver.id}`} value={approver.id}>
-                                      {approver.name} - {approver.jabatan}
-                                    </option>
-                                  ))}
-                              </>
-                            )}
-
-                      </select>
-                      {errors.disetujui && (
-                        <p className="text-red-500 text-sm mt-1">{errors.disetujui}</p>
-                      )}
+                        options={approvers.users || []}
+                        placeholder="Pilih Pimpinan"
+                        error={errors.disetujui}
+                      />
                     </div>
                   </div>
                 </div>
@@ -847,19 +896,14 @@ const formatHari = (hari) => {
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Penerima Tugas
                     </label>
-                    <select
+                    <SearchableSelect
                       name="id_penerima_tugas"
                       value={formData.id_penerima_tugas}
                       onChange={handleInputChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Pilih Rekan Kerja</option>
-                      {rekanKerja.map((rekan) => (
-                        <option key={rekan.id} value={rekan.id}>
-                          {rekan.name} {rekan.jabatan ? `- ${rekan.jabatan}` : ''}
-                        </option>
-                      ))}
-                    </select>
+                      options={rekanKerja}
+                      placeholder="Pilih Rekan Kerja"
+                      error={errors.id_penerima_tugas}
+                    />
                   </div>
 
                   {formData.id_penerima_tugas && (
@@ -1134,6 +1178,6 @@ const formatHari = (hari) => {
 )}
     </LayoutTemplate>
   );
-}
+} 
 
 export default UserCuti;

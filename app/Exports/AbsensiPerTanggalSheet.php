@@ -31,6 +31,31 @@ class AbsensiPerTanggalSheet implements FromCollection, WithHeadings, WithTitle,
     }
 
     /**
+     * Mapping status ke keterangan lengkap
+     */
+    protected function getStatusKeterangan($status)
+    {
+        $statusMap = [
+            'On Time' => 'On Time',
+            'Terlambat' => 'Terlambat',
+            'Sakit' => 'Sakit',
+            'P1' => 'Ijin Full Day',
+            'P2' => 'Ijin Setengah Hari',
+            'P3' => 'Ijin Keluar Kantor',
+            'C1' => 'Cuti Full Day',
+            'C2' => 'Cuti Setengah Hari',
+            'C3' => 'Cuti Setengah Hari', // Jika ada C3
+            'DL' => 'Dinas Luar',
+            'WFH' => 'Work From Home',
+            'FP-TR' => 'FP Tidak Ter-Record',
+            'LK' => 'Libur Kerja',
+            'Libur Kerja' => 'Libur Kerja',
+        ];
+
+        return $statusMap[$status] ?? $status;
+    }
+
+    /**
      * @return \Illuminate\Support\Collection
      */
     public function collection()
@@ -45,7 +70,7 @@ class AbsensiPerTanggalSheet implements FromCollection, WithHeadings, WithTitle,
                 'jabatan' => $item['jabatan'],
                 'jam_kedatangan' => $item['jam_kedatangan'],
                 'jam_pulang' => $item['jam_pulang'],
-                'keterangan' => $item['status'],
+                'keterangan' => $this->getStatusKeterangan($item['status']),
             ];
         });
     }
@@ -96,7 +121,7 @@ class AbsensiPerTanggalSheet implements FromCollection, WithHeadings, WithTitle,
             'F' => 20,  // Jabatan
             'G' => 12,  // Jam Datang
             'H' => 12,  // Jam Pulang
-            'I' => 20,  // Keterangan
+            'I' => 25,  // Keterangan (diperlebar untuk teks yang lebih panjang)
         ];
     }
 
@@ -179,8 +204,8 @@ class AbsensiPerTanggalSheet implements FromCollection, WithHeadings, WithTitle,
                     'startColor' => ['rgb' => 'FFFF99'] // Kuning muda
                 ];
             }
-            // Warna kuning untuk Libur Kerja
-            elseif ($status === 'Libur Kerja') {
+            // Warna kuning untuk Libur Kerja (LK atau Libur Kerja)
+            elseif (in_array($status, ['LK', 'Libur Kerja'])) {
                 $styles[$rowNumber]['fill'] = [
                     'fillType' => Fill::FILL_SOLID,
                     'startColor' => ['rgb' => 'FFF2CC'] // Kuning muda

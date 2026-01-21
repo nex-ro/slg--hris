@@ -36,22 +36,8 @@ const isWeekend = (dateString) => {
 };
 
 const getMinDate = () => {
-  const today = new Date();
-  let count = 0;
-  let currentDate = new Date(today);
-  
-  // Mundur 3 hari kerja (tidak termasuk Sabtu & Minggu)
-  while (count < 3) {
-    currentDate.setDate(currentDate.getDate() - 1);
-    const dayOfWeek = currentDate.getDay();
-    
-    // Jika bukan Sabtu (6) atau Minggu (0), hitung sebagai hari kerja
-    if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      count++;
-    }
-  }
-  
-  return currentDate.toISOString().split('T')[0];
+    return '1900-01-01'; // Tanggal minimal sangat lama (praktis tidak ada batasan)
+
 };
 
 
@@ -145,16 +131,7 @@ const handleSubmit = (e) => {
   }
   
   // Validasi H-3
-  const minDate = new Date(getMinDate());
-  const selectedDate = new Date(formData.tanggal_mulai);
-  
-  if (selectedDate < minDate) {
-    toast.error("Tanggal mulai tidak boleh lebih dari H-3 hari kerja!", {
-      position: "top-right",
-      autoClose: 3000,
-    });
-    return;
-  }
+ 
   
   if (!formData.keterangan) {
     toast.error("Keterangan harus diisi!", {
@@ -540,14 +517,7 @@ const handleDelete = (id) => {
         }
         
         // Validasi H-3
-        const minDate = new Date(getMinDate());
-        const selected = new Date(selectedDate + 'T00:00:00');
-        
-        if (selected < minDate) {
-          setDateError("Tanggal tidak boleh lebih dari H-3 hari kerja!");
-          setFormData({ ...formData, tanggal_mulai: "" });
-          return;
-        }
+       
         
         // Validasi tanggal selesai jika sudah diisi
         if (formData.tanggal_selesai && !validateDateRange(selectedDate, formData.tanggal_selesai)) {
@@ -563,15 +533,10 @@ const handleDelete = (id) => {
           setDateError("");
         }
       }}
-      min={getMinDate()}
       className={`w-full px-4 py-2 border ${dateError ? 'border-red-300 bg-red-50' : 'border-gray-300'} rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all`}
       required
       disabled={processing}
     />
-    <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
-      <Calendar className="w-3 h-3" />
-      Maksimal H-3 hari kerja (tidak termasuk weekend)
-    </p>
     {dateError && (
       <p className="text-xs text-red-600 mt-1 font-medium animate-pulse">
         ⚠️ {dateError}

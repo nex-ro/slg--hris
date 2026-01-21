@@ -18,6 +18,7 @@ const Dashboard = ({
   summaryStats 
 }) => {
   const currentDate = new Date();
+  const currentYear = currentDate.getFullYear();
   const [localFilters, setLocalFilters] = useState({
     periodType: filters?.periodType || 'month',
     month: filters?.month || currentDate.getMonth() + 1,
@@ -26,6 +27,8 @@ const Dashboard = ({
     divisi: filters?.divisi || '',
     userId: filters?.userId || ''
   });
+
+  const dynamicYears = [currentYear - 1, currentYear, currentYear + 1];
 
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
   const COLORS = ['#2563eb', '#3b82f6', '#60a5fa', '#93c5fd', '#1e40af', '#1d4ed8'];
@@ -170,7 +173,7 @@ const Dashboard = ({
                 onChange={(e) => handleFilterChange('year', e.target.value)}
                 className="w-full bg-gray-50 text-gray-900 rounded-lg px-4 py-3 border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                {[2023, 2024, 2025].map(year => (
+                {dynamicYears.map(year => (
                   <option key={year} value={year}>
                     {year}
                   </option>
