@@ -1015,9 +1015,23 @@ public function exportByTowerAndDivisi(Request $request)
         
         $jumlahHari = Carbon::create($tahun, $bulan, 1)->daysInMonth;
         
-        // Ambil users berdasarkan tower
+        // Tanggal awal dan akhir bulan yang dipilih
+        $startOfMonth = Carbon::create($tahun, $bulan, 1)->startOfMonth();
+        $endOfMonth = Carbon::create($tahun, $bulan, 1)->endOfMonth();
+        
+        // Ambil users berdasarkan kriteria TMK dan tanggal keluar
         $users = User::where('active', true)
-            ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk')
+            ->select('id', 'name', 'email', 'tower', 'divisi', 'jabatan', 'tmk', 'tanggal_keluar')
+            // TMK harus sebelum atau sama dengan akhir bulan
+            ->where(function($query) use ($endOfMonth) {
+                $query->whereNull('tmk')
+                      ->orWhere('tmk', '<=', $endOfMonth);
+            })
+            // Tanggal keluar harus null ATAU setelah awal bulan
+            ->where(function($query) use ($startOfMonth) {
+                $query->whereNull('tanggal_keluar')
+                      ->orWhere('tanggal_keluar', '>=', $startOfMonth);
+            })
             ->orderBy('divisi', 'asc')
             ->orderBy('id', 'asc')
             ->get();
@@ -1038,10 +1052,27 @@ public function exportByTowerAndDivisi(Request $request)
             foreach ($usersInDivisi as $user) {
                 $dataKehadiran = [];
                 
+                // Tentukan range tanggal yang valid untuk user ini
+                $userStartDate = $user->tmk ? Carbon::parse($user->tmk) : $startOfMonth;
+                $userEndDate = $user->tanggal_keluar ? Carbon::parse($user->tanggal_keluar) : $endOfMonth;
+                
+                // Pastikan start date tidak lebih awal dari awal bulan
+                if ($userStartDate->lt($startOfMonth)) {
+                    $userStartDate = $startOfMonth->copy();
+                }
+                
+                // Pastikan end date tidak lebih akhir dari akhir bulan
+                if ($userEndDate->gt($endOfMonth)) {
+                    $userEndDate = $endOfMonth->copy();
+                }
+                
                 // Loop untuk setiap hari dalam bulan
                 for ($hari = 1; $hari <= $jumlahHari; $hari++) {
                     $tanggal = Carbon::create($tahun, $bulan, $hari)->format('Y-m-d');
                     $carbonDate = Carbon::parse($tanggal);
+                    
+                    // Cek apakah tanggal dalam range kerja user
+                    $isInUserRange = $carbonDate->between($userStartDate, $userEndDate);
                     
                     // Cek hari libur
                     $isSaturdayOrSunday = $carbonDate->isSaturday() || $carbonDate->isSunday();
@@ -1052,8 +1083,14 @@ public function exportByTowerAndDivisi(Request $request)
                     $attendance = Kehadiran::where('tanggal', $tanggal)
                         ->where('uid', $user->id)
                         ->first();
+                    
                     // Tentukan status
-                    if ($isHoliday) {
+                    if (!$isInUserRange) {
+                        // Jika di luar range kerja user (belum masuk atau sudah keluar)
+                        $status = 'N/A';
+                        $jamKedatangan = null;
+                        $jamPulang = null;
+                    } elseif ($isHoliday) {
                         $status = 'Libur Kerja';
                         $jamKedatangan = '00:00';
                         $jamPulang = '00:00';
@@ -1084,6 +1121,7 @@ public function exportByTowerAndDivisi(Request $request)
                             'divisi' => $user->divisi,
                             'jabatan' => $user->jabatan,
                             'tmk' => $user->tmk,
+                            'tanggal_keluar' => $user->tanggal_keluar,
                             'tower' => $user->tower ?? 'Tanpa Tower',
                         ]
                     ];
@@ -1091,6 +1129,8 @@ public function exportByTowerAndDivisi(Request $request)
                 
                 $dataPerUser[] = [
                     'nama' => $user->name,
+                    'divisi' => $user->divisi,
+                    'jabatan' => $user->jabatan,
                     'data' => $dataKehadiran
                 ];
             }
@@ -1101,7 +1141,6 @@ public function exportByTowerAndDivisi(Request $request)
             ];
         }
         
-
         // Nama file
         $namaBulan = [
             1 => 'Januari', 2 => 'Februari', 3 => 'Maret', 4 => 'April',

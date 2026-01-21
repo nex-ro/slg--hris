@@ -374,48 +374,15 @@ public function getApprovers()
 {
     $user = auth()->user();
     
-    // ✅ Ambil HRD (tidak terbatas divisi)
-    $hrdUsers = User::where('role', 'hrd')
-        ->where('active', 1)
-        ->whereNull('tanggal_keluar')
+    // Ambil semua user aktif kecuali diri sendiri
+    $allUsers = User::where('active', 1)
         ->where('id', '!=', $user->id)
-        ->select('id', 'name', 'jabatan', 'divisi')
         ->orderBy('name')
-        ->get();
+        ->get(['id', 'name', 'jabatan', 'divisi']);
     
-    // ✅ Ambil Atasan dari divisi yang sama (tanpa batasan jabatan & role)
-    $atasanUsers = User::where('divisi', $user->divisi)  // Filter divisi yang sama
-        ->where('active', 1)
-        ->whereNull('tanggal_keluar')
-        ->where('id', '!=', $user->id)  // Tidak termasuk diri sendiri
-        ->select('id', 'name', 'jabatan', 'divisi', 'role')
-        ->orderBy('name')
-        ->get();
-    
-    // Format response
-    $approvers = [
-        'hrd' => $hrdUsers->map(function($user) {
-            return [
-                'id' => $user->id,
-                'name' => $user->name,
-                'jabatan' => $user->jabatan,
-                'divisi' => $user->divisi,
-                'category' => 'HRD'
-            ];
-        }),
-        'atasan' => $atasanUsers->map(function($user) {
-            return [
-                'id' => $user->id,
-                'name' => $user->name,
-                'jabatan' => $user->jabatan,
-                'divisi' => $user->divisi,
-                'role' => $user->role,
-                'category' => 'Atasan'
-            ];
-        })
-    ];
-    
-    return response()->json($approvers);
+    return response()->json([
+        'users' => $allUsers
+    ]);
 }
 
 public function getPimpinan()
