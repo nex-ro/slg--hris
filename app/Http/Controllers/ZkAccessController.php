@@ -126,4 +126,15 @@ class ZkAccessController extends Controller
         $result = $this->zkService->syncYesterdayAndToday($ip, $port);
         return response()->json($result);
     }
+
+    /**
+     * Endpoint API untuk membersihkan memori log pada mesin fisik
+     */
+    public function clearLogs(Request $request): JsonResponse
+    {
+        $ip = $request->input('ip', '192.168.87.201');
+        $port = (int) $request->input('port', 4370);
+        $result = $this->zkService->clearMachineLogs($ip, $port);
+        return response()->json($result);
+    }
 }

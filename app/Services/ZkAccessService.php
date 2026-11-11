@@ -103,6 +103,22 @@ class ZkAccessService
     }
 
     /**
+     * Bersihkan seluruh log pada memori mesin fisik (ClearGLog)
+     */
+    public function clearMachineLogs(?string $ip = '192.168.87.201', ?int $port = 4370): array
+    {
+        $targetIp = $ip ?: '192.168.87.201';
+        $targetPort = $port ?: 4370;
+
+        return $this->runScript([
+            'Action' => 'clear_logs',
+            'Ip' => $targetIp,
+            'Port' => $targetPort,
+            'DbPath' => $this->dbPath,
+        ]);
+    }
+
+    /**
      * Ambil data log absensi berdasarkan tanggal atau rentang tanggal & IP mesin
      */
     public function getLogs(?string $date = null, int $limit = 500, ?string $startDate = null, ?string $endDate = null, ?string $ip = '192.168.87.201', ?int $port = 4370): array

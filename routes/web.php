@@ -103,6 +103,8 @@ Route::middleware('hrd')->group(function () {
     Route::post('/pegawai', [UserController::class, 'store'])->name('pegawai.store');
     Route::put('/pegawai/{id}', [UserController::class, 'update'])->name('pegawai.update');
     Route::delete('/pegawai/{id}', [UserController::class, 'destroy'])->name('pegawai.destroy');
+    Route::post('/pegawai/{id}/reset-password', [UserController::class, 'resetPassword'])->name('pegawai.reset-password');
+    Route::post('/pegawai/{id}/send-reset-email', [UserController::class, 'sendResetEmail'])->name('pegawai.send-reset-email');
     Route::get('/absensi/list', [AbsensiController::class, 'absensi'])->name('absensi');
     Route::post('absensi/save', [AbsensiController::class, 'saveAbsensi'])->name('absensi.save');
     Route::get('/absensi/input-harian', [AbsensiController::class, 'inputHarian'])->name('absensi.harian');
@@ -118,6 +120,7 @@ Route::middleware('hrd')->group(function () {
     Route::get('/absensi/zkaccess/test', [ZkAccessController::class, 'testConnection'])->name('absensi.zkaccess.test');
     Route::post('/absensi/zkaccess/sync', [ZkAccessController::class, 'sync'])->name('absensi.zkaccess.sync');
     Route::post('/absensi/zkaccess/sync-two-days', [ZkAccessController::class, 'syncTwoDays'])->name('absensi.zkaccess.sync-two-days');
+    Route::post('/absensi/zkaccess/clear-logs', [ZkAccessController::class, 'clearLogs'])->name('absensi.zkaccess.clear-logs');
     Route::post('/print-absensi', [AbsensiController::class, 'printAbsensi'])->name('print.absensi');
     Route::post('/print-absensi-pdf', [AbsensiController::class, 'printAbsensiPDF'])->name('print.absensiPDF');
 

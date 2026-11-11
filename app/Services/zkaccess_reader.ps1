@@ -95,6 +95,49 @@ if ($Action -eq "test_connection") {
     exit 0
 }
 
+# 1.5 Action: Clear Machine Logs (Hapus Log di Memori Mesin Fisik)
+if ($Action -eq "clear_logs") {
+    try {
+        $zk = New-Object -ComObject zkemkeeper.ZKEM.1
+        $null = $zk.SetCommPassword(0)
+        $zkConnected = $zk.Connect_Net($Ip, $Port)
+        if (-not $zkConnected) {
+            @{
+                status = "error"
+                message = "Gagal terhubung ke mesin fisik ${Ip}:${Port}. Pastikan IP benar dan mesin dalam kondisi menyala."
+            } | ConvertTo-Json
+            exit 1
+        }
+
+        # Nonaktifkan sementara event pada mesin saat proses pembersihan berlangsung
+        $null = $zk.EnableDevice(1, $false)
+        $cleared = $zk.ClearGLog(1)
+        $null = $zk.RefreshData(1)
+        $null = $zk.EnableDevice(1, $true)
+        $null = $zk.Disconnect()
+
+        if ($cleared) {
+            @{
+                status = "success"
+                message = "Seluruh log pada memori mesin fisik ${Ip}:${Port} berhasil dibersihkan!"
+            } | ConvertTo-Json
+            exit 0
+        } else {
+            @{
+                status = "error"
+                message = "Mesin fisik ${Ip}:${Port} terhubung, tetapi perintah penghapusan log (ClearGLog) tidak berhasil."
+            } | ConvertTo-Json
+            exit 1
+        }
+    } catch {
+        @{
+            status = "error"
+            message = "Terjadi exception saat membersihkan log mesin: $_"
+        } | ConvertTo-Json
+        exit 1
+    }
+}
+
 # 2. Action: Get Logs (Gabungkan Buffer Mesin Fisik + Riwayat Database Access)
 $machineLogs = @()
 $directConnected = $false

@@ -18,7 +18,11 @@ import {
   CalendarRange,
   MapPin,
   Edit2,
-  Info
+  Info,
+  Plus,
+  Trash2,
+  X,
+  AlertTriangle
 } from 'lucide-react';
 import { toast } from 'react-toastify';
 import axios from 'axios';
@@ -30,8 +34,18 @@ export default function ZkAccessLogs({
   defaultDevices = [],
   connectionInfo = {}
 }) {
-  // 1. State 2 Mesin / Lokasi On-Premise
+  // 1. State Mesin / Lokasi On-Premise (dengan persistensi LocalStorage)
   const [devices, setDevices] = useState(() => {
+    try {
+      const saved = localStorage.getItem('zkaccess_devices_list');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+
     return defaultDevices && defaultDevices.length >= 2 ? defaultDevices : [
       {
         id: 'dev_1',
@@ -50,11 +64,38 @@ export default function ZkAccessLogs({
     ];
   });
 
-  const [activeDeviceId, setActiveDeviceId] = useState('dev_1');
+  // Simpan ke LocalStorage setiap kali ada perubahan pada daftar mesin
+  const updateDevicesList = (newDevices) => {
+    setDevices(newDevices);
+    try {
+      localStorage.setItem('zkaccess_devices_list', JSON.stringify(newDevices));
+    } catch (e) {}
+  };
+
+  const [activeDeviceId, setActiveDeviceId] = useState(() => {
+    return devices[0]?.id || 'dev_1';
+  });
 
   const activeDevice = useMemo(() => {
-    return devices.find(d => d.id === activeDeviceId) || devices[0];
+    return devices.find(d => d.id === activeDeviceId) || devices[0] || {
+      id: 'dev_1',
+      name: 'Lokasi 1 (Liberty Lt. 1 Front Office)',
+      ip: '192.168.87.201',
+      port: 4370,
+      online: false,
+    };
   }, [devices, activeDeviceId]);
+
+  // State Modal Tambah Mesin Baru
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [newDeviceForm, setNewDeviceForm] = useState({
+    name: '',
+    ip: '',
+    port: 4370,
+  });
+
+  // State proses bersihkan log mesin fisik
+  const [clearingLogs, setClearingLogs] = useState(false);
 
   // Helper tanggal lokal (YYYY-MM-DD) agar tidak terpengaruh offset UTC
   const getLocalDateString = (dateObj = new Date()) => {
@@ -165,7 +206,7 @@ export default function ZkAccessLogs({
     setActiveDeviceId(dev.id);
     checkDeviceOnline(dev.ip, dev.port, dev.id);
     toast.info(`Beralih ke ${dev.name} (${dev.ip})`);
-    
+
     // Tarik log untuk mesin yang baru dipilih
     if (selectedDate.includes('s/d')) {
       const parts = selectedDate.split(' s/d ');
@@ -175,17 +216,121 @@ export default function ZkAccessLogs({
     }
   };
 
-  // Ubah IP Mesin 2 jika IP mesin kedua sudah diketahui
-  const handleUpdateDevice2Ip = (newIp) => {
-    const updated = devices.map(d => {
-      if (d.id === 'dev_2') {
-        return { ...d, ip: newIp };
+  // Tambah Mesin Baru
+  const handleCreateDevice = (e) => {
+    e.preventDefault();
+    if (!newDeviceForm.name.trim() || !newDeviceForm.ip.trim()) {
+      toast.error('Nama mesin dan Alamat IP harus diisi!');
+      return;
+    }
+
+    const newDev = {
+      id: `dev_${Date.now()}`,
+      name: newDeviceForm.name.trim(),
+      ip: newDeviceForm.ip.trim(),
+      port: parseInt(newDeviceForm.port) || 4370,
+      online: false,
+    };
+
+    const nextDevices = [...devices, newDev];
+    updateDevicesList(nextDevices);
+    setActiveDeviceId(newDev.id);
+    setIsAddModalOpen(false);
+    setNewDeviceForm({ name: '', ip: '', port: 4370 });
+
+    toast.success(`Mesin "${newDev.name}" berhasil ditambahkan! Menguji koneksi...`);
+    checkDeviceOnline(newDev.ip, newDev.port, newDev.id);
+  };
+
+  // Hapus Mesin dari Daftar
+  const handleDeleteDevice = (devId, devName) => {
+    if (devices.length <= 1) {
+      toast.warning('Minimal harus ada 1 mesin absensi terdaftar.');
+      return;
+    }
+
+    if (!confirm(`Apakah Anda yakin ingin menghapus "${devName}" dari daftar mesin?`)) {
+      return;
+    }
+
+    const nextDevices = devices.filter(d => d.id !== devId);
+    updateDevicesList(nextDevices);
+
+    if (activeDeviceId === devId) {
+      const fallbackId = nextDevices[0].id;
+      setActiveDeviceId(fallbackId);
+      toast.info(`Beralih ke mesin ${nextDevices[0].name}`);
+    }
+
+    toast.success(`Mesin "${devName}" berhasil dihapus.`);
+  };
+
+  // Ubah IP / Nama Mesin
+  const handleEditDevice = (dev) => {
+    const newName = prompt(`Ubah Nama Mesin:`, dev.name);
+    if (newName === null) return;
+    const newIp = prompt(`Ubah Alamat IP Mesin (${dev.name}):`, dev.ip);
+    if (newIp === null) return;
+
+    const trimmedName = newName.trim() || dev.name;
+    const trimmedIp = newIp.trim() || dev.ip;
+
+    const nextDevices = devices.map(d => {
+      if (d.id === dev.id) {
+        return { ...d, name: trimmedName, ip: trimmedIp };
       }
       return d;
     });
-    setDevices(updated);
-    toast.success(`IP Mesin 2 berhasil diubah ke ${newIp}`);
-    checkDeviceOnline(newIp, 4370, 'dev_2');
+
+    updateDevicesList(nextDevices);
+    toast.success(`Mesin "${trimmedName}" berhasil diperbarui.`);
+    checkDeviceOnline(trimmedIp, dev.port, dev.id);
+  };
+
+  // Bersihkan Seluruh Log pada Memori Mesin Fisik
+  const handleClearMachineLogs = async () => {
+    const warningMsg =
+      `PERHATIAN: PEMBERSIHAN MEMORI MESIN FISIK\n\n` +
+      `Anda akan MENGOSONGKAN / MENGHAPUS seluruh rekaman log absensi di dalam memori perangkat fisik:\n` +
+      `▶ Mesin: ${activeDevice.name}\n` +
+      `▶ IP: ${activeDevice.ip}:${activeDevice.port}\n\n` +
+      `PENTING:\n` +
+      `1. Pastikan Anda telah menyinkronkan data ke tabel Kehadiran HRIS.\n` +
+      `2. Seluruh log transaksi di mesin fisik akan direset menjadi 0.\n` +
+      `3. Tindakan ini TIDAK DAPAT DIBATALKAN.\n\n` +
+      `Apakah Anda benar-benar yakin ingin melanjutkan?`;
+
+    if (!confirm(warningMsg)) {
+      return;
+    }
+
+    // Konfirmasi ganda demi keamanan
+    const finalCheck = prompt(`Ketik "BERSIHKAN" untuk mengonfirmasi penghapusan log pada mesin ${activeDevice.ip}:`);
+    if (finalCheck !== 'BERSIHKAN') {
+      toast.info('Pembersihan log mesin dibatalkan.');
+      return;
+    }
+
+    setClearingLogs(true);
+    try {
+      const response = await axios.post('/absensi/zkaccess/clear-logs', {
+        ip: activeDevice.ip,
+        port: activeDevice.port,
+      });
+
+      if (response.data.status === 'success') {
+        toast.success(response.data.message || 'Log mesin fisik berhasil dibersihkan!');
+        // Refresh log tampilan
+        fetchLogs(selectedDate, activeDevice.ip, activeDevice.port);
+      } else {
+        toast.error(response.data.message || 'Gagal membersihkan log mesin.');
+      }
+    } catch (error) {
+      console.error('Clear logs error:', error);
+      toast.error(error.response?.data?.message || 'Terjadi kesalahan saat membersihkan log mesin.');
+    } finally {
+      setClearingLogs(false);
+    }
   };
 
   // Handler tombol cepat tanggal
@@ -329,63 +474,55 @@ export default function ZkAccessLogs({
           </div>
         </div>
 
-        {/* Location & Machine Switcher (2 Lokasi Berbeda) */}
+        {/* Location & Machine Switcher */}
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-blue-600" />
-                <span>Pilih Lokasi Mesin Absensi</span>
+                <span>Pilih Lokasi Mesin Absensi ({devices.length} Terdaftar)</span>
               </h2>
               <p className="text-xs text-gray-500">
-                Klik kartu lokasi untuk berpindah mesin. Indikator hijau menandakan mesin terhubung di jaringan on-premise.
+                Klik kartu lokasi untuk berganti mesin aktif. Indikator hijau menandakan mesin terhubung di jaringan on-premise.
               </p>
             </div>
             <button
-              onClick={() => {
-                const currentIp = devices.find(d => d.id === 'dev_2')?.ip || '192.168.87.202';
-                const newIp = prompt(`Masukkan Alamat IP untuk Mesin 2 (${devices.find(d => d.id === 'dev_2')?.name || 'Lokasi 2'}):`, currentIp);
-                if (newIp && newIp.trim() !== '') {
-                  handleUpdateDevice2Ip(newIp.trim());
-                }
-              }}
-              className="inline-flex items-center gap-1.5 text-xs text-blue-600 hover:text-blue-800 font-semibold px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors self-start sm:self-auto"
+              onClick={() => setIsAddModalOpen(true)}
+              className="inline-flex items-center gap-1.5 text-xs text-white bg-blue-600 hover:bg-blue-700 font-semibold px-3 py-2 rounded-xl shadow-sm transition-all self-start sm:self-auto active:scale-95"
             >
-              <Edit2 className="w-3.5 h-3.5" />
-              <span>Ubah IP Mesin 2</span>
+              <Plus className="w-3.5 h-3.5" />
+              <span>Tambah Mesin</span>
             </button>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
             {devices.map((dev) => {
               const isSelected = dev.id === activeDeviceId;
               return (
                 <div
                   key={dev.id}
                   onClick={() => handleSwitchDevice(dev)}
-                  className={`cursor-pointer p-4 rounded-xl border transition-all flex items-center justify-between gap-3 ${
-                    isSelected
-                      ? 'border-blue-500 bg-blue-50/40 shadow-sm ring-2 ring-blue-500/20'
-                      : 'border-gray-200 bg-gray-50/60 hover:bg-white hover:border-gray-300'
-                  }`}
+                  className={`cursor-pointer p-4 rounded-xl border transition-all flex items-center justify-between gap-3 ${isSelected
+                    ? 'border-blue-500 bg-blue-50/40 shadow-sm ring-2 ring-blue-500/20'
+                    : 'border-gray-200 bg-gray-50/60 hover:bg-white hover:border-gray-300'
+                    }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <div className="relative flex h-3.5 w-3.5">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="relative flex h-3.5 w-3.5 flex-shrink-0">
                       {dev.online && (
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                       )}
-                      <span className={`relative inline-flex rounded-full h-3.5 w-3.5 ${
-                        dev.online ? 'bg-emerald-500' : 'bg-gray-400'
-                      }`}></span>
+                      <span className={`relative inline-flex rounded-full h-3.5 w-3.5 ${dev.online ? 'bg-emerald-500' : 'bg-gray-400'
+                        }`}></span>
                     </div>
 
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <p className={`text-sm font-bold ${isSelected ? 'text-blue-900' : 'text-gray-800'}`}>
+                        <p className={`text-sm font-bold truncate ${isSelected ? 'text-blue-900' : 'text-gray-800'}`}>
                           {dev.name}
                         </p>
                         {isSelected && (
-                          <span className="text-[10px] bg-blue-600 text-white font-bold px-2 py-0.5 rounded-full uppercase">
+                          <span className="text-[10px] bg-blue-600 text-white font-bold px-2 py-0.5 rounded-full uppercase flex-shrink-0">
                             Aktif
                           </span>
                         )}
@@ -396,13 +533,12 @@ export default function ZkAccessLogs({
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2">
-                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold uppercase tracking-wider ${
-                      dev.online
-                        ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
-                        : 'bg-gray-100 text-gray-600 border border-gray-200'
-                    }`}>
-                      {dev.online ? 'ONLINE (Hijau)' : 'OFFLINE'}
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${dev.online
+                      ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                      : 'bg-gray-100 text-gray-600 border border-gray-200'
+                      }`}>
+                      {dev.online ? 'ONLINE' : 'OFFLINE'}
                     </span>
                     <button
                       onClick={(e) => {
@@ -414,6 +550,28 @@ export default function ZkAccessLogs({
                     >
                       <RefreshCw className="w-3.5 h-3.5" />
                     </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleEditDevice(dev);
+                      }}
+                      title="Ubah Nama / IP Mesin"
+                      className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg hover:bg-white transition-colors"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    {devices.length > 1 && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteDevice(dev.id, dev.name);
+                        }}
+                        title="Hapus Mesin dari Daftar"
+                        className="p-1.5 text-gray-400 hover:text-rose-600 rounded-lg hover:bg-white transition-colors"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -466,30 +624,6 @@ export default function ZkAccessLogs({
           </div>
         </div>
 
-        {/* Info Banner On-Premise & Jam Kerja */}
-        <div className="p-4 rounded-2xl border bg-blue-50/70 border-blue-200 text-blue-900 space-y-2">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-blue-100 text-blue-700 flex-shrink-0">
-              <Info className="w-5 h-5" />
-            </div>
-            <div className="text-xs leading-relaxed">
-              <span className="font-bold text-sm">Penyimpanan & Aturan Absensi On-Premise:</span> Data log dibaca langsung dari database lokal ZKAccess 3.5 (<code className="bg-blue-100 px-1 py-0.5 rounded text-blue-900 font-mono">C:\Program Files (x86)\ZKTeco\ZKAccess3.5\access.mdb</code>) yang menggabungkan tabel <code className="bg-blue-100 px-1 py-0.5 rounded text-blue-900 font-mono">CHECKINOUT</code> dan <code className="bg-blue-100 px-1 py-0.5 rounded text-blue-900 font-mono">acc_monitor_log</code>, serta buffer mesin fisik <code className="bg-blue-100 px-1 py-0.5 rounded text-blue-900 font-mono">192.168.87.201</code>.
-            </div>
-          </div>
-          <div className="text-xs text-blue-800 bg-white/80 p-3 rounded-xl border border-blue-100 flex flex-wrap items-center gap-x-4 gap-y-2">
-            <div>
-              <span className="font-semibold text-gray-700">Jam Masuk:</span> Datang <strong className="text-emerald-700">&le; 08:00:59</strong> dihitung <strong>Tepat Waktu</strong>, di atas itu <strong>Terlambat</strong>.
-            </div>
-            <div>
-              <span className="font-semibold text-gray-700">Jam Pulang:</span> Scan mulai pukul <strong className="text-amber-700">&ge; 17:00:00</strong> dihitung otomatis sebagai <strong>Pulang Kerja (Check-Out)</strong>.
-            </div>
-            {stats.checkOuts === 0 && selectedDate === getLocalDateString() && (
-              <div className="text-amber-800 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200">
-                Catatan: Hari ini jam pulang masih 0 karena karyawan masih jam kerja (&lt; 17:00). Silakan klik <strong>9 Nov</strong> untuk melihat 36 log pulang lengkap!
-              </div>
-            )}
-          </div>
-        </div>
 
         {/* Toolbar & Filter Actions */}
         <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm space-y-4">
@@ -515,11 +649,10 @@ export default function ZkAccessLogs({
                   const today = getLocalDateString();
                   handleSelectSingleDate(today);
                 }}
-                className={`text-xs px-3 py-2 rounded-xl font-medium transition-all ${
-                  selectedDate === getLocalDateString()
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className={`text-xs px-3 py-2 rounded-xl font-medium transition-all ${selectedDate === getLocalDateString()
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
               >
                 Hari Ini
               </button>
@@ -531,55 +664,41 @@ export default function ZkAccessLogs({
                   const yesterday = getLocalDateString(d);
                   handleSelectSingleDate(yesterday);
                 }}
-                className={`text-xs px-3 py-2 rounded-xl font-medium transition-all ${
-                  (() => {
-                    const d = new Date();
-                    d.setDate(d.getDate() - 1);
-                    return selectedDate === getLocalDateString(d);
-                  })()
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className={`text-xs px-3 py-2 rounded-xl font-medium transition-all ${(() => {
+                  const d = new Date();
+                  d.setDate(d.getDate() - 1);
+                  return selectedDate === getLocalDateString(d);
+                })()
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
               >
                 Kemarin
               </button>
 
               <button
                 onClick={() => {
-                  handleSelectSingleDate('2026-11-09');
+                  const d = new Date();
+                  d.setDate(d.getDate() - 1);
+                  const yesterday = getLocalDateString(d);
+                  const today = getLocalDateString();
+                  handleSelectDateRange(yesterday, today);
                 }}
-                className={`text-xs px-3 py-2 rounded-xl font-medium transition-all flex items-center gap-1.5 ${
-                  selectedDate === '2026-11-09'
-                    ? 'bg-amber-600 text-white shadow-sm'
-                    : 'bg-amber-50 text-amber-800 border border-amber-200 hover:bg-amber-100'
-                }`}
-                title="Lihat riwayat lengkap hari Senin (ada 36 log check-out pulang)"
-              >
-                <LogOut className="w-3.5 h-3.5 text-amber-600" />
-                <span>9 Nov (Log Lengkap Pulang)</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  handleSelectDateRange('2026-11-09', getLocalDateString());
-                }}
-                className={`text-xs px-3 py-2 rounded-xl font-medium transition-all flex items-center gap-1.5 ${
-                  selectedDate === `2026-11-09 s/d ${getLocalDateString()}`
-                    ? 'bg-purple-600 text-white shadow-sm'
-                    : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
-                }`}
+                className={`text-xs px-3 py-2 rounded-xl font-medium transition-all flex items-center gap-1.5 ${selectedDate === `${(() => { const d = new Date(); d.setDate(d.getDate() - 1); return getLocalDateString(d); })()} s/d ${getLocalDateString()}`
+                  ? 'bg-purple-600 text-white shadow-sm'
+                  : 'bg-purple-50 text-purple-700 border border-purple-200 hover:bg-purple-100'
+                  }`}
               >
                 <CalendarRange className="w-3.5 h-3.5" />
-                9 s/d Hari Ini
+                Kemarin & Hari Ini
               </button>
 
               <button
                 onClick={() => handleSelectSingleDate('ALL')}
-                className={`text-xs px-3 py-2 rounded-xl font-medium transition-all ${
-                  selectedDate === 'ALL'
-                    ? 'bg-blue-600 text-white shadow-sm'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
+                className={`text-xs px-3 py-2 rounded-xl font-medium transition-all ${selectedDate === 'ALL'
+                  ? 'bg-blue-600 text-white shadow-sm'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
                 title="Tampilkan semua data log"
               >
                 Semua Tanggal
@@ -589,26 +708,23 @@ export default function ZkAccessLogs({
               <div className="flex items-center bg-gray-100 p-1 rounded-xl text-xs font-medium text-gray-600 ml-1">
                 <button
                   onClick={() => setTypeFilter('ALL')}
-                  className={`px-3 py-1.5 rounded-lg transition-all ${
-                    typeFilter === 'ALL' ? 'bg-white text-gray-900 shadow-sm font-semibold' : 'hover:text-gray-900'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg transition-all ${typeFilter === 'ALL' ? 'bg-white text-gray-900 shadow-sm font-semibold' : 'hover:text-gray-900'
+                    }`}
                 >
                   Semua
                 </button>
                 <button
                   onClick={() => setTypeFilter('I')}
-                  className={`px-3 py-1.5 rounded-lg transition-all ${
-                    typeFilter === 'I' ? 'bg-emerald-500 text-white shadow-sm font-semibold' : 'hover:text-gray-900'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg transition-all ${typeFilter === 'I' ? 'bg-emerald-500 text-white shadow-sm font-semibold' : 'hover:text-gray-900'
+                    }`}
                   title="Scan sebelum jam 17:00"
                 >
                   Masuk Kerja
                 </button>
                 <button
                   onClick={() => setTypeFilter('O')}
-                  className={`px-3 py-1.5 rounded-lg transition-all ${
-                    typeFilter === 'O' ? 'bg-amber-500 text-white shadow-sm font-semibold' : 'hover:text-gray-900'
-                  }`}
+                  className={`px-3 py-1.5 rounded-lg transition-all ${typeFilter === 'O' ? 'bg-amber-500 text-white shadow-sm font-semibold' : 'hover:text-gray-900'
+                    }`}
                   title="Scan jam 17:00 ke atas (Pulang)"
                 >
                   Pulang Kerja
@@ -644,6 +760,17 @@ export default function ZkAccessLogs({
               >
                 <Database className={`w-3.5 h-3.5 ${syncing ? 'animate-pulse' : ''}`} />
                 <span>{syncing ? 'Menyinkronkan...' : 'Sinkronkan ke Kehadiran'}</span>
+              </button>
+
+              {/* Button Bersihkan Log Mesin Fisik */}
+              <button
+                onClick={handleClearMachineLogs}
+                disabled={clearingLogs || loading}
+                title={`Kosongkan/hapus seluruh memori log transaksi pada mesin ${activeDevice.name} (${activeDevice.ip})`}
+                className="flex items-center gap-2 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl shadow-sm transition-all disabled:opacity-50 active:scale-95"
+              >
+                <Trash2 className={`w-3.5 h-3.5 ${clearingLogs ? 'animate-spin' : 'text-rose-600'}`} />
+                <span>{clearingLogs ? 'Membersihkan...' : 'Bersihkan Log Mesin'}</span>
               </button>
             </div>
           </div>
@@ -763,11 +890,10 @@ export default function ZkAccessLogs({
                                 Masuk
                               </span>
                               {log.checktime && (
-                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                                  log.checktime.substring(11, 19) <= '08:00:59'
-                                    ? 'text-emerald-700 bg-emerald-100'
-                                    : 'text-rose-700 bg-rose-100'
-                                }`}>
+                                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${log.checktime.substring(11, 19) <= '08:00:59'
+                                  ? 'text-emerald-700 bg-emerald-100'
+                                  : 'text-rose-700 bg-rose-100'
+                                  }`}>
                                   {log.checktime.substring(11, 19) <= '08:00:59' ? 'On Time' : 'Terlambat'}
                                 </span>
                               )}
@@ -809,6 +935,99 @@ export default function ZkAccessLogs({
           </div>
         </div>
       </div>
+
+      {/* Modal Tambah Mesin Baru */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-blue-100 text-blue-700 rounded-xl">
+                  <Server className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-gray-900 text-base">Tambah Mesin Absensi Baru</h3>
+                  <p className="text-xs text-gray-500">Daftarkan alamat IP perangkat ZKTeco baru</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsAddModalOpen(false)}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateDevice} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                  Nama / Lokasi Mesin <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="Contoh: Lokasi 2 (Pintu Belakang) / Lt. 2"
+                  value={newDeviceForm.name}
+                  onChange={(e) => setNewDeviceForm({ ...newDeviceForm, name: e.target.value })}
+                  required
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                />
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-2">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    Alamat IP Mesin <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="192.168.87.xxx"
+                    value={newDeviceForm.ip}
+                    onChange={(e) => setNewDeviceForm({ ...newDeviceForm, ip: e.target.value })}
+                    required
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1.5">
+                    Port
+                  </label>
+                  <input
+                    type="number"
+                    placeholder="4370"
+                    value={newDeviceForm.port}
+                    onChange={(e) => setNewDeviceForm({ ...newDeviceForm, port: e.target.value })}
+                    className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white"
+                  />
+                </div>
+              </div>
+
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
+                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <span>
+                  Pastikan komputer HRIS ini berada dalam satu jaringan LAN / WiFi dengan IP mesin yang dimasukkan agar status mesin berwarna hijau (ONLINE).
+                </span>
+              </div>
+
+              <div className="flex items-center justify-end gap-2.5 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAddModalOpen(false)}
+                  className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  type="submit"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shadow-md transition-all active:scale-95"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>Simpan & Hubungkan</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </DashboardLayouts>
   );
 }

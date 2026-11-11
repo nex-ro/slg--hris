@@ -1,13 +1,46 @@
   import { useState, useEffect } from 'react';
   import { Head, router } from '@inertiajs/react';
   import LayoutTemplate from "@/Layouts/LayoutTemplate";
-import { Pencil, Trash2, Plus, X, Upload, Search, Filter, ChevronLeft, ChevronRight, RefreshCw, Users, UserX } from 'lucide-react';
+  import {
+    Pencil,
+    Trash2,
+    Plus,
+    X,
+    Upload,
+    Search,
+    Filter,
+    ChevronLeft,
+    ChevronRight,
+    RefreshCw,
+    Users,
+    UserX,
+    KeyRound,
+    Mail,
+    Eye,
+    EyeOff,
+    Check,
+    AlertCircle,
+    Send,
+    Lock
+  } from 'lucide-react';
+  import axios from 'axios';
 
   function Pegawai({ flash }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+
+    // State Modal Reset Password & Kirim Email
+    const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
+    const [selectedUserForReset, setSelectedUserForReset] = useState(null);
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [showPassword, setShowPassword] = useState(false);
+    const [isSubmittingReset, setIsSubmittingReset] = useState(false);
+    const [isSendingEmail, setIsSendingEmail] = useState(false);
+    const [resetError, setResetError] = useState('');
+    const [resetSuccess, setResetSuccess] = useState('');
     const [users, setUsers] = useState({ data: [], links: [], total: 0, from: 0, to: 0, last_page: 1 });
     const [divisiList, setDivisiList] = useState([]);
     const [jabatanList, setJabatanList] = useState([]);
@@ -200,6 +233,104 @@ useEffect(() => {
           fetchData(currentPage); 
         }
       });
+    }
+  };
+
+  const openResetPasswordModal = (user) => {
+    setSelectedUserForReset(user);
+    setNewPassword('');
+    setConfirmPassword('');
+    setShowPassword(false);
+    setResetError('');
+    setResetSuccess('');
+    setIsResetPasswordModalOpen(true);
+  };
+
+  const closeResetPasswordModal = () => {
+    setIsResetPasswordModalOpen(false);
+    setSelectedUserForReset(null);
+    setNewPassword('');
+    setConfirmPassword('');
+    setResetError('');
+    setResetSuccess('');
+  };
+
+  // Kirim link reset password ke email pegawai
+  const handleSendResetEmail = async (user = selectedUserForReset) => {
+    if (!user || !user.email) {
+      alert('Pegawai ini belum memiliki email terdaftar.');
+      return;
+    }
+
+    if (!confirm(`Kirim email link reset password ke ${user.name} (${user.email})?`)) {
+      return;
+    }
+
+    setIsSendingEmail(true);
+    setResetError('');
+    setResetSuccess('');
+
+    try {
+      const response = await axios.post(`/pegawai/${user.id}/send-reset-email`);
+      if (response.data.status === 'success') {
+        const msg = response.data.message || `Link reset password berhasil dikirim ke ${user.email}`;
+        setResetSuccess(msg);
+        alert(msg);
+      } else {
+        const errMsg = response.data.message || 'Gagal mengirim email reset password.';
+        setResetError(errMsg);
+        alert(errMsg);
+      }
+    } catch (error) {
+      console.error('Error sending reset email:', error);
+      const errMsg = error.response?.data?.message || 'Terjadi kesalahan saat mengirim email reset password.';
+      setResetError(errMsg);
+      alert(errMsg);
+    } finally {
+      setIsSendingEmail(false);
+    }
+  };
+
+  // Reset password manual oleh Admin/HRD
+  const handleDirectResetPassword = async (e) => {
+    e.preventDefault();
+    if (!selectedUserForReset) return;
+
+    if (!newPassword || newPassword.length < 8) {
+      setResetError('Password baru minimal harus 8 karakter.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setResetError('Konfirmasi password tidak cocok.');
+      return;
+    }
+
+    setIsSubmittingReset(true);
+    setResetError('');
+    setResetSuccess('');
+
+    try {
+      const response = await axios.post(`/pegawai/${selectedUserForReset.id}/reset-password`, {
+        password: newPassword,
+        password_confirmation: confirmPassword
+      });
+
+      if (response.data.status === 'success') {
+        const msg = response.data.message || 'Password berhasil direset!';
+        setResetSuccess(msg);
+        alert(msg);
+        setTimeout(() => {
+          closeResetPasswordModal();
+        }, 1200);
+      } else {
+        setResetError(response.data.message || 'Gagal mereset password.');
+      }
+    } catch (error) {
+      console.error('Error resetting password:', error);
+      setResetError(error.response?.data?.message || 'Terjadi kesalahan saat mereset password.');
+    } finally {
+      setIsSubmittingReset(false);
     }
   };
 
@@ -457,18 +588,36 @@ useEffect(() => {
                         </span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <button
-                          onClick={() => openEditModal(user)}
-                          className="text-blue-600 hover:text-blue-900 mr-3"
-                        >
-                          <Pencil size={18} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(user.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <Trash2 size={18} />
-                        </button>
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => openResetPasswordModal(user)}
+                            className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition"
+                            title="Reset Password & Kirim Email"
+                          >
+                            <KeyRound size={17} />
+                          </button>
+                          <button
+                            onClick={() => handleSendResetEmail(user)}
+                            className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition"
+                            title="Kirim Email Reset Password"
+                          >
+                            <Mail size={17} />
+                          </button>
+                          <button
+                            onClick={() => openEditModal(user)}
+                            className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition"
+                            title="Edit Pegawai"
+                          >
+                            <Pencil size={17} />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(user.id)}
+                            className="p-1.5 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition"
+                            title="Hapus Pegawai"
+                          >
+                            <Trash2 size={17} />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )) : (
@@ -781,6 +930,143 @@ useEffect(() => {
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* Modal Reset Password & Kirim Email */}
+          {isResetPasswordModalOpen && selectedUserForReset && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-5 animate-fade-in">
+                {/* Header Modal */}
+                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-amber-100 text-amber-700 rounded-xl">
+                      <KeyRound size={22} />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-gray-900 text-base">Reset Password Pegawai</h3>
+                      <p className="text-xs text-gray-500">
+                        {selectedUserForReset.name} • <span className="font-mono text-gray-600">{selectedUserForReset.email || 'Tanpa Email'}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={closeResetPasswordModal}
+                    className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
+                  >
+                    <X size={20} />
+                  </button>
+                </div>
+
+                {/* Feedback Alerts */}
+                {resetError && (
+                  <div className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-xl text-xs flex items-center gap-2">
+                    <AlertCircle size={16} className="flex-shrink-0 text-red-600" />
+                    <span>{resetError}</span>
+                  </div>
+                )}
+
+                {resetSuccess && (
+                  <div className="p-3 bg-green-50 text-green-700 border border-green-200 rounded-xl text-xs flex items-center gap-2">
+                    <Check size={16} className="flex-shrink-0 text-green-600" />
+                    <span>{resetSuccess}</span>
+                  </div>
+                )}
+
+                {/* Pilihan 1: Kirim Link Reset Password via Email */}
+                <div className="p-4 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-3">
+                  <div className="flex items-start gap-2.5">
+                    <Mail size={18} className="text-indigo-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wide">
+                        Kirim Link Reset via Email
+                      </h4>
+                      <p className="text-xs text-indigo-700 mt-0.5 leading-relaxed">
+                        Kirim email resmi berisi tautan reset password ke <strong className="font-semibold text-indigo-950">{selectedUserForReset.email}</strong>. Pegawai dapat mengatur sendiri kata sandi baru mereka.
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSendResetEmail(selectedUserForReset)}
+                    disabled={isSendingEmail || !selectedUserForReset.email}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition disabled:opacity-50 active:scale-95"
+                  >
+                    <Send size={14} className={isSendingEmail ? 'animate-spin' : ''} />
+                    <span>{isSendingEmail ? 'Mengirim Email...' : 'Kirim Email Reset Password Sekarang'}</span>
+                  </button>
+                </div>
+
+                {/* Divider */}
+                <div className="relative flex py-1 items-center">
+                  <div className="flex-grow border-t border-gray-200"></div>
+                  <span className="flex-shrink mx-3 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
+                    Atau Reset Manual oleh HRD
+                  </span>
+                  <div className="flex-grow border-t border-gray-200"></div>
+                </div>
+
+                {/* Pilihan 2: Reset Manual oleh HRD */}
+                <form onSubmit={handleDirectResetPassword} className="space-y-3.5">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Password Baru <span className="text-red-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        placeholder="Minimal 8 karakter"
+                        className="w-full px-3.5 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        required
+                        minLength={8}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">
+                      Konfirmasi Password Baru <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Ketik ulang password baru"
+                      className="w-full px-3.5 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      required
+                      minLength={8}
+                    />
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={closeResetPasswordModal}
+                      className="px-4 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50 transition"
+                    >
+                      Batal
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isSubmittingReset}
+                      className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition disabled:opacity-50 active:scale-95"
+                    >
+                      <Lock size={14} className={isSubmittingReset ? 'animate-spin' : ''} />
+                      <span>{isSubmittingReset ? 'Menyimpan...' : 'Simpan Password Baru'}</span>
+                    </button>
+                  </div>
+                </form>
               </div>
             </div>
           )}
