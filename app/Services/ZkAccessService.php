@@ -15,40 +15,43 @@ class ZkAccessService
     public function __construct()
     {
         $this->scriptPath = app_path('Services/zkaccess_reader.ps1');
-        $this->dbPath = 'C:\\Program Files (x86)\\ZKTeco\\ZKAccess3.5\\access.mdb';
+        $this->dbPath = config('services.zkaccess.db_path', 'C:\\Program Files (x86)\\ZKTeco\\ZKAccess3.5\\access.mdb');
     }
 
     /**
-     * Jalankan powershell script dengan parameter
+     * Jalankan script PowerShell zkaccess_reader.ps1
      */
     protected function runScript(array $params = []): array
     {
-        $powershellBin = 'C:\\Windows\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe';
-        if (!file_exists($powershellBin)) {
-            $powershellBin = 'powershell';
+        if (!file_exists($this->scriptPath)) {
+            return [
+                'status' => 'error',
+                'message' => 'Script reader ZKAccess tidak ditemukan di: ' . $this->scriptPath,
+                'data' => []
+            ];
         }
 
-        $argList = [
-            escapeshellcmd($powershellBin),
-            '-NoProfile',
-            '-ExecutionPolicy',
-            'Bypass',
-            '-File',
-            escapeshellarg($this->scriptPath),
-        ];
-
+        $argList = [];
         foreach ($params as $key => $val) {
-            $argList[] = '-' . $key;
-            $argList[] = escapeshellarg((string)$val);
+            $escaped = escapeshellarg((string)$val);
+            $argList[] = "-{$key} {$escaped}";
+        }
+        $argsStr = implode(' ', $argList);
+
+        $powershellBin = 'powershell.exe';
+        $sysWow64Ps = 'C:\\Windows\\SysWOW64\\WindowsPowerShell\\v1.0\\powershell.exe';
+        if (file_exists($sysWow64Ps)) {
+            $powershellBin = "\"{$sysWow64Ps}\"";
         }
 
-        $command = implode(' ', $argList);
-        $output = shell_exec($command);
+        $powershellCmd = "{$powershellBin} -NoProfile -ExecutionPolicy Bypass -File \"{$this->scriptPath}\" {$argsStr}";
+
+        $output = shell_exec($powershellCmd);
 
         if (!$output) {
             return [
                 'status' => 'error',
-                'message' => 'Tidak ada respon dari pembaca database ZKAccess.',
+                'message' => 'Tidak ada output dari eksekusi PowerShell reader ZKAccess.',
                 'data' => []
             ];
         }
@@ -56,7 +59,7 @@ class ZkAccessService
         $raw = trim($output);
         $jsonStart = strpos($raw, '{');
         $jsonEnd = strrpos($raw, '}');
-        if ($jsonStart !== false && $jsonEnd !== false && $jsonEnd >= $jsonStart) {
+        if ($jsonStart !== false && $jsonEnd !== false && $jsonEnd > $jsonStart) {
             $raw = substr($raw, $jsonStart, ($jsonEnd - $jsonStart) + 1);
         }
 
@@ -73,25 +76,43 @@ class ZkAccessService
     }
 
     /**
-     * Uji koneksi ke database ZKAccess dan info mesin
+     * Uji koneksi ke perangkat ZKAccess (Online = socket TCP port 4370 terbuka)
      */
-    public function testConnection(): array
+    public function testConnection(?string $ip = '192.168.87.201', ?int $port = 4370): array
     {
-        return $this->runScript([
-            'Action' => 'test_connection',
-            'DbPath' => $this->dbPath,
-        ]);
+        $targetIp = $ip ?: '192.168.87.201';
+        $targetPort = $port ?: 4370;
+
+        // Uji socket TCP port 4370 dengan timeout cepat (1.5 detik) agar non-blocking
+        $isOnline = false;
+        $connection = @fsockopen($targetIp, $targetPort, $errno, $errstr, 1.5);
+        if (is_resource($connection)) {
+            $isOnline = true;
+            fclose($connection);
+        }
+
+        return [
+            'status' => 'success',
+            'online' => $isOnline,
+            'ip' => $targetIp,
+            'port' => $targetPort,
+            'message' => $isOnline 
+                ? "Perangkat {$targetIp}:{$targetPort} ONLINE & terhubung."
+                : "Perangkat {$targetIp}:{$targetPort} OFFLINE (tidak dapat dihubungi)."
+        ];
     }
 
     /**
-     * Ambil data log absensi berdasarkan tanggal atau rentang tanggal
+     * Ambil data log absensi berdasarkan tanggal atau rentang tanggal & IP mesin
      */
-    public function getLogs(?string $date = null, int $limit = 500, ?string $startDate = null, ?string $endDate = null): array
+    public function getLogs(?string $date = null, int $limit = 500, ?string $startDate = null, ?string $endDate = null, ?string $ip = '192.168.87.201', ?int $port = 4370): array
     {
         $params = [
             'Action' => 'get_logs',
             'Limit' => $limit,
             'DbPath' => $this->dbPath,
+            'Ip' => $ip ?: '192.168.87.201',
+            'Port' => $port ?: 4370,
         ];
 
         if ($startDate && $endDate) {
@@ -130,17 +151,14 @@ class ZkAccessService
             $item['tower'] = $user ? $user->tower : null;
 
             // Klasifikasi otomatis jenis scan:
-            // Scan <= 10:00:00 -> Masuk (Check-In)
-            // Scan >= 15:00:00 -> Pulang (Check-Out)
-            // 10:00 - 15:00 -> Antara / Istirahat
+            // 1. Scan jam 17:00:00 ke atas atau checktype asli 'O' -> Pulang (Check-Out / O)
+            // 2. Scan sebelum jam 17:00:00 -> Masuk (Check-In / I)
             if (!empty($item['checktime'])) {
                 $time = substr($item['checktime'], 11, 8);
-                if ($time <= '10:00:00') {
-                    $item['checktype'] = 'I';
-                } elseif ($time >= '15:00:00') {
+                if (($item['checktype'] ?? '') === 'O' || $time >= '17:00:00') {
                     $item['checktype'] = 'O';
                 } else {
-                    $item['checktype'] = 'M';
+                    $item['checktype'] = 'I';
                 }
             }
 
@@ -149,7 +167,7 @@ class ZkAccessService
 
         return [
             'status' => 'success',
-            'date' => $targetDate,
+            'date' => $targetDate ?? $displayDate,
             'count' => count($enrichedLogs),
             'data' => $enrichedLogs,
         ];
@@ -157,11 +175,14 @@ class ZkAccessService
 
     /**
      * Sinkronkan log ZKAccess ke tabel kehadiran HRIS
+     * Aturan:
+     * - Jam Kedatangan: scan pagi (< 12:00:00). Tepat waktu <= 08:00:59, di atas itu Terlambat.
+     * - Jam Pulang: scan sore mulai jam 17:00:00 ke atas (atau checktype 'O'). Diambil scan paling akhir.
      */
-    public function syncToKehadiran(?string $date = null): array
+    public function syncToKehadiran(?string $date = null, ?string $ip = '192.168.87.201', ?int $port = 4370): array
     {
         $targetDate = $date ?: Carbon::now()->format('Y-m-d');
-        $logsResult = $this->getLogs($targetDate, 2000);
+        $logsResult = $this->getLogs($targetDate, 2000, null, null, $ip, $port);
 
         if ($logsResult['status'] !== 'success') {
             return [
@@ -190,16 +211,18 @@ class ZkAccessService
             if (!isset($userScans[$pin])) {
                 $userScans[$pin] = [];
             }
-            $userScans[$pin][] = Carbon::parse($log['checktime']);
+            $userScans[$pin][] = [
+                'time' => Carbon::parse($log['checktime']),
+                'type' => $log['checktype'] ?? 'I',
+            ];
         }
 
         $savedCount = 0;
         $updatedCount = 0;
         $ignoredCount = 0;
-        $batasWaktu = Carbon::parse('08:01:00');
         $statusKhusus = ['Cuti', 'Sakit', 'Izin', 'C1', 'C2', 'C3', 'C4', 'C5', 'C6', 'C7', 'C8', 'Dinas Luar'];
 
-        foreach ($userScans as $uid => $times) {
+        foreach ($userScans as $uid => $scans) {
             // Cek apakah user ada di sistem
             $user = User::find($uid);
             if (!$user) {
@@ -208,44 +231,46 @@ class ZkAccessService
             }
 
             // Urutkan waktu scan dari paling awal ke paling akhir
-            usort($times, function ($a, $b) {
-                return $a->timestamp <=> $b->timestamp;
+            usort($scans, function ($a, $b) {
+                return $a['time']->timestamp <=> $b['time']->timestamp;
             });
 
-            // Pisahkan scan:
-            // 1. Scan Masuk/Kedatangan: pagi hari sampai jam 10:00 (<= 10:00:00)
-            // 2. Scan Pulang/Checkout: sore hari setelah jam 15:00 (>= 15:00:00)
-            // Scan antara jam 10:00:01 s/d 14:59:59 diabaikan
-            $morningScans = [];
-            $afternoonScans = [];
-
-            foreach ($times as $t) {
-                $timeStr = $t->format('H:i:s');
-                if ($timeStr <= '10:00:00') {
-                    $morningScans[] = $t;
-                } elseif ($timeStr >= '15:00:00') {
-                    $afternoonScans[] = $t;
-                }
-            }
+            $jamKedatangan = null;
+            $jamPulang = null;
+            $status = null;
 
             // 1. JAM KEDATANGAN:
-            // Hanya diambil dari scan pagi hari sampai maksimal jam 10:00 (<= 10:00:00).
-            $jamKedatangan = null;
-            $earliestMorning = null;
+            // Scan pertama jika dilakukan pada pagi hari (< 12:00:00)
+            $morningScans = array_filter($scans, function ($s) {
+                return $s['time']->format('H:i:s') < '12:00:00';
+            });
+
             if (!empty($morningScans)) {
-                $earliestMorning = $morningScans[0];
-                $jamKedatangan = $earliestMorning->format('H:i:s');
+                $earliestMorning = reset($morningScans);
+                $jamKedatangan = $earliestMorning['time']->format('H:i:s');
+                // Tepat waktu <= 08:00:59, di atas jam 08:00:59 Terlambat
+                $status = ($jamKedatangan <= '08:00:59') ? 'On Time' : 'Terlambat';
             }
 
             // 2. JAM PULANG (CHECKOUT):
-            // Diambil dari scan sore hari setelah jam 3 sore (>= 15:00:00) yang paling akhir.
-            $jamPulang = null;
-            if (!empty($afternoonScans)) {
-                $latestAfternoon = end($afternoonScans);
-                $jamPulang = $latestAfternoon->format('H:i:s');
+            // Pulang mulai dari jam 17:00:00 ke atas (atau checktype 'O').
+            // Diambil scan yang paling akhir.
+            $pulangScans = array_filter($scans, function ($s) {
+                return $s['time']->format('H:i:s') >= '17:00:00' || $s['type'] === 'O';
+            });
+
+            if (!empty($pulangScans)) {
+                $latestPulang = end($pulangScans);
+                $jamPulang = $latestPulang['time']->format('H:i:s');
+            } elseif (count($scans) > 1) {
+                // Fallback jika karyawan pulang lebih awal (di atas jam 15:00) dan ada lebih dari 1 scan
+                $latestScan = end($scans);
+                if ($latestScan['time']->format('H:i:s') >= '15:00:00') {
+                    $jamPulang = $latestScan['time']->format('H:i:s');
+                }
             }
 
-            // Jika tidak ada scan yang memenuhi (misal kosong), skip
+            // Jika tidak ada scan yang valid, lewati
             if (!$jamKedatangan && !$jamPulang) {
                 continue;
             }
@@ -258,18 +283,18 @@ class ZkAccessService
                 $isUpdated = false;
                 $isSpecialStatus = in_array($kehadiran->status, $statusKhusus);
 
-                // Update jam kedatangan jika di DB belum ada dan ada scan pagi
-                if (!$kehadiran->jam_kedatangan && $jamKedatangan) {
+                // Update jam kedatangan jika di DB belum ada atau masih kosong / 00:00:00
+                if ((empty($kehadiran->jam_kedatangan) || $kehadiran->jam_kedatangan === '00:00:00') && $jamKedatangan) {
                     $kehadiran->jam_kedatangan = $jamKedatangan;
                     if (!$isSpecialStatus) {
-                        $kehadiran->status = $earliestMorning->lte(Carbon::parse($targetDate . ' 08:01:00')) ? 'On Time' : 'Terlambat';
+                        $kehadiran->status = $status;
                     }
                     $isUpdated = true;
                 }
 
-                // Update jam pulang jika ada scan siang/sore dari mesin
+                // Update jam pulang jika di DB belum ada atau scan pulang baru lebih lambat
                 if ($jamPulang) {
-                    if (!$kehadiran->jam_pulang || Carbon::parse($jamPulang)->gt(Carbon::parse($kehadiran->jam_pulang))) {
+                    if (empty($kehadiran->jam_pulang) || $kehadiran->jam_pulang === '00:00:00' || Carbon::parse($jamPulang)->gt(Carbon::parse($kehadiran->jam_pulang))) {
                         $kehadiran->jam_pulang = $jamPulang;
                         $isUpdated = true;
                     }
@@ -281,19 +306,14 @@ class ZkAccessService
                 }
             } else {
                 // Buat data kehadiran baru
-                $status = null;
-                if ($jamKedatangan && $earliestMorning) {
-                    $status = $earliestMorning->lte(Carbon::parse($targetDate . ' 08:01:00')) ? 'On Time' : 'Terlambat';
-                }
-
                 Kehadiran::create([
                     'uid' => $uid,
                     'tanggal' => $targetDate,
                     'jam_kedatangan' => $jamKedatangan,
                     'jam_pulang' => $jamPulang,
-                    'status' => $status,
+                    'status' => $status ?? ($jamPulang ? 'Hadir' : null),
                     'tower' => $user->tower ?? 'Liberty',
-                    'keterangan' => 'Auto-sync ZKAccess (Liberty Lt. 1)',
+                    'keterangan' => 'Auto-sync ZKAccess (' . ($ip ?? 'Liberty') . ')',
                 ]);
 
                 $savedCount++;
@@ -302,7 +322,7 @@ class ZkAccessService
 
         return [
             'status' => 'success',
-            'message' => "Sinkronisasi selesai: $savedCount data baru disimpan, $updatedCount data diperbarui.",
+            'message' => "Sinkronisasi selesai: $savedCount data baru disimpan, $updatedCount data diperbarui (Kedatangan & Jam Pulang).",
             'saved' => $savedCount,
             'updated' => $updatedCount,
             'ignored' => $ignoredCount,
@@ -311,22 +331,59 @@ class ZkAccessService
     }
 
     /**
+     * Sinkronkan rentang tanggal secara berurutan
+     */
+    public function syncDateRange(string $startDate, string $endDate, ?string $ip = '192.168.87.201', ?int $port = 4370): array
+    {
+        $start = Carbon::parse($startDate);
+        $end = Carbon::parse($endDate);
+
+        if ($start->gt($end)) {
+            $tmp = $start;
+            $start = $end;
+            $end = $tmp;
+        }
+
+        $totalSaved = 0;
+        $totalUpdated = 0;
+        $details = [];
+
+        $current = $start->copy();
+        while ($current->lte($end)) {
+            $tglStr = $current->format('Y-m-d');
+            $res = $this->syncToKehadiran($tglStr, $ip, $port);
+            $totalSaved += ($res['saved'] ?? 0);
+            $totalUpdated += ($res['updated'] ?? 0);
+            $details[$tglStr] = $res;
+            $current->addDay();
+        }
+
+        return [
+            'status' => 'success',
+            'message' => "Berhasil sinkronisasi periode $startDate s/d $endDate: $totalSaved baru disimpan, $totalUpdated diperbarui.",
+            'total_saved' => $totalSaved,
+            'total_updated' => $totalUpdated,
+            'details' => $details,
+        ];
+    }
+
+    /**
      * Sinkronkan 2 hari sekaligus: Pulang Kemarin & Kedatangan Hari Ini (1-Klik)
      */
-    public function syncYesterdayAndToday(): array
+    public function syncYesterdayAndToday(?string $ip = '192.168.87.201', ?int $port = 4370): array
     {
         $yesterday = Carbon::yesterday()->format('Y-m-d');
         $today = Carbon::today()->format('Y-m-d');
 
-        $resYesterday = $this->syncToKehadiran($yesterday);
-        $resToday = $this->syncToKehadiran($today);
+        $resYesterday = $this->syncToKehadiran($yesterday, $ip, $port);
+        $resToday = $this->syncToKehadiran($today, $ip, $port);
 
         $totalSaved = ($resYesterday['saved'] ?? 0) + ($resToday['saved'] ?? 0);
         $totalUpdated = ($resYesterday['updated'] ?? 0) + ($resToday['updated'] ?? 0);
 
         return [
             'status' => 'success',
-            'message' => "Berhasil sinkronisasi 2 hari! Kemarin ($yesterday): {$resYesterday['saved']} baru, {$resYesterday['updated']} jam pulang diperbarui. Hari Ini ($today): {$resToday['saved']} masuk baru, {$resToday['updated']} diperbarui.",
+            'message' => "Berhasil sinkronisasi 2 hari! Kemarin ($yesterday): {$resYesterday['saved']} baru, {$resYesterday['updated']} jam pulang/datang diperbarui. Hari Ini ($today): {$resToday['saved']} masuk baru, {$resToday['updated']} diperbarui.",
             'total_saved' => $totalSaved,
             'total_updated' => $totalUpdated,
             'yesterday' => $resYesterday,
@@ -334,4 +391,3 @@ class ZkAccessService
         ];
     }
 }
-
