@@ -439,8 +439,9 @@ public function getApprovers()
 {
     $user = auth()->user();
     
-    // Ambil semua user aktif kecuali diri sendiri
+    // Ambil semua user aktif (bukan resign) kecuali diri sendiri
     $allUsers = User::where('active', 1)
+        ->whereNull('tanggal_keluar')
         ->where('id', '!=', $user->id)
         ->orderBy('name')
         ->get(['id', 'name', 'jabatan', 'divisi']);

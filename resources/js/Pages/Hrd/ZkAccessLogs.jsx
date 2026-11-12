@@ -44,7 +44,7 @@ export default function ZkAccessLogs({
           return parsed;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     return defaultDevices && defaultDevices.length >= 2 ? defaultDevices : [
       {
@@ -69,7 +69,7 @@ export default function ZkAccessLogs({
     setDevices(newDevices);
     try {
       localStorage.setItem('zkaccess_devices_list', JSON.stringify(newDevices));
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const [activeDeviceId, setActiveDeviceId] = useState(() => {
@@ -96,6 +96,7 @@ export default function ZkAccessLogs({
 
   // State proses bersihkan log mesin fisik
   const [clearingLogs, setClearingLogs] = useState(false);
+  const [isClearModalOpen, setIsClearModalOpen] = useState(false);
 
   // Helper tanggal lokal (YYYY-MM-DD) agar tidak terpengaruh offset UTC
   const getLocalDateString = (dateObj = new Date()) => {
@@ -113,7 +114,7 @@ export default function ZkAccessLogs({
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('ALL'); // ALL, I (Masuk), O (Pulang)
 
-  // Uji koneksi perangkat (Online = Hijau)
+  // Uji koneksi perangkat (Online )
   const checkDeviceOnline = async (ip, port, devId) => {
     try {
       const res = await axios.get('/absensi/zkaccess/test', {
@@ -126,7 +127,6 @@ export default function ZkAccessLogs({
     }
   };
 
-  // Ambil data log langsung dari backend (Single Date / ALL)
   const fetchLogs = async (dateToFetch = selectedDate, targetIp = activeDevice.ip, targetPort = activeDevice.port) => {
     setLoading(true);
     try {
@@ -289,28 +289,6 @@ export default function ZkAccessLogs({
 
   // Bersihkan Seluruh Log pada Memori Mesin Fisik
   const handleClearMachineLogs = async () => {
-    const warningMsg =
-      `PERHATIAN: PEMBERSIHAN MEMORI MESIN FISIK\n\n` +
-      `Anda akan MENGOSONGKAN / MENGHAPUS seluruh rekaman log absensi di dalam memori perangkat fisik:\n` +
-      `▶ Mesin: ${activeDevice.name}\n` +
-      `▶ IP: ${activeDevice.ip}:${activeDevice.port}\n\n` +
-      `PENTING:\n` +
-      `1. Pastikan Anda telah menyinkronkan data ke tabel Kehadiran HRIS.\n` +
-      `2. Seluruh log transaksi di mesin fisik akan direset menjadi 0.\n` +
-      `3. Tindakan ini TIDAK DAPAT DIBATALKAN.\n\n` +
-      `Apakah Anda benar-benar yakin ingin melanjutkan?`;
-
-    if (!confirm(warningMsg)) {
-      return;
-    }
-
-    // Konfirmasi ganda demi keamanan
-    const finalCheck = prompt(`Ketik "BERSIHKAN" untuk mengonfirmasi penghapusan log pada mesin ${activeDevice.ip}:`);
-    if (finalCheck !== 'BERSIHKAN') {
-      toast.info('Pembersihan log mesin dibatalkan.');
-      return;
-    }
-
     setClearingLogs(true);
     try {
       const response = await axios.post('/absensi/zkaccess/clear-logs', {
@@ -320,6 +298,7 @@ export default function ZkAccessLogs({
 
       if (response.data.status === 'success') {
         toast.success(response.data.message || 'Log mesin fisik berhasil dibersihkan!');
+        setIsClearModalOpen(false);
         // Refresh log tampilan
         fetchLogs(selectedDate, activeDevice.ip, activeDevice.port);
       } else {
@@ -460,7 +439,7 @@ export default function ZkAccessLogs({
               <p className="text-gray-500 font-mono">
                 IP: {activeDevice.ip}:{activeDevice.port} •{' '}
                 <span className={activeDevice.online ? 'text-emerald-600 font-semibold' : 'text-gray-500 font-semibold'}>
-                  {activeDevice.online ? 'Terhubung (Hijau)' : 'Offline / Standby'}
+                  {activeDevice.online ? 'Online' : 'Offline'}
                 </span>
               </p>
             </div>
@@ -764,13 +743,13 @@ export default function ZkAccessLogs({
 
               {/* Button Bersihkan Log Mesin Fisik */}
               <button
-                onClick={handleClearMachineLogs}
+                onClick={() => setIsClearModalOpen(true)}
                 disabled={clearingLogs || loading}
                 title={`Kosongkan/hapus seluruh memori log transaksi pada mesin ${activeDevice.name} (${activeDevice.ip})`}
                 className="flex items-center gap-2 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 text-xs font-semibold rounded-xl shadow-sm transition-all disabled:opacity-50 active:scale-95"
               >
-                <Trash2 className={`w-3.5 h-3.5 ${clearingLogs ? 'animate-spin' : 'text-rose-600'}`} />
-                <span>{clearingLogs ? 'Membersihkan...' : 'Bersihkan Log Mesin'}</span>
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <span>Bersihkan Log Mesin</span>
               </button>
             </div>
           </div>
@@ -1025,6 +1004,87 @@ export default function ZkAccessLogs({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Konfirmasi Pembersihan Log Mesin Fisik */}
+      {isClearModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full border border-gray-100 overflow-hidden transform transition-all p-6">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Confirmation</h3>
+                  <p className="text-xs text-gray-500">Pembersihan Memori Mesin Absensi</p>
+                </div>
+              </div>
+              <button
+                onClick={() => !clearingLogs && setIsClearModalOpen(false)}
+                disabled={clearingLogs}
+                className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors disabled:opacity-50"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="py-5 space-y-4 text-sm text-gray-600">
+              <p>
+                Apakah Anda yakin ingin mengosongkan seluruh rekaman log absensi di dalam memori perangkat fisik berikut?
+              </p>
+
+              <div className="p-3.5 bg-gray-50 rounded-xl border border-gray-200 space-y-1.5 font-mono text-xs">
+                <div className="flex justify-between text-gray-700 font-sans">
+                  <span className="text-gray-500">Perangkat:</span>
+                  <span className="font-semibold text-gray-900">{activeDevice.name}</span>
+                </div>
+                <div className="flex justify-between text-gray-700">
+                  <span className="text-gray-500 font-sans">IP / Port:</span>
+                  <span className="font-semibold text-blue-700">{activeDevice.ip}:{activeDevice.port}</span>
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs flex items-start gap-2.5">
+                <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-semibold">Perhatian Penting:</p>
+                  <p>1. Pastikan Anda telah menyinkronkan data ke tabel Kehadiran HRIS.</p>
+                  <p>2. Seluruh log transaksi di mesin fisik akan direset menjadi 0 dan tindakan ini tidak dapat dibatalkan.</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setIsClearModalOpen(false)}
+                disabled={clearingLogs}
+                className="px-4 py-2.5 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition-colors disabled:opacity-50"
+              >
+                Batal
+              </button>
+              <button
+                type="button"
+                onClick={handleClearMachineLogs}
+                disabled={clearingLogs}
+                className="flex items-center gap-1.5 px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold rounded-xl shadow-md transition-all active:scale-95 disabled:opacity-50"
+              >
+                {clearingLogs ? (
+                  <>
+                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    <span>Memproses...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Confirmation</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

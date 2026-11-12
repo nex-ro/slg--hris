@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, Eye, Plus, Clock, AlertCircle, FileText,Download, User, X, Save, ChevronLeft ,ChevronRight ,CheckCircle } from 'lucide-react';
+import { Calendar, Eye, Plus, Clock, AlertCircle, FileText,Download, User, X, Save, ChevronLeft ,ChevronRight ,CheckCircle, HelpCircle, ChevronDown, ChevronUp, UserCheck, CheckCircle2 } from 'lucide-react';
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
 import { Head, router } from '@inertiajs/react';
 import { toast } from 'react-toastify';
@@ -10,6 +10,7 @@ function UserCuti({ jatahCuti = [], pemakaianCuti = {}, paginationLinks = [] }) 
   const [selectedCuti, setSelectedCuti] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [showFormModal, setShowFormModal] = useState(false);
+  const [showPetunjuk, setShowPetunjuk] = useState(true);
   const [rekanKerja, setRekanKerja] = useState([]);
   const [processing, setProcessing] = useState(false);
 const [approvers, setApprovers] = useState({
@@ -443,9 +444,101 @@ const formatHari = (hari) => {
     <LayoutTemplate>
       <Head title="Izin Cuti" />
 
-      <div className="p-6 max-w-7xl mx-auto">
+      <div className="p-6 max-w-7xl mx-auto space-y-6">
 
-<div className="mb-8">
+        {/* Banner Panduan / Tata Cara Melakukan Izin Cuti */}
+        <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-white rounded-xl border border-blue-200 shadow-sm overflow-hidden transition-all">
+          <div 
+            onClick={() => setShowPetunjuk(!showPetunjuk)}
+            className="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-blue-100/40 transition-colors select-none"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-lg bg-blue-600 text-white flex items-center justify-center shadow-sm">
+                <HelpCircle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-gray-900">Tata Cara Pengajuan Izin Cuti</h3>
+                <p className="text-xs text-gray-600">Pelajari alur dan langkah-langkah pengajuan cuti tahunan pegawai</p>
+              </div>
+            </div>
+            <button 
+              type="button" 
+              className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 bg-white border border-blue-200 px-3 py-1.5 rounded-lg hover:bg-blue-50 transition-colors"
+            >
+              <span>{showPetunjuk ? 'Sembunyikan' : 'Lihat Panduan'}</span>
+              {showPetunjuk ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+            </button>
+          </div>
+
+          {showPetunjuk && (
+            <div className="px-6 pb-6 pt-2 border-t border-blue-100">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-3">
+                <div className="p-4 bg-white rounded-xl border border-blue-100 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">1</span>
+                      <h4 className="text-sm font-bold text-gray-800">Cek Sisa Cuti</h4>
+                    </div>
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      Pastikan Anda memiliki <strong>Sisa Cuti (tersedia)</strong> yang cukup pada tabel Informasi Jatah Cuti di bawah sebelum mengajukan.
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-gray-100 text-[11px] text-blue-600 font-medium">
+                    ✓ Cuti bersama & pending otomatis dipotong
+                  </div>
+                </div>
+
+                <div className="p-4 bg-white rounded-xl border border-blue-100 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">2</span>
+                      <h4 className="text-sm font-bold text-gray-800">Isi Form Pengajuan</h4>
+                    </div>
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      Klik tombol <strong>"Ajukan Cuti Baru"</strong>, pilih tanggal mulai & selesai (atau cuti setengah hari), serta tuliskan alasan cuti.
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-gray-100 text-[11px] text-blue-600 font-medium">
+                    ✓ Hari libur/weekend tidak dihitung
+                  </div>
+                </div>
+
+                <div className="p-4 bg-white rounded-xl border border-blue-100 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">3</span>
+                      <h4 className="text-sm font-bold text-gray-800">Delegasi Tugas</h4>
+                    </div>
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      Pilih rekan kerja yang akan menerima limpahan tugas beserta rincian pekerjaan yang dialihkan selama Anda cuti.
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-gray-100 text-[11px] text-blue-600 font-medium">
+                    ✓ Menjaga kelancaran operasional
+                  </div>
+                </div>
+
+                <div className="p-4 bg-white rounded-xl border border-blue-100 shadow-sm flex flex-col justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-6 h-6 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">4</span>
+                      <h4 className="text-sm font-bold text-gray-800">Alur Persetujuan</h4>
+                    </div>
+                    <p className="text-xs text-gray-600 leading-relaxed">
+                      Pilih Atasan, HRD, dan Approver Final (Direksi/Pimpinan). Pantau status persetujuan pada tabel Riwayat Pengajuan.
+                    </p>
+                  </div>
+                  <div className="mt-3 pt-2 border-t border-gray-100 text-[11px] text-emerald-600 font-medium flex items-center gap-1">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Dapat download PDF formulir jika disetujui</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="mb-8">
   {jatahCuti.length > 0 && jatahCuti[0] && (
     <div className="bg-white rounded-lg shadow-md overflow-hidden">
       <div className="px-6 py-4 bg-blue-600 text-white">
@@ -503,7 +596,7 @@ const formatHari = (hari) => {
     <td className="py-2 text-sm text-gray-700">Dapat dipinjam cuti tahun ke {Number(jatahCuti[0].tahun_ke) + 1}
 </td>
     <td className="py-2 text-sm text-gray-900 font-medium">
-      : {formatHari(jatahCuti[1].sisa_cuti) || '0'} hari
+      : {formatHari(jatahCuti[1]?.sisa_cuti || 0)} hari
     </td>
   </tr>
   

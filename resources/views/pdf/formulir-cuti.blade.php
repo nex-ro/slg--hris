@@ -129,6 +129,11 @@
             color: #666;
             margin-top: 3px;
         }
+        .signature-role {
+            font-size: 9px;
+            color: #666;
+            margin-top: 2px;
+        }
         .status-badge {
             display: inline-block;
             padding: 3px 10px;
@@ -269,20 +274,21 @@
     <div class="signature-row">
         <!-- 1. Pemohon -->
         <div class="signature-col">
-            <div class="signature-title">Pemohon</div>
+            <div class="signature-title">{{ $user->name }}</div>
             <div class="signature-box">
                 @if($user->ttd && file_exists(public_path('storage/ttd/' . $user->ttd)))
                     <img src="{{ public_path('storage/ttd/' . $user->ttd) }}" alt="TTD">
                 @endif
             </div>
             <div class="signature-name">{{ $user->name }}</div>
+            <div class="signature-role">Pemohon</div>
             <div class="signature-date">{{ \Carbon\Carbon::parse($pemakaianCuti->tanggal_pengajuan)->format('d/m/Y') }}</div>
         </div>
 
         <!-- 2. Diketahui Atasan -->
         @if($pemakaianCuti->diketahui_atasan)
         <div class="signature-col">
-            <div class="signature-title">Diketahui Atasan</div>
+            <div class="signature-title">{{ $pemakaianCuti->diketahuiAtasanUser->name ?? 'Atasan' }}</div>
             <div class="signature-box">
                 @if($pemakaianCuti->status_diketahui_atasan == 'disetujui')
                     @if($pemakaianCuti->diketahuiAtasanUser && $pemakaianCuti->diketahuiAtasanUser->ttd && file_exists(public_path('storage/ttd/' . $pemakaianCuti->diketahuiAtasanUser->ttd)))
@@ -295,6 +301,7 @@
                 @endif
             </div>
             <div class="signature-name">{{ $pemakaianCuti->diketahuiAtasanUser->name ?? 'Atasan' }}</div>
+            <div class="signature-role">Diketahui Atasan</div>
             <div class="signature-date">
                 @if($pemakaianCuti->tanggal_diketahui_atasan)
                     {{ \Carbon\Carbon::parse($pemakaianCuti->tanggal_diketahui_atasan)->format('d/m/Y') }}
@@ -303,10 +310,10 @@
         </div>
         @endif
 
-        <!-- 3. Diketahui HRD (YANG HILANG INI) -->
+        <!-- 3. Diketahui HRD -->
         @if($pemakaianCuti->diketahui_hrd)
         <div class="signature-col">
-            <div class="signature-title">Diketahui HRD</div>
+            <div class="signature-title">{{ $pemakaianCuti->diketahuiHrdUser->name ?? 'HRD' }}</div>
             <div class="signature-box">
                 @if($pemakaianCuti->status_diketahui_hrd == 'disetujui')
                     @if($pemakaianCuti->diketahuiHrdUser && $pemakaianCuti->diketahuiHrdUser->ttd && file_exists(public_path('storage/ttd/' . $pemakaianCuti->diketahuiHrdUser->ttd)))
@@ -319,6 +326,7 @@
                 @endif
             </div>
             <div class="signature-name">{{ $pemakaianCuti->diketahuiHrdUser->name ?? 'HRD' }}</div>
+            <div class="signature-role">Diketahui HRD</div>
             <div class="signature-date">
                 @if($pemakaianCuti->tanggal_diketahui_hrd)
                     {{ \Carbon\Carbon::parse($pemakaianCuti->tanggal_diketahui_hrd)->format('d/m/Y') }}
@@ -327,10 +335,10 @@
         </div>
         @endif
 
-        <!-- 4. Disetujui Pimpinan -->
+        <!-- 4. Disetujui Pimpinan / Direktur -->
         @if($pemakaianCuti->disetujui)
         <div class="signature-col">
-            <div class="signature-title">Disetujui Oleh</div>
+            <div class="signature-title">{{ $pemakaianCuti->disetujuiUser->name ?? 'Pimpinan' }}</div>
             <div class="signature-box">
                 @if($pemakaianCuti->status_disetujui == 'disetujui')
                     @if($pemakaianCuti->disetujuiUser && $pemakaianCuti->disetujuiUser->ttd && file_exists(public_path('storage/ttd/' . $pemakaianCuti->disetujuiUser->ttd)))
@@ -343,6 +351,7 @@
                 @endif
             </div>
             <div class="signature-name">{{ $pemakaianCuti->disetujuiUser->name ?? 'Direktur' }}</div>
+            <div class="signature-role">Disetujui Direktur/Pimpinan</div>
             <div class="signature-date">
                 @if($pemakaianCuti->tanggal_disetujui)
                     {{ \Carbon\Carbon::parse($pemakaianCuti->tanggal_disetujui)->format('d/m/Y') }}

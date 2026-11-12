@@ -1173,6 +1173,7 @@ public function update(Request $request, $id)
         $user = auth()->user();
         
         $rekanKerja = User::where('active', 1)
+            ->whereNull('tanggal_keluar')
             ->where('id', '!=', $user->id)
             ->orderBy('name')
             ->get(['id', 'name', 'jabatan']);
@@ -1184,6 +1185,7 @@ public function update(Request $request, $id)
     {
         $user = auth()->user();
         $approvers = User::where('active', 1)
+            ->whereNull('tanggal_keluar')
             ->where('id', '!=', $user->id)
             ->orderBy('name')
             ->get(['id', 'name', 'jabatan']);
