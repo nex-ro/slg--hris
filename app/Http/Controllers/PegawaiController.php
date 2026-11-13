@@ -3,8 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Resign;
-use App\Models\Notification;
-use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
@@ -62,20 +60,13 @@ class PegawaiController extends Controller
         ]);
 
         try {
-            $resign = Resign::create([
+            Resign::create([
                 'uid' => Auth::id(),
                 'tanggal_keluar' => $validated['tanggal_keluar'],
                 'alasan' => $validated['alasan'],
                 'status' => 'Diajukan', 
                 'dokument' => null,
             ]);
-
-            // Kirim notifikasi ke semua HRD
-            $this->sendNotificationToHRD(
-                'Pengajuan Resign Baru',
-                Auth::user()->name . ' telah mengajukan resign dengan tanggal keluar ' . date('d M Y', strtotime($validated['tanggal_keluar'])),
-                '/hrd/resign/' . $resign->id
-            );
 
             return redirect()->back()->with('success', 'Pengajuan resign berhasil diajukan');
         } catch (\Exception $e) {
@@ -105,13 +96,6 @@ class PegawaiController extends Controller
                 'tanggal_keluar' => $validated['tanggal_keluar'],
                 'alasan' => $validated['alasan'],
             ]);
-
-            // Kirim notifikasi ke semua HRD
-            $this->sendNotificationToHRD(
-                'Pengajuan Resign Diperbarui',
-                Auth::user()->nama . ' telah memperbarui pengajuan resign dengan tanggal keluar ' . date('d M Y', strtotime($validated['tanggal_keluar'])),
-                '/hrd/resign/' . $resign->id
-            );
 
             return redirect()->back()->with('success', 'Pengajuan resign berhasil diperbarui');
         } catch (\Exception $e) {
@@ -185,34 +169,6 @@ class PegawaiController extends Controller
             'isDokument' => true
         ]);
 
-        // Kirim notifikasi ke semua HRD
-        $this->sendNotificationToHRD(
-            'Exit Interview Diselesaikan',
-            Auth::user()->nama . ' telah menyelesaikan exit interview untuk pengajuan resign',
-            '/hrd/resign/' . $resign->id
-        );
-
         return redirect('/dokumen')->with('success', 'Exit interview berhasil disimpan!');
-    }
-
-    /**
-     * Kirim notifikasi ke semua user dengan role HRD
-     */
-    private function sendNotificationToHRD($title, $message, $link)
-    {
-        // Ambil semua user dengan role HRD
-        $hrdUsers = User::where('role', 'hrd')->get();
-
-        foreach ($hrdUsers as $hrd) {
-            Notification::create([
-                'user_id' => Auth::id(), // Pengirim (user yang login)
-                'to_uid' => null,
-                'title' => $title,
-                'message' => $message,
-                'link' => $link,
-                'is_read' => false,
-                'type' => 'hrd'
-            ]);
-        }
     }
 }

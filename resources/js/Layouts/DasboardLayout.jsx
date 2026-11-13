@@ -1,26 +1,21 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, usePage } from '@inertiajs/react';
 import {
-  Search, User, Settings, Bell, LayoutDashboard, Users, Calendar, LogOut, LogIn,
+  Search, User, Settings, LayoutDashboard, Users, Calendar, LogOut, LogIn,
   Menu, X, Home, ChevronRight, ChevronDown, Activity, BarChart3, FileText,
   List, ClipboardCheck, XCircle, FolderOpen, Calendar1, LogOutIcon, Clock, Thermometer, CalendarClock, MapPin,
   Umbrella,
   UmbrellaIcon,
   Cpu
 } from 'lucide-react';
-import { toast, ToastContainer } from 'react-toastify';
+import { ToastContainer } from 'react-toastify';
 
 const DashboardLayouts = ({ children }) => {
   const { auth = {}, url } = usePage().props;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
-  const [notifications, setNotifications] = useState([]);
-  const [notificationCount, setNotificationCount] = useState(0);
-  const [loadingNotifications, setLoadingNotifications] = useState(false);
   const [expandedMenu, setExpandedMenu] = useState(null);
-  const [notificationOpen, setNotificationOpen] = useState(false);
-  const notificationRef = useRef(null);
   const dropdownRef = useRef(null);
 
   const currentPath = usePage().url;
@@ -28,175 +23,6 @@ const DashboardLayouts = ({ children }) => {
   const userId = auth?.user?.id;
   const userDivisi = auth?.user?.divisi;
 
-
-  const toggleNotification = () => {
-    setNotificationOpen(!notificationOpen);
-    if (!notificationOpen) {
-      fetchNotifications();
-    }
-  };
-
-  useEffect(() => {
-    if (auth?.user) {
-      fetchNotifications();
-      const interval = setInterval(() => {
-        fetchNotifications();
-      }, 30000);
-      return () => clearInterval(interval);
-    }
-  }, [auth?.user]);
-
-  const getCsrfToken = () => {
-    // Coba ambil dari meta tag
-    let token = document.querySelector('meta[name="csrf-token"]')?.content;
-
-    // Jika tidak ada, coba dari cookie
-    if (!token) {
-      const cookies = document.cookie.split(';');
-      for (let cookie of cookies) {
-        const [name, value] = cookie.trim().split('=');
-        if (name === 'XSRF-TOKEN') {
-          token = decodeURIComponent(value);
-          break;
-        }
-      }
-    }
-
-    return token || '';
-  };
-
-
-  const fetchNotifications = async () => {
-    if (!auth?.user) return;
-    setLoadingNotifications(true);
-    try {
-      const response = await fetch('/notifications', {
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        credentials: 'include'
-      });
-      if (response.ok) {
-        const result = await response.json();
-        setNotifications(result.data || []);
-        setNotificationCount(result.unread_count || 0);
-      }
-    } catch (error) {
-      console.error('Error fetching notifications:', error);
-    } finally {
-      setLoadingNotifications(false);
-    }
-  };
-
-  const handleNotificationClick = async (notification) => {
-    try {
-      const csrfToken = getCsrfToken();
-
-      if (!csrfToken) {
-        console.error('CSRF token not found');
-        toast.error('Terjadi kesalahan. Silakan refresh halaman.');
-        return;
-      }
-
-      const response = await fetch(`/notifications/${notification.id}/click`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        credentials: 'include',
-        body: JSON.stringify({})
-      });
-
-      if (response.ok) {
-        const result = await response.json();
-
-        // Update notification list
-        await fetchNotifications();
-
-        // Close dropdown
-        setNotificationOpen(false);
-
-        // Redirect jika link tidak kosong
-        if (result.link && result.link.trim() !== '') {
-          if (result.link.startsWith('http://') || result.link.startsWith('https://')) {
-            window.location.href = result.link;
-          } else {
-            window.location.href = result.link;
-          }
-        }
-      } else if (response.status === 419) {
-        console.error('CSRF token mismatch');
-        toast.error('Sesi Anda telah berakhir. Silakan refresh halaman.');
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
-      } else {
-        console.error('Failed to mark notification as read:', response.status);
-        toast.error('Gagal memproses notifikasi');
-      }
-    } catch (error) {
-      console.error('Error handling notification click:', error);
-      toast.error('Terjadi kesalahan jaringan');
-    }
-  };
-  const markAllAsRead = async () => {
-    try {
-      const csrfToken = getCsrfToken();
-
-      if (!csrfToken) {
-        console.error('CSRF token not found');
-        toast.error('Terjadi kesalahan. Silakan refresh halaman.');
-        return;
-      }
-
-      const response = await fetch('/notifications/mark-all-read', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-          'X-CSRF-TOKEN': csrfToken,
-          'X-Requested-With': 'XMLHttpRequest'
-        },
-        credentials: 'include',
-        body: JSON.stringify({}) // Kirim body kosong untuk POST request
-      });
-
-      if (response.ok) {
-        await fetchNotifications();
-        toast.success('Semua notifikasi telah ditandai sebagai dibaca');
-      } else if (response.status === 419) {
-        console.error('CSRF token mismatch');
-        toast.error('Sesi Anda telah berakhir. Silakan refresh halaman.');
-        // Optional: reload halaman setelah beberapa detik
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
-      } else {
-        console.error('Failed to mark all as read:', response.status);
-        toast.error('Gagal menandai notifikasi');
-      }
-    } catch (error) {
-      console.error('Error marking all as read:', error);
-      toast.error('Terjadi kesalahan jaringan');
-    }
-  };
-
-
-  const formatTimeAgo = (dateString) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const seconds = Math.floor((now - date) / 1000);
-    if (seconds < 60) return 'Baru saja';
-    if (seconds < 3600) return `${Math.floor(seconds / 60)} menit yang lalu`;
-    if (seconds < 86400) return `${Math.floor(seconds / 3600)} jam yang lalu`;
-    if (seconds < 604800) return `${Math.floor(seconds / 86400)} hari yang lalu`;
-    return date.toLocaleDateString('id-ID');
-  };
 
   const getMenuItems = () => {
     const hrdMenu = [
@@ -328,9 +154,6 @@ const DashboardLayouts = ({ children }) => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false);
-      }
-      if (notificationRef.current && !notificationRef.current.contains(event.target)) {
-        setNotificationOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -523,75 +346,6 @@ const DashboardLayouts = ({ children }) => {
               </div>
 
               <div className="flex items-center space-x-2">
-                <div className="relative" ref={notificationRef}>
-                  <button onClick={toggleNotification}
-                    className="relative p-2.5 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-xl">
-                    <Bell className="w-5 h-5" />
-                    {notificationCount > 0 && (
-                      <span className="absolute -top-1 -right-1 w-5 h-5 bg-red-500 text-white text-xs rounded-full flex items-center justify-center font-medium">
-                        {notificationCount}
-                      </span>
-                    )}
-                  </button>
-
-                  {notificationOpen && (
-                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-200 z-40 max-h-96 overflow-hidden flex flex-col">
-                      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
-                        <h3 className="text-sm font-semibold text-gray-900">Notifikasi</h3>
-                        {notificationCount > 0 && (
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-blue-600 font-medium">{notificationCount} Baru</span>
-                            <button onClick={markAllAsRead} className="text-xs text-gray-600 hover:text-blue-600 font-medium">
-                              Tandai Semua
-                            </button>
-                          </div>
-                        )}
-                      </div>
-                      <div className="overflow-y-auto max-h-80">
-                        {loadingNotifications ? (
-                          <div className="px-4 py-8 text-center">
-                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-                            <p className="text-sm text-gray-600 mt-2">Memuat notifikasi...</p>
-                          </div>
-                        ) : notifications.length === 0 ? (
-                          <div className="px-4 py-8 text-center">
-                            <Bell className="w-12 h-12 text-gray-300 mx-auto mb-2" />
-                            <p className="text-sm text-gray-600">Tidak ada notifikasi</p>
-                          </div>
-                        ) : (
-                          <div className="divide-y divide-gray-100">
-                            {notifications.map((notif) => (
-                              <div key={notif.id} onClick={() => handleNotificationClick(notif)}
-                                className={`px-4 py-3 hover:bg-gray-50 cursor-pointer transition-colors ${!notif.is_read ? 'bg-blue-50' : ''}`}>
-                                <div className="flex items-start space-x-3">
-                                  <div className={`w-2 h-2 rounded-full mt-2 flex-shrink-0 ${!notif.is_read ? 'bg-blue-500' : 'bg-gray-300'}`}></div>
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                                      <p className={`text-sm ${!notif.is_read ? 'font-semibold text-gray-900' : 'font-medium text-gray-700'}`}>
-                                        {notif.title}
-                                      </p>
-                                      {notif.type && (
-                                        <span className={`text-xs px-2 py-0.5 rounded-full ${notif.type === 'all' ? 'bg-green-100 text-green-700' :
-                                          notif.type === 'hrd' ? 'bg-blue-100 text-blue-700' :
-                                            'bg-purple-100 text-purple-700'}`}>
-                                          {notif.type === 'all' ? 'Semua' : notif.type === 'hrd' ? 'HRD' : 'Atasan'}
-                                        </span>
-                                      )}
-                                    </div>
-                                    <p className="text-xs text-gray-600 mt-1 line-clamp-2">{notif.message}</p>
-                                    <p className="text-xs text-gray-400 mt-1">{formatTimeAgo(notif.created_at)}</p>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-
                 <div className="relative" ref={dropdownRef}>
                   <button onClick={() => setDropdownOpen(!dropdownOpen)}
                     className="flex items-center space-x-2 p-2 text-gray-600 hover:bg-gray-100 rounded-xl">

@@ -47,6 +47,11 @@ class PemakaianCuti extends Model
     }
     public function updateStatusFinal()
 {
+    if (!$this->diketahui_atasan && !$this->diketahui_hrd && !$this->disetujui) {
+        $this->status_final = 'diproses';
+        return 'diproses';
+    }
+
     // Cek apakah ada yang ditolak
     if ($this->status_diketahui_atasan === 'ditolak' || 
         $this->status_diketahui_hrd === 'ditolak' || 

@@ -15,7 +15,9 @@ function CutiHead({
   validasiCuti = [], 
   cutiSayaPaginationLinks = [], 
   validasiPaginationLinks = [],
-  users = [] 
+  users = [],
+  tahunPengajuanList = [],
+  filters = {}
 }) {
   const cutiSayaData = Array.isArray(cutiSaya) 
     ? cutiSaya 
@@ -34,8 +36,6 @@ function CutiHead({
   const [loadingOverlay, setLoadingOverlay] = useState(false);
   const itemsPerPagePengajuan = 10;
   const [searchCutiSaya, setSearchCutiSaya] = useState('');
-const [currentPageCutiSaya, setCurrentPageCutiSaya] = useState(1);
-const itemsPerPageCutiSaya = 10;
 const [searchPengajuan, setSearchPengajuan] = useState('');
 const [currentPagePengajuan, setCurrentPagePengajuan] = useState(1);
 
@@ -62,6 +62,17 @@ const itemsPerPageValidasi = 10;
   const [workDays, setWorkDays] = useState(0);
 
   const currentUserId = auth?.user?.id;
+
+  const updateCutiSayaFilter = (key, value) => {
+    router.get(route('cuti.head'), {
+      bulan: key === 'bulan' ? value : filters.bulan,
+      tahun: key === 'tahun' ? value : filters.tahun
+    }, {
+      preserveState: true,
+      preserveScroll: true,
+      replace: true
+    });
+  };
 
   const formatDate = (date) => {
     if (!date) return '-';
@@ -114,11 +125,8 @@ const filteredApprovalCuti = validasiCutiData.filter(cuti => {
 
 
 
-const totalPagesCutiSaya = Math.ceil(filteredCutiSaya.length / itemsPerPageCutiSaya);
-const paginatedCutiSaya = filteredCutiSaya.slice(
-  (currentPageCutiSaya - 1) * itemsPerPageCutiSaya,
-  currentPageCutiSaya * itemsPerPageCutiSaya
-);
+const totalPagesCutiSaya = cutiSaya?.last_page || 1;
+const paginatedCutiSaya = filteredCutiSaya;
    // ✅ Filter Validasi Cuti - HANYA cuti yang butuh approval dari user login
 const filteredValidasiCuti = validasiCutiData.filter(cuti => {
   // Cek apakah user adalah approver
@@ -822,11 +830,35 @@ const paginatedValidasiCuti = filteredValidasiCuti.slice(
             value={searchCutiSaya}  
             onChange={(e) => {
               setSearchCutiSaya(e.target.value);  
-              setCurrentPageCutiSaya(1); 
             }}
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
+        <select
+          value={filters.bulan || ''}
+          onChange={(e) => updateCutiSayaFilter('bulan', e.target.value)}
+          className="w-full md:w-44 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          aria-label="Filter bulan pengajuan"
+        >
+          <option value="">Semua Bulan</option>
+          {[
+            'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+            'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+          ].map((bulan, index) => (
+            <option key={index + 1} value={String(index + 1)}>{bulan}</option>
+          ))}
+        </select>
+        <select
+          value={filters.tahun || ''}
+          onChange={(e) => updateCutiSayaFilter('tahun', e.target.value)}
+          className="w-full md:w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          aria-label="Filter tahun pengajuan"
+        >
+          <option value="">Semua Tahun</option>
+          {tahunPengajuanList.map(tahun => (
+            <option key={tahun} value={tahun}>{tahun}</option>
+          ))}
+        </select>
         <button
           onClick={openFormModal}
           className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors whitespace-nowrap"
@@ -855,7 +887,7 @@ const paginatedValidasiCuti = filteredValidasiCuti.slice(
             paginatedCutiSaya.map((cuti, index) => (
               <tr key={cuti.id} className="hover:bg-gray-50">
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                  {(currentPageCutiSaya - 1) * itemsPerPageCutiSaya + index + 1}
+                  {(cutiSaya.from || 1) + index}
                 </td>
                 <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                   {formatDate(cuti.tanggal_pengajuan)}
@@ -921,7 +953,9 @@ const paginatedValidasiCuti = filteredValidasiCuti.slice(
           ) : (
             <tr>
               <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
-                {searchCutiSaya ? 'Tidak ada hasil yang ditemukan' : 'Belum ada pengajuan cuti'}
+                {searchCutiSaya || filters.bulan || filters.tahun
+                  ? 'Tidak ada hasil yang ditemukan'
+                  : 'Belum ada pengajuan cuti'}
               </td>
             </tr>
           )}
@@ -929,28 +963,28 @@ const paginatedValidasiCuti = filteredValidasiCuti.slice(
       </table>
 
       {/* Pagination Cuti Saya */}
-      {filteredCutiSaya.length > itemsPerPageCutiSaya && ( 
+      {totalPagesCutiSaya > 1 && (
         <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-between bg-gray-50">
           <div className="text-sm text-gray-700">
             Menampilkan{' '}
             <span className="font-medium">
-              {(currentPageCutiSaya - 1) * itemsPerPageCutiSaya + 1}
+              {cutiSaya.from || 0}
             </span>
             {' '}-{' '}
             <span className="font-medium">
-              {Math.min(currentPageCutiSaya * itemsPerPageCutiSaya, filteredCutiSaya.length)}
+              {cutiSaya.to || 0}
             </span>
             {' '}dari{' '}
-            <span className="font-medium">{filteredCutiSaya.length}</span>
+            <span className="font-medium">{cutiSaya.total || filteredCutiSaya.length}</span>
             {' '}pengajuan
           </div>
           
           <div className="flex gap-2">
             <button
-              onClick={() => setCurrentPageCutiSaya(prev => Math.max(1, prev - 1))}
-              disabled={currentPageCutiSaya === 1}
+              onClick={() => handlePageChange(cutiSaya.prev_page_url)}
+              disabled={!cutiSaya.prev_page_url}
               className={`px-3 py-2 text-sm border rounded transition-colors ${
-                currentPageCutiSaya === 1
+                !cutiSaya.prev_page_url
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   : 'bg-white text-gray-700 hover:bg-gray-50'
               }`}
@@ -961,9 +995,11 @@ const paginatedValidasiCuti = filteredValidasiCuti.slice(
             {[...Array(totalPagesCutiSaya)].map((_, i) => (
               <button
                 key={i + 1}
-                onClick={() => setCurrentPageCutiSaya(i + 1)}
+                onClick={() => handlePageChange(
+                  cutiSayaPaginationLinks.find(link => Number(link.label) === i + 1)?.url
+                )}
                 className={`px-3 py-2 text-sm border rounded transition-colors ${
-                  currentPageCutiSaya === i + 1
+                  cutiSaya.current_page === i + 1
                     ? 'bg-blue-600 text-white border-blue-600 font-semibold'
                     : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
                 }`}
@@ -973,10 +1009,10 @@ const paginatedValidasiCuti = filteredValidasiCuti.slice(
             ))}
             
             <button
-              onClick={() => setCurrentPageCutiSaya(prev => Math.min(totalPagesCutiSaya, prev + 1))}
-              disabled={currentPageCutiSaya === totalPagesCutiSaya}
+              onClick={() => handlePageChange(cutiSaya.next_page_url)}
+              disabled={!cutiSaya.next_page_url}
               className={`px-3 py-2 text-sm border rounded transition-colors ${
-                currentPageCutiSaya === totalPagesCutiSaya
+                !cutiSaya.next_page_url
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
                   : 'bg-white text-gray-700 hover:bg-gray-50'
               }`}

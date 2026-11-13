@@ -13,7 +13,6 @@ use Illuminate\Http\Request;
 use App\Http\Controllers\ResignController;
 use App\Http\Controllers\PegawaiController;
 use App\Models\Resign;
-use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\SakitController;
 use App\Http\Controllers\IzinController;
 use App\Http\Controllers\CutiController;
@@ -46,15 +45,6 @@ Route::get('/', function () {
 
     return redirect('/login');
 });
-Route::middleware('auth:sanctum')->group(function () {
-    Route::get('/notifications', [NotificationController::class, 'index']);
-    Route::get('/notifications/unread-count', [NotificationController::class, 'unreadCount']);
-    Route::post('/notifications/{id}/read', [NotificationController::class, 'markAsRead']);
-    Route::post('/notifications/{id}/click', [NotificationController::class, 'markAsReadOnClick']); // NEW
-    Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllAsRead']);
-    Route::delete('/notifications/{id}', [NotificationController::class, 'destroy']);
-});
-
 Route::middleware('pegawai')->group(function () {
     Route::get('/dashboard', [UserController::class, 'index'])->middleware(['auth', 'verified'])->name('dashboard');
     Route::get('/dokumen/file/resign/{id}', function ($id) {

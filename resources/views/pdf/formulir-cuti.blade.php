@@ -259,7 +259,7 @@
     @if($pemakaianCuti->catatan)
     <table class="info-table" style="margin-top: 15px; margin-bottom: 15px;">
         <tr>
-            <td style="width: 35%; vertical-align: top; padding-top: 10px; font-weight: bold; font-size: 11px;">Catatan dari Pimpinan</td>
+            <td style="width: 35%; vertical-align: top; padding-top: 10px; font-weight: bold; font-size: 11px;">Catatan Persetujuan</td>
             <td></td>
         </tr>
         <tr>

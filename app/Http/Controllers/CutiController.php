@@ -296,6 +296,24 @@ class CutiController extends Controller
     ]);
 
     $user = auth()->user();
+    $approverIds = array_filter([
+        $validated['diketahui_atasan'] ?? null,
+        $validated['diketahui_hrd'] ?? null,
+        $validated['disetujui'] ?? null,
+    ]);
+
+    if (empty($approverIds)) {
+        return back()->withErrors([
+            'error' => 'Minimal pilih satu approver (Atasan, HRD, atau Pimpinan).'
+        ]);
+    }
+
+    if (in_array((string) $user->id, array_map('strval', $approverIds), true)) {
+        return back()->withErrors([
+            'error' => 'Anda tidak dapat menjadi approver untuk pengajuan cuti sendiri.'
+        ]);
+    }
+
     $jatahCuti = JatahCuti::findOrFail($validated['jatah_cuti_id']);
     
     // Validasi ownership
@@ -548,14 +566,8 @@ public function approval(Request $request)
 
         // Simpan catatan
         if (!empty($validated['catatan'])) {
-            $approvalLabel = match($validated['approval_type']) {
-                'atasan' => 'Atasan',
-                'hrd' => 'HRD',
-                'pimpinan' => 'Pimpinan',
-                default => 'User'
-            };
             $timestamp = now()->format('d/m/Y H:i');
-            $catatanBaru = "[{$approvalLabel} - {$timestamp}]\n{$validated['catatan']}\n\n";
+            $catatanBaru = "[{$user->name} - {$timestamp}]\n{$validated['catatan']}\n\n";
             $pemakaianCuti->catatan = $catatanBaru . ($pemakaianCuti->catatan ?? '');
         }
 
@@ -1357,9 +1369,13 @@ public function downloadPdf($id)
 }
 
 
-public function indexHead()
+public function indexHead(Request $request)
 {
     $user = auth()->user();
+    $filters = $request->validate([
+        'bulan' => 'nullable|integer|between:1,12',
+        'tahun' => 'nullable|integer|min:1900|max:2100',
+    ]);
     
     $tmk = \Carbon\Carbon::parse($user->tmk);
     $today = \Carbon\Carbon::now();
@@ -1560,14 +1576,25 @@ public function indexHead()
     }
     
     // ✅ QUERY 1: Pengajuan Cuti User Sendiri (Tab "Cuti Saya")
-    $cutiSaya = PemakaianCuti::with([
+    $cutiSayaQuery = PemakaianCuti::with([
         'user', 'jatahCuti', 'penerimaTugas',
         'diketahuiAtasanUser', 'diketahuiHrdUser', 'disetujuiUser'
     ])
-    ->where('uid', $user->id)
+    ->where('uid', $user->id);
+
+    if (!empty($filters['bulan'])) {
+        $cutiSayaQuery->whereMonth('tanggal_pengajuan', $filters['bulan']);
+    }
+
+    if (!empty($filters['tahun'])) {
+        $cutiSayaQuery->whereYear('tanggal_pengajuan', $filters['tahun']);
+    }
+
+    $cutiSaya = $cutiSayaQuery
     ->orderBy('tanggal_pengajuan', 'desc')
     ->orderBy('created_at', 'desc')
     ->paginate(10, ['*'], 'cuti_saya_page')
+    ->withQueryString()
     ->through(function($item) {
         return [
             'id' => $item->id,
@@ -1693,6 +1720,16 @@ public function indexHead()
         ->where('id', '!=', $user->id)
         ->orderBy('name', 'asc')
         ->get();
+
+    $tahunPengajuanList = PemakaianCuti::where('uid', $user->id)
+        ->whereNotNull('tanggal_pengajuan')
+        ->pluck('tanggal_pengajuan')
+        ->map(function ($tanggal) {
+            return \Carbon\Carbon::parse($tanggal)->year;
+        })
+        ->unique()
+        ->sortDesc()
+        ->values();
     
     return Inertia::render('Atasan/CutiHead', [
         'jatahCuti' => $jatahCutiData,
@@ -1700,6 +1737,11 @@ public function indexHead()
         'validasiCuti' => $validasiCuti,
         'cutiSayaPaginationLinks' => $cutiSaya->linkCollection()->toArray(),
         'validasiPaginationLinks' => $validasiCuti->linkCollection()->toArray(),
+        'tahunPengajuanList' => $tahunPengajuanList,
+        'filters' => [
+            'bulan' => $filters['bulan'] ?? '',
+            'tahun' => $filters['tahun'] ?? '',
+        ],
         'users' => $users,
         'periodInfo' => [
             'current' => $currentPeriod,
@@ -1900,7 +1942,7 @@ public function updateStatusDirect(Request $request, $id)
         // Tambahkan catatan
         if (!empty($validated['catatan'])) {
             $timestamp = now()->format('d/m/Y H:i');
-            $catatanBaru = "[Edit Langsung oleh HRD - {$timestamp}]\n";
+            $catatanBaru = "[Edit Langsung oleh {$user->name} - {$timestamp}]\n";
             $catatanBaru .= $validated['catatan'] . "\n\n";
             $pemakaianCuti->catatan = $catatanBaru . ($pemakaianCuti->catatan ?? '');
         }

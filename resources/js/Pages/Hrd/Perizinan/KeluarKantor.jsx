@@ -488,7 +488,6 @@ const getSelectedHeadName = () => {
       });
     };
 
-  // Tambahkan di akhir fungsi fetchPerizinans (opsional, jika ingin notifikasi saat refresh):
   const fetchPerizinans = async () => {
     setLoading(true);
     try {

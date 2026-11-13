@@ -21,6 +21,8 @@ function Cuti({ jatahCuti, users, tahunList, filters = {}, pemakaianCuti = [], a
   const [selectedUserGroup, setSelectedUserGroup] = useState(null);
   const [searchPengajuan, setSearchPengajuan] = useState('');
   const [currentPagePengajuan, setCurrentPagePengajuan] = useState(1);
+  const [selectedBulanPengajuan, setSelectedBulanPengajuan] = useState('');
+  const [selectedTahunPengajuan, setSelectedTahunPengajuan] = useState('');
   const itemsPerPagePengajuan = 10;
   const [searchJatah, setSearchJatah] = useState('');
   const [currentPageJatah, setCurrentPageJatah] = useState(1);
@@ -1296,12 +1298,25 @@ const calculateWorkDays = (startDate, endDate, isHalfDay) => {
 
 // Filter & Pagination
 const filteredPengajuanCuti = pemakaianCutiArray.filter(cuti => {
+  const tanggalPengajuan = String(cuti.tanggal_pengajuan || '');
+  const tahunPengajuan = tanggalPengajuan.slice(0, 4);
+  const bulanPengajuan = tanggalPengajuan.slice(5, 7);
+
+  if (selectedTahunPengajuan && tahunPengajuan !== selectedTahunPengajuan) return false;
+  if (selectedBulanPengajuan && bulanPengajuan !== selectedBulanPengajuan.padStart(2, '0')) return false;
   if (!searchPengajuan) return true;
+
   const searchLower = searchPengajuan.toLowerCase();
   return cuti.user?.name?.toLowerCase().includes(searchLower) ||
          cuti.user?.email?.toLowerCase().includes(searchLower) ||
          cuti.alasan?.toLowerCase().includes(searchLower);
 });
+
+const tahunPengajuanList = [...new Set(
+  pemakaianCutiArray
+    .map(cuti => String(cuti.tanggal_pengajuan || '').slice(0, 4))
+    .filter(tahun => /^\d{4}$/.test(tahun))
+)].sort((a, b) => b.localeCompare(a));
 
 const totalPagesPengajuan = Math.ceil(filteredPengajuanCuti.length / itemsPerPagePengajuan);
 const paginatedPengajuanCuti = filteredPengajuanCuti.slice(
@@ -1630,6 +1645,49 @@ const handlePageChangePengajuan = (page) => {
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
+        <select
+          value={selectedBulanPengajuan}
+          onChange={(e) => {
+            setSelectedBulanPengajuan(e.target.value);
+            setCurrentPagePengajuan(1);
+          }}
+          className="w-full md:w-44 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          aria-label="Filter bulan pengajuan"
+        >
+          <option value="">Semua Bulan</option>
+          {[
+            'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+            'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'
+          ].map((bulan, index) => (
+            <option key={index + 1} value={String(index + 1)}>{bulan}</option>
+          ))}
+        </select>
+        <select
+          value={selectedTahunPengajuan}
+          onChange={(e) => {
+            setSelectedTahunPengajuan(e.target.value);
+            setCurrentPagePengajuan(1);
+          }}
+          className="w-full md:w-32 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          aria-label="Filter tahun pengajuan"
+        >
+          <option value="">Semua Tahun</option>
+          {tahunPengajuanList.map(tahun => (
+            <option key={tahun} value={tahun}>{tahun}</option>
+          ))}
+        </select>
+        {(selectedBulanPengajuan || selectedTahunPengajuan) && (
+          <button
+            onClick={() => {
+              setSelectedBulanPengajuan('');
+              setSelectedTahunPengajuan('');
+              setCurrentPagePengajuan(1);
+            }}
+            className="px-3 py-2 text-sm text-gray-600 hover:text-gray-800 whitespace-nowrap"
+          >
+            Hapus Filter
+          </button>
+        )}
         {searchPengajuan && (
           <button
             onClick={() => handleSearchPengajuan('')}
@@ -1648,9 +1706,9 @@ const handlePageChangePengajuan = (page) => {
           Tambah Pengajuan Cuti
         </button>
       </div>
-      {searchPengajuan && (
+      {(searchPengajuan || selectedBulanPengajuan || selectedTahunPengajuan) && (
         <p className="text-sm text-gray-600 mt-2">
-          Ditemukan {filteredPengajuanCuti.length} hasil dari pencarian "{searchPengajuan}"
+          Ditemukan {filteredPengajuanCuti.length} pengajuan
         </p>
       )}
     </div>

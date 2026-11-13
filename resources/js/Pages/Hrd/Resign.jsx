@@ -11,7 +11,7 @@ const Resign = ({ resigns: initialResigns = [], users: initialUsers = [] }) => {
   const [showModal, setShowModal] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
   const [selectedResign, setSelectedResign] = useState(null);
-  const [notification, setNotification] = useState(null);
+  const [feedback, setFeedback] = useState(null);
 
   const [formData, setFormData] = useState({
     uid: '',
@@ -65,9 +65,9 @@ const Resign = ({ resigns: initialResigns = [], users: initialUsers = [] }) => {
     });
   }, [users, userSearchQuery]);
 
-  const showNotification = (message, type = 'success') => {
-    setNotification({ message, type });
-    setTimeout(() => setNotification(null), 3000);
+  const showFeedback = (message, type = 'success') => {
+    setFeedback({ message, type });
+    setTimeout(() => setFeedback(null), 3000);
   };
 
   const handleInputChange = (e) => {
@@ -86,7 +86,7 @@ const Resign = ({ resigns: initialResigns = [], users: initialUsers = [] }) => {
     e.preventDefault();
     
     if (!formData.uid || !formData.tanggal_resign || !formData.alasan || formData.isDokument === null) {
-      showNotification('Semua field wajib diisi', 'error');
+      showFeedback('Semua field wajib diisi', 'error');
       return;
     }
     
@@ -104,10 +104,10 @@ const Resign = ({ resigns: initialResigns = [], users: initialUsers = [] }) => {
           isDokument: null,
           status: 'Diproses'
         });
-        showNotification('Data resign berhasil ditambahkan');
+        showFeedback('Data resign berhasil ditambahkan');
       },
       onError: (errors) => {
-        showNotification(errors.message || 'Terjadi kesalahan', 'error');
+        showFeedback(errors.message || 'Terjadi kesalahan', 'error');
       }
     });
   };
@@ -131,10 +131,10 @@ const Resign = ({ resigns: initialResigns = [], users: initialUsers = [] }) => {
             resign.id === id ? { ...resign, status: newStatus } : resign
           )
         );
-        showNotification('Status berhasil diupdate');
+        showFeedback('Status berhasil diupdate');
       },
       onError: () => {
-        showNotification('Gagal mengupdate status', 'error');
+        showFeedback('Gagal mengupdate status', 'error');
       }
     });
   };
@@ -145,10 +145,10 @@ const Resign = ({ resigns: initialResigns = [], users: initialUsers = [] }) => {
         onSuccess: () => {
           // Update state lokal agar langsung berubah
           setResigns(prevResigns => prevResigns.filter(resign => resign.id !== id));
-          showNotification('Data resign berhasil dihapus');
+          showFeedback('Data resign berhasil dihapus');
         },
         onError: () => {
-          showNotification('Gagal menghapus data', 'error');
+          showFeedback('Gagal menghapus data', 'error');
         }
       });
     }
@@ -182,10 +182,9 @@ const Resign = ({ resigns: initialResigns = [], users: initialUsers = [] }) => {
             </button>
           </div>
 
-          {/* Notification */}
-          {notification && (
-            <div className={`mb-4 p-4 rounded-lg ${notification.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-              {notification.message}
+          {feedback && (
+            <div className={`mb-4 p-4 rounded-lg ${feedback.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+              {feedback.message}
             </div>
           )}
 

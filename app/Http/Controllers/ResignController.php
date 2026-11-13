@@ -7,7 +7,6 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
-use App\Models\Notification;
 use Illuminate\Support\Facades\Auth;
 
 
@@ -54,24 +53,6 @@ class ResignController extends Controller
         }
     }
     
-    // Kirim notifikasi ke user jika status berubah
-    if ($oldStatus !== $newStatus) {
-        $statusMessages = [
-            'Diproses' => 'Pengajuan resign Anda sedang diproses oleh HRD.',
-            'Ditolak' => 'Pengajuan resign Anda ditolak. Silakan hubungi HRD untuk informasi lebih lanjut.',
-            'Diterima' => 'Pengajuan resign Anda telah diterima. Tanggal efektif berhenti: ' . date('d F Y', strtotime($resign->tanggal_keluar)),
-        ];
-
-        Notification::create([
-            'user_id' => Auth::id(),
-            'to_uid' => $resign->uid,
-            'type' => 'personal',
-            'title' => "Status Resign Diubah: {$newStatus}",
-            'message' => $statusMessages[$newStatus] ?? "Status resign Anda diubah menjadi: {$newStatus}",
-            'link' => '/pegawai/resign',
-        ]);
-    }
-
     return back()->with('success', 'Status resign berhasil diupdate');
 }
 
@@ -86,7 +67,7 @@ public function store(Request $request)
     ]);
 
     try {
-        $resign = Resign::create($validated);
+        Resign::create($validated);
 
         // TAMBAHAN: Update tanggal_keluar di users jika status langsung Diterima
         if ($validated['status'] === 'Diterima') {
@@ -98,20 +79,6 @@ public function store(Request $request)
                 ]);
             }
         }
-
-        // Kirim notifikasi untuk HRD
-        $user = User::find($validated['uid']);
-        $userName = $user->name ?? $user->nama;
-        
-        Notification::create([
-            'user_id' => Auth::id(),
-            'to_uid' => null,
-            'title' => 'Pengajuan Resign Baru',
-            'message' => "{$userName} telah mengajukan resign dengan tanggal keluar {$validated['tanggal_keluar']}",
-            'link' => '/resign/manage',
-            'is_read' => false,
-            'type' => 'hrd'
-        ]);
 
         return back()->with('success', 'Pengajuan resign berhasil ditambahkan');
     } catch (\Exception $e) {
@@ -142,19 +109,6 @@ public function update(Request $request, $id)
             'alasan' => $validated['alasan'],
         ]);
 
-        // Kirim notifikasi update untuk HRD
-        $userName = Auth::user()->nama ?? Auth::user()->name;
-        
-        Notification::create([
-            'user_id' => Auth::id(),
-            'to_uid' => null, // Dikosongkan untuk notifikasi ke HRD
-            'title' => 'Pengajuan Resign Diperbarui',
-            'message' => "{$userName} telah memperbarui pengajuan resign",
-            'link' => '/resign/manage',
-            'is_read' => false,
-            'type' => 'hrd'
-        ]);
-
         return redirect()->back()->with('success', 'Pengajuan resign berhasil diperbarui');
     } catch (\Exception $e) {
         return redirect()->back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
@@ -173,19 +127,6 @@ public function destroy($id)
             return redirect()->back()->with('error', 'Pengajuan yang sudah diproses tidak dapat dihapus');
         }
 
-        // Kirim notifikasi pembatalan untuk HRD sebelum dihapus
-        $userName = Auth::user()->nama ?? Auth::user()->name;
-        
-        Notification::create([
-            'user_id' => Auth::id(),
-            'to_uid' => null, // Dikosongkan untuk notifikasi ke HRD
-            'title' => 'Pengajuan Resign Dibatalkan',
-            'message' => "{$userName} telah membatalkan pengajuan resign",
-            'link' => '/resign/manage',
-            'is_read' => false,
-            'type' => 'hrd'
-        ]);
-        
         $resign->delete();
         
         return redirect()->back()->with('success', 'Pengajuan resign berhasil dibatalkan');
@@ -239,19 +180,6 @@ public function filestore(Request $request, $id)
         'isDokument' => true
     ]);
 
-    // Kirim notifikasi untuk HRD bahwa dokumen exit interview sudah diisi
-    $userName = Auth::user()->nama ?? Auth::user()->name;
-    
-    Notification::create([
-        'user_id' => Auth::id(),
-        'to_uid' => null, // Dikosongkan untuk notifikasi ke HRD
-        'title' => 'Dokumen Exit Interview Diserahkan',
-        'message' => "{$userName} telah menyelesaikan dan menyerahkan dokumen exit interview",
-        'link' => '/resign/manage',
-        'is_read' => false,
-        'type' => 'hrd'
-    ]);
-    
     return redirect('/dokumen')->with('success', 'Exit interview berhasil disimpan!');
 }
 }
