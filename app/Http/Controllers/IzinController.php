@@ -4,9 +4,12 @@ namespace App\Http\Controllers;
 
 use Inertia\Inertia;
 use Illuminate\Http\Request;
+use App\Mail\PerizinanDiajukan;
 use App\Models\Perizinan;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -229,23 +232,40 @@ private function updateKehadiranIzin($perizinan)
         }
 
         try {
-        $perizinan = Perizinan::create([  
-            'uid' => Auth::id(),
-            'uid_diketahui' => $request->uid_diketahui,
-            'type_perizinan' => $request->type_perizinan,
-            'tanggal' => $request->tanggal,
-            'jam_keluar' => $jamKeluar,
-            'jam_kembali' => $jamKembali,
-            'keperluan' => $request->keperluan,
-            'status' => 'Diajukan'
-        ]);
-
-            return redirect()->back()->with('success', 'Pengajuan izin berhasil diajukan!');
-        } catch (\Exception $e) {
+            $perizinan = Perizinan::create([
+                'uid' => Auth::id(),
+                'uid_diketahui' => $request->uid_diketahui,
+                'type_perizinan' => $request->type_perizinan,
+                'tanggal' => $request->tanggal,
+                'jam_keluar' => $jamKeluar,
+                'jam_kembali' => $jamKembali,
+                'keperluan' => $request->keperluan,
+                'status' => 'Diajukan'
+            ]);
+        } catch (\Throwable $e) {
             return redirect()->back()
                 ->withErrors(['error' => 'Terjadi kesalahan saat menyimpan data: ' . $e->getMessage()])
                 ->withInput();
         }
+
+        try {
+            $this->queuePerizinanNotification($perizinan);
+        } catch (\Throwable $e) {
+            Log::error('Gagal mengantrekan email pengajuan perizinan.', [
+                'perizinan_id' => $perizinan->id,
+                'exception' => $e->getMessage(),
+            ]);
+
+            return redirect()->back()->with(
+                'error',
+                'Pengajuan izin berhasil disimpan, tetapi email notifikasi gagal dijadwalkan. Silakan hubungi HRD.'
+            );
+        }
+
+        return redirect()->back()->with(
+            'success',
+            'Pengajuan izin berhasil diajukan. Email notifikasi sedang diproses.'
+        );
     }
 
     /**
@@ -750,18 +770,46 @@ private function updateOverallStatus($perizinan)
             'status' => 'Diajukan'
         ]);
         $perizinan->load('user');
-
-        return response()->json([
-            'success' => true,
-            'message' => 'Perizinan berhasil ditambahkan',
-            'data' => $perizinan
-        ]);
-    } catch (\Exception $e) {
+    } catch (\Throwable $e) {
         return response()->json([
             'success' => false,
             'message' => 'Gagal menambahkan perizinan: ' . $e->getMessage()
         ], 500);
     }
+
+    try {
+        $this->queuePerizinanNotification($perizinan);
+    } catch (\Throwable $e) {
+        Log::error('Gagal mengantrekan email pengajuan perizinan HRD.', [
+            'perizinan_id' => $perizinan->id,
+            'exception' => $e->getMessage(),
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Perizinan berhasil ditambahkan, tetapi email notifikasi gagal dijadwalkan.',
+            'data' => $perizinan
+        ]);
+    }
+
+    return response()->json([
+        'success' => true,
+        'message' => 'Perizinan berhasil ditambahkan. Email notifikasi sedang diproses.',
+        'data' => $perizinan
+    ]);
+}
+
+private function queuePerizinanNotification(Perizinan $perizinan): void
+{
+    $perizinan->loadMissing(['user', 'diketahuiOleh']);
+
+    if (!$perizinan->diketahuiOleh || !$perizinan->diketahuiOleh->email) {
+        throw new \RuntimeException('Penerima email perizinan tidak ditemukan.');
+    }
+
+    Mail::to($perizinan->diketahuiOleh->email)->queue(
+        (new PerizinanDiajukan($perizinan))->onConnection('database')
+    );
 }
 
     /**

@@ -23,6 +23,7 @@
         "vite": "^7.0.4"
     },
     "dependencies": {
+        "@tanstack/react-table": "^8.21.3",
         "lucide-react": "^0.544.0",
         "react-toastify": "^11.0.5",
         "recharts": "^3.2.1"

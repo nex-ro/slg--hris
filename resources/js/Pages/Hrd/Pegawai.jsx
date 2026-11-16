@@ -1,6 +1,7 @@
-  import { useState, useEffect } from 'react';
+  import { useState, useEffect, useMemo } from 'react';
   import { Head, router } from '@inertiajs/react';
   import LayoutTemplate from "@/Layouts/LayoutTemplate";
+  import { ToastContainer } from 'react-toastify';
   import {
     Pencil,
     Trash2,
@@ -12,35 +13,51 @@
     ChevronLeft,
     ChevronRight,
     RefreshCw,
+    ArrowUp,
+    ArrowDown,
+    ArrowUpDown,
     Users,
     UserX,
-    KeyRound,
-    Mail,
     Eye,
     EyeOff,
-    Check,
-    AlertCircle,
-    Send,
-    Lock
   } from 'lucide-react';
-  import axios from 'axios';
+  import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
+  import { toast } from 'react-toastify';
+  import 'react-toastify/dist/ReactToastify.css';
+
+  const activeColumns = [
+    { accessorKey: 'id', header: 'ID' },
+    { accessorKey: 'name', header: 'Nama' },
+    { accessorKey: 'role', header: 'Role' },
+    { accessorKey: 'active', header: 'Status' },
+    { accessorKey: 'tmk', header: 'TMK' },
+    { accessorKey: 'divisi', header: 'Divisi' },
+    { accessorKey: 'jabatan', header: 'Jabatan' },
+    { accessorKey: 'tower', header: 'Tower' },
+    { id: 'actions', header: 'Aksi', enableSorting: false },
+  ];
+
+  const resignColumns = [
+    { accessorKey: 'id', header: 'ID' },
+    { accessorKey: 'name', header: 'Nama' },
+    { accessorKey: 'role', header: 'Role' },
+    { accessorKey: 'active', header: 'Status' },
+    { accessorKey: 'tanggal_keluar', header: 'Tanggal Keluar' },
+    { accessorKey: 'divisi', header: 'Divisi' },
+    { accessorKey: 'jabatan', header: 'Jabatan' },
+    { accessorKey: 'tower', header: 'Tower' },
+    { id: 'actions', header: 'Aksi', enableSorting: false },
+  ];
 
   function Pegawai({ flash }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditing, setIsEditing] = useState(false);
     const [currentUser, setCurrentUser] = useState(null);
     const [isFilterOpen, setIsFilterOpen] = useState(false);
+    const [isSubmittingForm, setIsSubmittingForm] = useState(false);
+    const [showEmployeePassword, setShowEmployeePassword] = useState(false);
+    const [showEmployeePasswordConfirmation, setShowEmployeePasswordConfirmation] = useState(false);
 
-    // State Modal Reset Password & Kirim Email
-    const [isResetPasswordModalOpen, setIsResetPasswordModalOpen] = useState(false);
-    const [selectedUserForReset, setSelectedUserForReset] = useState(null);
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [showPassword, setShowPassword] = useState(false);
-    const [isSubmittingReset, setIsSubmittingReset] = useState(false);
-    const [isSendingEmail, setIsSendingEmail] = useState(false);
-    const [resetError, setResetError] = useState('');
-    const [resetSuccess, setResetSuccess] = useState('');
     const [users, setUsers] = useState({ data: [], links: [], total: 0, from: 0, to: 0, last_page: 1 });
     const [divisiList, setDivisiList] = useState([]);
     const [jabatanList, setJabatanList] = useState([]);
@@ -51,25 +68,32 @@
   const [selectedJabatan, setSelectedJabatan] = useState('');
   const [selectedTower, setSelectedTower] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
+  const [sorting, setSorting] = useState([]);
     
 useEffect(() => {
-  fetchData(currentPage);
+  fetchData(1);
   
   const interval = setInterval(() => {
     fetchData(currentPage);
   }, 150000);
   
   return () => clearInterval(interval);
-}, [activeTab]);
+}, [activeTab, sorting]);
+
+useEffect(() => {
+  if (flash?.error) toast.error(flash.error);
+}, [flash?.error]);
 
     const [formData, setFormData] = useState({
     id: '',  // ✅ TAMBAHKAN INI
     name: '',
     email: '',
     password: '',
+    password_confirmation: '',
     role: 'pegawai',
     active: true,
     tmk: '',
+    tanggal_keluar: '',
     divisi: '',
     jabatan: '',
     tower: '',
@@ -105,6 +129,10 @@ useEffect(() => {
     if (selectedDivisi) params.append('divisi', selectedDivisi);
     if (selectedJabatan) params.append('jabatan', selectedJabatan);
     if (selectedTower) params.append('tower', selectedTower);
+    const defaultSortField = activeTab === 'resign' ? 'tanggal_keluar' : 'id';
+    const defaultSortDir = activeTab === 'resign' ? 'desc' : 'asc';
+    params.append('sortBy', sorting[0]?.id || defaultSortField);
+    params.append('sortDirection', sorting[0] ? (sorting[0].desc ? 'desc' : 'asc') : defaultSortDir);
     params.append('page', page);
     params.append('status', activeTab); // ✅ TAMBAHKAN INI
 
@@ -124,7 +152,7 @@ useEffect(() => {
     setCurrentPage(page);
   } catch (error) {
     console.error('Error fetching data:', error);
-    alert('Gagal memuat data. Silakan refresh halaman.');
+    toast.error('Gagal memuat data pegawai. Silakan coba lagi.');
   } finally {
     setLoading(false);
   }
@@ -137,6 +165,7 @@ useEffect(() => {
         name: '',
         email: '',
         password: '',
+        password_confirmation: '',
         role: 'pegawai',
         active: true,
         tmk: '',
@@ -150,6 +179,8 @@ useEffect(() => {
       setTtdPreview(null);
       setIsEditing(false);
       setCurrentUser(null);
+      setShowEmployeePassword(false);
+      setShowEmployeePasswordConfirmation(false);
     };
 
     const openAddModal = () => {
@@ -163,6 +194,7 @@ useEffect(() => {
         name: user.name,
         email: user.email,
         password: '',
+        password_confirmation: '',
         role: user.role,
         active: user.active,
         tmk: user.tmk || '',
@@ -176,6 +208,8 @@ useEffect(() => {
       setTtdPreview(user.ttd ? `/storage/ttd/${user.ttd}` : null);
       setCurrentUser(user);
       setIsEditing(true);
+      setShowEmployeePassword(false);
+      setShowEmployeePasswordConfirmation(false);
       setIsModalOpen(true);
     };
 
@@ -184,153 +218,67 @@ useEffect(() => {
       resetForm();
     };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    
-    const submitData = new FormData();
-    Object.keys(formData).forEach(key => {
-      if (key === 'ttd' && formData[key]) {
-        submitData.append('ttd', formData[key]);
-      } else if (key === 'active') {
-        submitData.append('active', formData[key] ? '1' : '0');
-      } else if (formData[key] !== null && formData[key] !== '') {
-        submitData.append(key, formData[key]);
-      }
-    });
+    const handleSubmit = (e) => {
+      e.preventDefault();
 
-    if (isEditing) {
-      submitData.append('_method', 'PUT');
-      router.post(`/pegawai/${currentUser.id}`, submitData, {
+      if (isSubmittingForm) return;
+      if (formData.password && formData.password !== formData.password_confirmation) {
+        toast.error('Konfirmasi password tidak cocok.');
+        return;
+      }
+      if (!formData.password && formData.password_confirmation) {
+        toast.error('Masukkan password terlebih dahulu.');
+        return;
+      }
+
+      const submitData = new FormData();
+      Object.entries(formData).forEach(([key, value]) => {
+        if (key === 'ttd' && value) {
+          submitData.append('ttd', value);
+        } else if (key === 'active') {
+          submitData.append('active', value ? '1' : '0');
+        } else if (key === 'tanggal_keluar') {
+          submitData.append(key, value || '');
+        } else if (key === 'password_confirmation' && !formData.password) {
+          return;
+        } else if (value !== null && value !== '') {
+          submitData.append(key, value);
+        }
+      });
+
+      if (isEditing) {
+        submitData.append('_method', 'PUT');
+      }
+
+      router.post(isEditing ? `/pegawai/${currentUser.id}` : '/pegawai', submitData, {
+        onStart: () => setIsSubmittingForm(true),
+        onFinish: () => setIsSubmittingForm(false),
         onSuccess: () => {
           closeModal();
-          fetchData(currentPage); 
+          fetchData(isEditing ? currentPage : 1);
         },
         onError: (errors) => {
-          const errorMessages = Object.values(errors).flat().join('\n');
-          alert('Validasi Gagal:\n\n' + errorMessages);
+          const errorMessage = (Array.isArray(errors.id) ? errors.id[0] : errors.id)
+            || Object.values(errors).flat().find(Boolean);
+          toast.error(errorMessage || 'Gagal menyimpan data pegawai.', {
+            containerId: 'hrd-pegawai-form'
+          });
         },
+        onException: () => toast.error('Gagal menyimpan data pegawai. Silakan coba lagi.', {
+          containerId: 'hrd-pegawai-form'
+        }),
         forceFormData: true
       });
-    } else {
-      router.post('/pegawai', submitData, {
-        onSuccess: () => {
-          closeModal();
-          fetchData(1); // ✅ TAMBAHKAN INI
-        },
-        onError: (errors) => {
-          const errorMessages = Object.values(errors).flat().join('\n');
-          alert('Validasi Gagal:\n\n' + errorMessages);
-        },
-        forceFormData: true
-      });
-    }
-  };
+    };
 
     const handleDelete = (id) => {
     if (confirm('Apakah Anda yakin ingin menghapus pegawai ini?')) {
       router.delete(`/pegawai/${id}`, {
         onSuccess: () => {
           fetchData(currentPage); 
-        }
+        },
+        onError: () => toast.error('Gagal menghapus data pegawai.')
       });
-    }
-  };
-
-  const openResetPasswordModal = (user) => {
-    setSelectedUserForReset(user);
-    setNewPassword('');
-    setConfirmPassword('');
-    setShowPassword(false);
-    setResetError('');
-    setResetSuccess('');
-    setIsResetPasswordModalOpen(true);
-  };
-
-  const closeResetPasswordModal = () => {
-    setIsResetPasswordModalOpen(false);
-    setSelectedUserForReset(null);
-    setNewPassword('');
-    setConfirmPassword('');
-    setResetError('');
-    setResetSuccess('');
-  };
-
-  // Kirim link reset password ke email pegawai
-  const handleSendResetEmail = async (user = selectedUserForReset) => {
-    if (!user || !user.email) {
-      alert('Pegawai ini belum memiliki email terdaftar.');
-      return;
-    }
-
-    if (!confirm(`Kirim email link reset password ke ${user.name} (${user.email})?`)) {
-      return;
-    }
-
-    setIsSendingEmail(true);
-    setResetError('');
-    setResetSuccess('');
-
-    try {
-      const response = await axios.post(`/pegawai/${user.id}/send-reset-email`);
-      if (response.data.status === 'success') {
-        const msg = response.data.message || `Link reset password berhasil dikirim ke ${user.email}`;
-        setResetSuccess(msg);
-        alert(msg);
-      } else {
-        const errMsg = response.data.message || 'Gagal mengirim email reset password.';
-        setResetError(errMsg);
-        alert(errMsg);
-      }
-    } catch (error) {
-      console.error('Error sending reset email:', error);
-      const errMsg = error.response?.data?.message || 'Terjadi kesalahan saat mengirim email reset password.';
-      setResetError(errMsg);
-      alert(errMsg);
-    } finally {
-      setIsSendingEmail(false);
-    }
-  };
-
-  // Reset password manual oleh Admin/HRD
-  const handleDirectResetPassword = async (e) => {
-    e.preventDefault();
-    if (!selectedUserForReset) return;
-
-    if (!newPassword || newPassword.length < 8) {
-      setResetError('Password baru minimal harus 8 karakter.');
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setResetError('Konfirmasi password tidak cocok.');
-      return;
-    }
-
-    setIsSubmittingReset(true);
-    setResetError('');
-    setResetSuccess('');
-
-    try {
-      const response = await axios.post(`/pegawai/${selectedUserForReset.id}/reset-password`, {
-        password: newPassword,
-        password_confirmation: confirmPassword
-      });
-
-      if (response.data.status === 'success') {
-        const msg = response.data.message || 'Password berhasil direset!';
-        setResetSuccess(msg);
-        alert(msg);
-        setTimeout(() => {
-          closeResetPasswordModal();
-        }, 1200);
-      } else {
-        setResetError(response.data.message || 'Gagal mereset password.');
-      }
-    } catch (error) {
-      console.error('Error resetting password:', error);
-      setResetError(error.response?.data?.message || 'Terjadi kesalahan saat mereset password.');
-    } finally {
-      setIsSubmittingReset(false);
     }
   };
 
@@ -346,12 +294,12 @@ useEffect(() => {
       const file = e.target.files[0];
       if (file) {
         if (file.size > 2048000) {
-          alert('Ukuran file maksimal 2MB');
+          toast.error('Ukuran file maksimal 2MB.');
           e.target.value = '';
           return;
         }
         if (!file.type.startsWith('image/')) {
-          alert('File harus berupa gambar');
+          toast.error('File harus berupa gambar.');
           e.target.value = '';
           return;
         }
@@ -371,9 +319,27 @@ useEffect(() => {
 
     const userData = users.data || [];
     const activeFilters = [searchTerm, selectedDivisi, selectedJabatan, selectedTower].filter(Boolean).length;
+    const currentColumns = useMemo(() => {
+      return activeTab === 'resign' ? resignColumns : activeColumns;
+    }, [activeTab]);
+
+    const table = useReactTable({
+      data: userData,
+      columns: currentColumns,
+      getCoreRowModel: getCoreRowModel(),
+      manualSorting: true,
+      state: { sorting },
+      onSortingChange: setSorting,
+    });
 
     return (
       <LayoutTemplate>
+          <ToastContainer
+            containerId="hrd-pegawai-form"
+            position="top-right"
+            autoClose={5000}
+            style={{ zIndex: 10000 }}
+          />
           <Head title="Pegawai" />
         <div className="">
         <div className="mb-6 flex justify-between items-center">
@@ -405,17 +371,13 @@ useEffect(() => {
             </div>
           )}
 
-          {flash?.error && (
-            <div className="mb-4 p-4 bg-red-100 text-red-700 rounded-lg">
-              {flash.error}
-            </div>
-          )}
           {/* Tab Navigation - Updated Design */}
           <div className="bg-white rounded-lg shadow overflow-hidden">
             <div className="flex border-b">
               <button
                 onClick={() => {
                   setActiveTab('active');
+                  setSorting([]);
                   setCurrentPage(1);
                 }}
                 className={`flex-1 flex items-center justify-center gap-3 px-6 py-4 font-medium transition relative ${
@@ -434,6 +396,7 @@ useEffect(() => {
               <button
                 onClick={() => {
                   setActiveTab('resign');
+                  setSorting([]);
                   setCurrentPage(1);
                 }}
                 className={`flex-1 flex items-center justify-center gap-3 px-6 py-4 font-medium transition relative ${
@@ -531,7 +494,7 @@ useEffect(() => {
             )}
           </div>
 
-          <div className="bg-white rounded-lg shadow overflow-hidden">
+          <div className="bg-white rounded-lg shadow overflow-hidden relative" aria-busy={loading}>
             {loading && (
       <div className="absolute inset-0 bg-white bg-opacity-75 flex items-center justify-center z-10">
         <RefreshCw className="animate-spin text-blue-600" size={32} />
@@ -541,20 +504,31 @@ useEffect(() => {
             <div className="overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">TMK</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Divisi</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jabatan</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tower</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Aksi</th>
-                  </tr>
+                  {table.getHeaderGroups().map(headerGroup => (
+                    <tr key={headerGroup.id}>
+                      {headerGroup.headers.map(header => {
+                        const direction = header.column.getIsSorted();
+
+                        return (
+                          <th key={header.id} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <button
+                              type="button"
+                              disabled={!header.column.getCanSort()}
+                              onClick={header.column.getToggleSortingHandler()}
+                              className="inline-flex items-center gap-1 disabled:cursor-default"
+                              aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'}
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              {direction === 'asc' ? <ArrowUp size={14} /> : direction === 'desc' ? <ArrowDown size={14} /> : header.column.getCanSort() ? <ArrowUpDown size={14} className="opacity-40" /> : null}
+                            </button>
+                          </th>
+                        );
+                      })}
+                    </tr>
+                  ))}
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {userData.length > 0 ? userData.map((user) => (
+                  {table.getRowModel().rows.length > 0 ? table.getRowModel().rows.map(({ original: user }) => (
                     <tr key={user.id} className="hover:bg-gray-50">
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.id}</td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -573,7 +547,9 @@ useEffect(() => {
                           {user.active ? 'Aktif' : 'Non-Aktif'}
                         </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.tmk || '-'}</td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {activeTab === 'resign' ? (user.tanggal_keluar || '-') : (user.tmk || '-')}
+                      </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{user.divisi || '-'}</td>
                         <td className="px-6 py-4 text-sm text-gray-900">
                           <div className="max-w-[150px] truncate" title={user.jabatan}>
@@ -589,20 +565,6 @@ useEffect(() => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center gap-1.5">
-                          <button
-                            onClick={() => openResetPasswordModal(user)}
-                            className="p-1.5 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition"
-                            title="Reset Password & Kirim Email"
-                          >
-                            <KeyRound size={17} />
-                          </button>
-                          <button
-                            onClick={() => handleSendResetEmail(user)}
-                            className="p-1.5 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition"
-                            title="Kirim Email Reset Password"
-                          >
-                            <Mail size={17} />
-                          </button>
                           <button
                             onClick={() => openEditModal(user)}
                             className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition"
@@ -694,7 +656,7 @@ useEffect(() => {
                   </button>
                 </div>
 
-                <div onSubmit={handleSubmit}>
+                <form onSubmit={handleSubmit} aria-busy={isSubmittingForm}>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
                       <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -749,14 +711,50 @@ useEffect(() => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Password {isEditing ? '(Kosongkan jika tidak ingin mengubah)' : <span className="text-red-500">*</span>}
                       </label>
-                      <input
-                        type="password"
-                        name="password"
-                        value={formData.password}
-                        onChange={handleChange}
-                        required={!isEditing}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+                      <div className="relative">
+                        <input
+                          type={showEmployeePassword ? 'text' : 'password'}
+                          name="password"
+                          value={formData.password}
+                          onChange={handleChange}
+                          required={!isEditing}
+                          minLength={8}
+                          className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowEmployeePassword(!showEmployeePassword)}
+                          aria-label={showEmployeePassword ? 'Sembunyikan password' : 'Tampilkan password'}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showEmployeePassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        Konfirmasi Password {isEditing ? '(Isi jika mengubah password)' : <span className="text-red-500">*</span>}
+                      </label>
+                      <div className="relative">
+                        <input
+                          type={showEmployeePasswordConfirmation ? 'text' : 'password'}
+                          name="password_confirmation"
+                          value={formData.password_confirmation}
+                          onChange={handleChange}
+                          required={!isEditing || Boolean(formData.password)}
+                          minLength={8}
+                          className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowEmployeePasswordConfirmation(!showEmployeePasswordConfirmation)}
+                          aria-label={showEmployeePasswordConfirmation ? 'Sembunyikan konfirmasi password' : 'Tampilkan konfirmasi password'}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                        >
+                          {showEmployeePasswordConfirmation ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </div>
 
                     <div>
@@ -795,13 +793,23 @@ useEffect(() => {
                       <label className="block text-sm font-medium text-gray-700 mb-1">
                         Tanggal Keluar (Opsional)
                       </label>
-                      <input
-                        type="date"
-                        name="tanggal_keluar"
-                        value={formData.tanggal_keluar}
-                        onChange={handleChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+                      <div className="flex gap-2">
+                        <input
+                          type="date"
+                          name="tanggal_keluar"
+                          value={formData.tanggal_keluar}
+                          onChange={handleChange}
+                          className="min-w-0 flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setFormData((previous) => ({ ...previous, tanggal_keluar: '' }))}
+                          disabled={!formData.tanggal_keluar}
+                          className="px-3 py-2 text-sm text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                        >
+                          Hapus
+                        </button>
+                      </div>
                       <p className="text-xs text-gray-500 mt-1">
                         Isi jika pegawai sudah resign
                       </p>
@@ -922,154 +930,18 @@ useEffect(() => {
                       Batal
                     </button>
                     <button
-                      type="button"
-                      onClick={handleSubmit}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition"
-                    >
-                      {isEditing ? 'Update' : 'Simpan'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Modal Reset Password & Kirim Email */}
-          {isResetPasswordModalOpen && selectedUserForReset && (
-            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-              <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl border border-gray-100 space-y-5 animate-fade-in">
-                {/* Header Modal */}
-                <div className="flex items-center justify-between pb-3 border-b border-gray-100">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2.5 bg-amber-100 text-amber-700 rounded-xl">
-                      <KeyRound size={22} />
-                    </div>
-                    <div>
-                      <h3 className="font-bold text-gray-900 text-base">Reset Password Pegawai</h3>
-                      <p className="text-xs text-gray-500">
-                        {selectedUserForReset.name} • <span className="font-mono text-gray-600">{selectedUserForReset.email || 'Tanpa Email'}</span>
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    onClick={closeResetPasswordModal}
-                    className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors"
-                  >
-                    <X size={20} />
-                  </button>
-                </div>
-
-                {/* Feedback Alerts */}
-                {resetError && (
-                  <div className="p-3 bg-red-50 text-red-700 border border-red-200 rounded-xl text-xs flex items-center gap-2">
-                    <AlertCircle size={16} className="flex-shrink-0 text-red-600" />
-                    <span>{resetError}</span>
-                  </div>
-                )}
-
-                {resetSuccess && (
-                  <div className="p-3 bg-green-50 text-green-700 border border-green-200 rounded-xl text-xs flex items-center gap-2">
-                    <Check size={16} className="flex-shrink-0 text-green-600" />
-                    <span>{resetSuccess}</span>
-                  </div>
-                )}
-
-                {/* Pilihan 1: Kirim Link Reset Password via Email */}
-                <div className="p-4 bg-indigo-50/70 border border-indigo-200 rounded-xl space-y-3">
-                  <div className="flex items-start gap-2.5">
-                    <Mail size={18} className="text-indigo-600 flex-shrink-0 mt-0.5" />
-                    <div>
-                      <h4 className="text-xs font-bold text-indigo-900 uppercase tracking-wide">
-                        Kirim Link Reset via Email
-                      </h4>
-                      <p className="text-xs text-indigo-700 mt-0.5 leading-relaxed">
-                        Kirim email resmi berisi tautan reset password ke <strong className="font-semibold text-indigo-950">{selectedUserForReset.email}</strong>. Pegawai dapat mengatur sendiri kata sandi baru mereka.
-                      </p>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleSendResetEmail(selectedUserForReset)}
-                    disabled={isSendingEmail || !selectedUserForReset.email}
-                    className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-lg shadow-sm transition disabled:opacity-50 active:scale-95"
-                  >
-                    <Send size={14} className={isSendingEmail ? 'animate-spin' : ''} />
-                    <span>{isSendingEmail ? 'Mengirim Email...' : 'Kirim Email Reset Password Sekarang'}</span>
-                  </button>
-                </div>
-
-                {/* Divider */}
-                <div className="relative flex py-1 items-center">
-                  <div className="flex-grow border-t border-gray-200"></div>
-                  <span className="flex-shrink mx-3 text-[11px] font-bold text-gray-400 uppercase tracking-wider">
-                    Atau Reset Manual oleh HRD
-                  </span>
-                  <div className="flex-grow border-t border-gray-200"></div>
-                </div>
-
-                {/* Pilihan 2: Reset Manual oleh HRD */}
-                <form onSubmit={handleDirectResetPassword} className="space-y-3.5">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Password Baru <span className="text-red-500">*</span>
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={newPassword}
-                        onChange={(e) => setNewPassword(e.target.value)}
-                        placeholder="Minimal 8 karakter"
-                        className="w-full px-3.5 py-2 pr-10 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        required
-                        minLength={8}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                      >
-                        {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      Konfirmasi Password Baru <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      placeholder="Ketik ulang password baru"
-                      className="w-full px-3.5 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                      minLength={8}
-                    />
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={closeResetPasswordModal}
-                      className="px-4 py-2 border border-gray-300 rounded-lg text-xs font-semibold text-gray-600 hover:bg-gray-50 transition"
-                    >
-                      Batal
-                    </button>
-                    <button
                       type="submit"
-                      disabled={isSubmittingReset}
-                      className="flex items-center gap-1.5 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-lg shadow-sm transition disabled:opacity-50 active:scale-95"
+                      disabled={isSubmittingForm}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition disabled:opacity-50"
                     >
-                      <Lock size={14} className={isSubmittingReset ? 'animate-spin' : ''} />
-                      <span>{isSubmittingReset ? 'Menyimpan...' : 'Simpan Password Baru'}</span>
+                      {isSubmittingForm ? 'Menyimpan...' : isEditing ? 'Update' : 'Simpan'}
                     </button>
                   </div>
                 </form>
               </div>
             </div>
           )}
+
         </div>
       </LayoutTemplate>
     );

@@ -2,7 +2,19 @@ import { useState, useEffect } from 'react';
 import { Head, router } from '@inertiajs/react';
 import LayoutTemplate from "@/Layouts/LayoutTemplate";
 import { Pencil, Trash2, Plus, X, Upload, Search, Filter, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
+import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
 import { toast } from 'react-toastify';
+
+const tableColumns = [
+  { id: 'rowNumber', header: 'No', enableSorting: false },
+  { accessorKey: 'name', header: 'Nama' },
+  { accessorKey: 'email', header: 'Email' },
+  { accessorKey: 'divisi', header: 'Divisi' },
+  { accessorKey: 'jabatan', header: 'Jabatan' },
+  { accessorKey: 'tower', header: 'Tower' },
+  { accessorKey: 'active', header: 'Status' },
+];
 
 function Pegawai({ flash, filterDivisi }) {
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -19,16 +31,17 @@ const [selectedDivisi, setSelectedDivisi] = useState('');
 const [selectedJabatan, setSelectedJabatan] = useState('');
 const [selectedTower, setSelectedTower] = useState('');
 const [currentPage, setCurrentPage] = useState(1);
+const [sorting, setSorting] = useState([]);
   
 useEffect(() => {
-  fetchData(currentPage);
+  fetchData(1);
   
   const interval = setInterval(() => {
     fetchData(currentPage);
   }, 30000); // Refresh every 30 seconds
   
   return () => clearInterval(interval);
-}, []);
+}, [sorting]);
 useEffect(() => {
   if (flash?.success) {
     toast.success(flash.success, {
@@ -100,6 +113,8 @@ const fetchData = async (page = 1) => {
     
     if (selectedJabatan) params.append('jabatan', selectedJabatan);
     if (selectedTower) params.append('tower', selectedTower);
+    params.append('sortBy', sorting[0]?.id || 'id');
+    params.append('sortDirection', sorting[0]?.desc ? 'desc' : 'asc');
     params.append('page', page);
 
     const response = await fetch(`/api/pegawai?${params.toString()}`, {
@@ -373,6 +388,14 @@ const handleSubmit = async (e) => {
 
   const userData = users.data || [];
   const activeFilters = [searchTerm, selectedDivisi, selectedJabatan, selectedTower].filter(Boolean).length;
+  const table = useReactTable({
+    data: userData,
+    columns: tableColumns,
+    getCoreRowModel: getCoreRowModel(),
+    manualSorting: true,
+    state: { sorting },
+    onSortingChange: setSorting,
+  });
 
   return (
     <LayoutTemplate>
@@ -500,18 +523,31 @@ const handleSubmit = async (e) => {
       <div className="overflow-x-auto">
        <table className="w-full">
   <thead className="bg-gray-50 border-b">
-    <tr>
-      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No</th>
-      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nama</th>
-      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
-      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Divisi</th>
-      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Jabatan</th>
-      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tower</th>
-      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
-    </tr>
+    {table.getHeaderGroups().map(headerGroup => (
+      <tr key={headerGroup.id}>
+        {headerGroup.headers.map(header => {
+          const direction = header.column.getIsSorted();
+
+          return (
+            <th key={header.id} className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+              <button
+                type="button"
+                disabled={!header.column.getCanSort()}
+                onClick={header.column.getToggleSortingHandler()}
+                className="inline-flex items-center gap-1 disabled:cursor-default"
+                aria-sort={direction === 'asc' ? 'ascending' : direction === 'desc' ? 'descending' : 'none'}
+              >
+                {flexRender(header.column.columnDef.header, header.getContext())}
+                {direction === 'asc' ? <ArrowUp size={14} /> : direction === 'desc' ? <ArrowDown size={14} /> : header.column.getCanSort() ? <ArrowUpDown size={14} className="opacity-40" /> : null}
+              </button>
+            </th>
+          );
+        })}
+      </tr>
+    ))}
   </thead>
   <tbody className="bg-white divide-y divide-gray-200">
-    {userData.map((user, index) => (
+    {table.getRowModel().rows.map(({ original: user }, index) => (
       <tr key={user.id} className="hover:bg-gray-50 transition">
         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
           {users.from + index}

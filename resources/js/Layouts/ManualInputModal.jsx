@@ -353,7 +353,7 @@ const handleSubmit = async () => {
               </div>
             </div>
 
-            {/* Jam Kedatangan dan Pulang - hanya tampil jika status Hadir */}
+              {/* Jam Kedatangan dan Pulang - hanya tampil jika status Hadir */}
             {formData.status === 'Hadir' && (
               <div className="space-y-4 pt-2 border-t">
                 <div>
@@ -365,6 +365,7 @@ const handleSubmit = async () => {
                     value={formData.jam_kedatangan}
                     onChange={(e) => setFormData({...formData, jam_kedatangan: e.target.value})}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                    required
                   />
                 </div>
                 

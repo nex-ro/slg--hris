@@ -229,10 +229,6 @@ const SearchableSelect = ({
   
   post(route('izin.store'), {
     onSuccess: () => {
-      toast.success('Pengajuan izin berhasil diajukan!', {
-        position: "top-right",
-        autoClose: 3000,
-      });
       reset();
       setIsCreateModalOpen(false);
       setLoadingOverlay(false);
@@ -322,8 +318,8 @@ const getDurationInfo = (jamKeluar, jamKembali) => {
     setEditData({
       type_perizinan: izin.type_perizinan,
       tanggal: izin.tanggal,
-      jam_keluar: (izin.jam_keluar && izin.jam_keluar !== '00:00') ? izin.jam_keluar : '',
-      jam_kembali: (izin.jam_kembali && izin.jam_kembali !== '00:00') ? izin.jam_kembali : '',
+      jam_keluar: (izin.jam_keluar && izin.jam_keluar.slice(0, 5) !== '00:00') ? izin.jam_keluar.slice(0, 5) : '',
+      jam_kembali: (izin.jam_kembali && izin.jam_kembali.slice(0, 5) !== '00:00') ? izin.jam_kembali.slice(0, 5) : '',
       uid_diketahui: izin.uid_diketahui,
       keperluan: izin.keperluan
     });

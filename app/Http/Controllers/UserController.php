@@ -6,7 +6,6 @@ use Inertia\Inertia;
 use Illuminate\Http\Request;
 use App\Models\User;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Holiday;
 use App\Models\JatahCuti;
@@ -98,8 +97,22 @@ class UserController extends Controller
         $query->where('tower', $request->tower);
     }
 
-    // Paginate dengan 15 item per page
-    $users = $query->orderBy('id', 'asc')->paginate(15);
+    $sortableColumns = ['id', 'name', 'email', 'role', 'active', 'tmk', 'tanggal_keluar', 'divisi', 'jabatan', 'tower'];
+    
+    // Default sorting: jika tab resign, urutkan tanggal_keluar desc (paling baru), selain itu id asc
+    $defaultSortBy = $request->status === 'resign' ? 'tanggal_keluar' : 'id';
+    $defaultSortDirection = $request->status === 'resign' ? 'desc' : 'asc';
+
+    $sortBy = $request->input('sortBy', $defaultSortBy);
+    $sortDirection = $request->input('sortDirection') === 'desc' ? 'desc' : ($request->input('sortDirection') === 'asc' ? 'asc' : $defaultSortDirection);
+
+    if (!in_array($sortBy, $sortableColumns, true)) {
+        $sortBy = $defaultSortBy;
+        $sortDirection = $defaultSortDirection;
+    }
+
+    // Paginate setelah seluruh hasil diurutkan agar urutan konsisten antar halaman.
+    $users = $query->orderBy($sortBy, $sortDirection)->orderBy('id', 'desc')->paginate(15);
 
     $divisiQuery = User::select('divisi')
         ->distinct()
@@ -167,7 +180,7 @@ class UserController extends Controller
             'id' => 'required|integer|unique:users,id', 
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email',
-            'password' => 'required|min:8',
+            'password' => 'required|string|min:8|confirmed',
             'role' => 'required|string',
             'active' => 'boolean',
             'tmk' => 'nullable|date',
@@ -178,6 +191,8 @@ class UserController extends Controller
             'tower' => 'required|string',
             'keterangan' => 'nullable|string',
             'ttd' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048'
+        ], [
+            'id.unique' => 'ID Pegawai sudah digunakan.',
         ]);
         $validated['password'] = Hash::make($validated['password']);
 
@@ -201,7 +216,7 @@ class UserController extends Controller
         $validated = $request->validate([
             'name' => 'required|string|max:255',
             'email' => 'required|email|unique:users,email,' . $id,
-            'password' => 'nullable|min:8',
+            'password' => 'nullable|string|min:8|confirmed',
             'role' => 'required|string',
             'active' => 'boolean',
             'tmk' => 'nullable|date',
@@ -248,69 +263,6 @@ class UserController extends Controller
         return redirect()->back()->with('success', 'Pegawai berhasil dihapus');
     }
 
-    /**
-     * Reset password pegawai langsung oleh Admin/HRD
-     */
-    public function resetPassword(Request $request, $id)
-    {
-        $user = User::findOrFail($id);
-
-        $request->validate([
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
-        ], [
-            'password.required' => 'Password baru harus diisi.',
-            'password.min' => 'Password minimal harus 8 karakter.',
-            'password.confirmed' => 'Konfirmasi password baru tidak cocok.',
-        ]);
-
-        $user->password = Hash::make($request->password);
-        $user->save();
-
-        if ($request->wantsJson()) {
-            return response()->json([
-                'status' => 'success',
-                'message' => "Password untuk {$user->name} berhasil direset.",
-            ]);
-        }
-
-        return redirect()->back()->with('success', "Password untuk {$user->name} berhasil direset.");
-    }
-
-    /**
-     * Kirim email link reset password ke pegawai
-     */
-    public function sendResetEmail(Request $request, $id)
-    {
-        $user = User::findOrFail($id);
-
-        if (empty($user->email)) {
-            return response()->json([
-                'status' => 'error',
-                'message' => "Pegawai {$user->name} belum memiliki alamat email yang valid.",
-            ], 422);
-        }
-
-        try {
-            $status = Password::broker()->sendResetLink(['email' => $user->email]);
-
-            if ($status === Password::RESET_LINK_SENT) {
-                return response()->json([
-                    'status' => 'success',
-                    'message' => "Email link reset password berhasil dikirim ke {$user->email}.",
-                ]);
-            }
-
-            return response()->json([
-                'status' => 'error',
-                'message' => trans($status) ?: 'Gagal mengirim email reset password.',
-            ], 400);
-        } catch (\Exception $e) {
-            return response()->json([
-                'status' => 'error',
-                'message' => 'Gagal mengirim email: ' . $e->getMessage(),
-            ], 500);
-        }
-    }
         public function index()
 {
     $userId = auth()->id();

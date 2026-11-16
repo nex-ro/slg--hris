@@ -93,8 +93,6 @@ Route::middleware('hrd')->group(function () {
     Route::post('/pegawai', [UserController::class, 'store'])->name('pegawai.store');
     Route::put('/pegawai/{id}', [UserController::class, 'update'])->name('pegawai.update');
     Route::delete('/pegawai/{id}', [UserController::class, 'destroy'])->name('pegawai.destroy');
-    Route::post('/pegawai/{id}/reset-password', [UserController::class, 'resetPassword'])->name('pegawai.reset-password');
-    Route::post('/pegawai/{id}/send-reset-email', [UserController::class, 'sendResetEmail'])->name('pegawai.send-reset-email');
     Route::get('/absensi/list', [AbsensiController::class, 'absensi'])->name('absensi');
     Route::post('absensi/save', [AbsensiController::class, 'saveAbsensi'])->name('absensi.save');
     Route::get('/absensi/input-harian', [AbsensiController::class, 'inputHarian'])->name('absensi.harian');
