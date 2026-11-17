@@ -32,7 +32,8 @@ class AuthenticatedSessionController extends Controller
         'hrd' => 'hrd.dashboard',
         'head' => 'head.dashboard', 
         'pegawai' => 'dashboard',
-        'eksekutif' => 'head.dashboard', 
+        'eksekutif' => 'head.dashboard',
+        'it' => 'head.dashboard',
         'site' => 'dashboard', 
         default => 'dashboard' 
     };

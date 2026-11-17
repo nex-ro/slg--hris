@@ -9,6 +9,11 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Models\PemakaianCuti;
 use Barryvdh\DomPDF\Facade\Pdf;
+use App\Mail\CutiDiajukan;
+use App\Mail\StatusCutiDiupdate;
+use App\Mail\CutiDisetujuiPenerimaTugas;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 
 class CutiController extends Controller
 {
@@ -410,6 +415,9 @@ class CutiController extends Controller
         
         \DB::commit();
         
+        // ✅ Kirim email notifikasi pengajuan cuti baru ke atasan, HRD, dan pimpinan yang ditunjuk
+        $this->queueCutiDiajukanToApprovers($pengajuan);
+
         \Log::info('✅ Cuti berhasil di-reserve', [
             'pengajuan_id' => $pengajuan->id,
             'user_id' => $user->id,
@@ -612,6 +620,14 @@ public function approval(Request $request)
         }
 
         \DB::commit();
+
+        // ✅ Kirim email notifikasi ke pegawai yang bersangkutan & penerima tugas jika status final berubah
+        if ($statusFinalBaru === 'disetujui' && $statusFinalSebelumnya !== 'disetujui') {
+            $this->queueStatusCutiNotification($pemakaianCuti);
+            $this->queuePenerimaTugasNotification($pemakaianCuti);
+        } elseif ($statusFinalBaru === 'ditolak' && $statusFinalSebelumnya !== 'ditolak') {
+            $this->queueStatusCutiNotification($pemakaianCuti);
+        }
 
         $message = match($statusFinalBaru) {
             'disetujui' => 'Pengajuan cuti telah disetujui. Cuti dipindahkan ke terpakai dan kehadiran telah diupdate.',
@@ -1038,6 +1054,9 @@ public function storePengajuanAdmin(Request $request)
         
         \DB::commit();
         
+        // ✅ Kirim email notifikasi pengajuan cuti baru ke approver yang ditunjuk
+        $this->queueCutiDiajukanToApprovers($pengajuan);
+
         \Log::info('✅ Cuti berhasil di-reserve (Admin)', [
             'pengajuan_id' => $pengajuan->id,
             'user_id' => $user->id,
@@ -2037,6 +2056,14 @@ public function updateStatusDirect(Request $request, $id)
         
         \DB::commit();
         
+        // ✅ Kirim email notifikasi ke pegawai yang bersangkutan & penerima tugas jika status berubah
+        if ($validated['status_final'] === 'disetujui' && $statusSebelumnya !== 'disetujui') {
+            $this->queueStatusCutiNotification($pemakaianCuti);
+            $this->queuePenerimaTugasNotification($pemakaianCuti);
+        } elseif ($validated['status_final'] === 'ditolak' && $statusSebelumnya !== 'ditolak') {
+            $this->queueStatusCutiNotification($pemakaianCuti);
+        }
+        
         $message = $validated['status_final'] === 'disetujui' 
             ? 'Status berhasil diubah menjadi DISETUJUI. Jatah cuti telah dikurangi.' 
             : 'Status berhasil diubah menjadi DITOLAK.';
@@ -2050,6 +2077,96 @@ public function updateStatusDirect(Request $request, $id)
             'trace' => $e->getTraceAsString()
         ]);
         return back()->withErrors(['error' => 'Gagal mengubah status: ' . $e->getMessage()]);
+    }
+}
+
+/**
+ * Kirim email pemberitahuan pengajuan cuti baru ke atasan, HRD, dan pimpinan yang ditunjuk
+ */
+private function queueCutiDiajukanToApprovers(PemakaianCuti $pemakaianCuti): void
+{
+    try {
+        $pemakaianCuti->loadMissing(['user', 'penerimaTugas', 'diketahuiAtasanUser', 'diketahuiHrdUser', 'disetujuiUser']);
+
+        $approverTargets = [
+            [
+                'user' => $pemakaianCuti->diketahuiAtasanUser,
+                'role' => 'Atasan Langsung',
+            ],
+            [
+                'user' => $pemakaianCuti->diketahuiHrdUser,
+                'role' => 'HRD',
+            ],
+            [
+                'user' => $pemakaianCuti->disetujuiUser,
+                'role' => 'Pimpinan / Direksi',
+            ],
+        ];
+
+        $sentEmails = [];
+
+        foreach ($approverTargets as $target) {
+            $approver = $target['user'];
+            $roleText = $target['role'];
+
+            if ($approver && !empty($approver->email) && !in_array($approver->email, $sentEmails, true)) {
+                if (!empty($approver->tanggal_keluar) || $approver->active == 0) {
+                    continue;
+                }
+
+                Mail::to($approver->email)->queue(
+                    (new CutiDiajukan($pemakaianCuti, $approver->name, $roleText))->onConnection('database')
+                );
+
+                $sentEmails[] = $approver->email;
+            }
+        }
+    } catch (\Throwable $e) {
+        Log::error('Gagal mengantrekan email pengajuan cuti ke approver: ' . $e->getMessage(), [
+            'pemakaian_cuti_id' => $pemakaianCuti->id,
+        ]);
+    }
+}
+
+/**
+ * Kirim email pemberitahuan status cuti (Disetujui / Ditolak) ke pegawai pemohon secara async via Queue
+ */
+private function queueStatusCutiNotification(PemakaianCuti $pemakaianCuti): void
+{
+    try {
+        $pemakaianCuti->loadMissing('user');
+        $user = $pemakaianCuti->user;
+
+        if (!empty($user?->email)) {
+            Mail::to($user->email)->queue(
+                (new StatusCutiDiupdate($pemakaianCuti))->onConnection('database')
+            );
+        }
+    } catch (\Throwable $e) {
+        Log::error('Gagal mengantrekan email status cuti ke pemohon: ' . $e->getMessage(), [
+            'pemakaian_cuti_id' => $pemakaianCuti->id,
+        ]);
+    }
+}
+
+/**
+ * Kirim email pemberitahuan pelimpahan tugas ke penerima tugas secara async via Queue saat cuti disetujui
+ */
+private function queuePenerimaTugasNotification(PemakaianCuti $pemakaianCuti): void
+{
+    try {
+        $pemakaianCuti->loadMissing(['user', 'penerimaTugas']);
+        $penerima = $pemakaianCuti->penerimaTugas;
+
+        if (!empty($penerima?->email)) {
+            Mail::to($penerima->email)->queue(
+                (new CutiDisetujuiPenerimaTugas($pemakaianCuti))->onConnection('database')
+            );
+        }
+    } catch (\Throwable $e) {
+        Log::error('Gagal mengantrekan email pelimpahan tugas cuti: ' . $e->getMessage(), [
+            'pemakaian_cuti_id' => $pemakaianCuti->id,
+        ]);
     }
 }
 

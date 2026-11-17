@@ -239,26 +239,56 @@ const handleFileChange = (e) => {
 };
 
 const handleDelete = (id) => {
-  if (window.confirm("Apakah Anda yakin ingin menghapus data ini?")) {
-    setLoadingOverlay(true);
-    router.delete(`/sakit/${id}`, {
-      onSuccess: () => {
-        toast.success("Data berhasil dihapus!", {
-          position: "top-right",
-          autoClose: 3000,
-        });
-        setLoadingOverlay(false);
-      },
-      onError: (errors) => {
-        console.error(errors);
-        toast.error('Terjadi kesalahan saat menghapus data', {
-          position: "top-right",
-          autoClose: 4000,
-        });
-        setLoadingOverlay(false);
-      }
-    });
-  }
+  toast.warn(
+    ({ closeToast }) => (
+      <div className="space-y-3">
+        <p className="text-sm font-semibold text-gray-800">
+          Apakah Anda yakin ingin menghapus data izin sakit ini?
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={closeToast}
+            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition"
+          >
+            Batal
+          </button>
+          <button
+            onClick={() => {
+              closeToast();
+              setLoadingOverlay(true);
+              router.delete(`/sakit/${id}`, {
+                onSuccess: () => {
+                  toast.success("Data berhasil dihapus!", {
+                    position: "top-right",
+                    autoClose: 3000,
+                  });
+                  setLoadingOverlay(false);
+                },
+                onError: (errors) => {
+                  console.error(errors);
+                  toast.error('Terjadi kesalahan saat menghapus data', {
+                    position: "top-right",
+                    autoClose: 4000,
+                  });
+                  setLoadingOverlay(false);
+                }
+              });
+            }}
+            className="px-3 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-md transition shadow-sm"
+          >
+            Ya, Hapus
+          </button>
+        </div>
+      </div>
+    ),
+    {
+      position: "top-center",
+      autoClose: false,
+      closeOnClick: false,
+      draggable: false,
+      closeButton: false,
+    }
+  );
 };
 
   const handleDownload = (id, bukti) => {

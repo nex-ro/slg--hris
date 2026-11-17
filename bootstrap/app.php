@@ -19,6 +19,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'hrd'=>\App\Http\Middleware\Hrd::class,
             'head'=>\App\Http\Middleware\Atasan::class,
             'pegawai'=>\App\Http\Middleware\Pegawai::class,
+            'inventaris'=>\App\Http\Middleware\InventarisAccess::class,
         ]);
 
     })

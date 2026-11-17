@@ -18,6 +18,7 @@ use App\Http\Controllers\IzinController;
 use App\Http\Controllers\CutiController;
 use App\Http\Controllers\ZkAccessController;
 use App\Http\Controllers\DinasLuarController;
+use App\Http\Controllers\InventarisController;
 
 
 
@@ -36,11 +37,8 @@ Route::get('/', function () {
         return redirect()->route('dashboard');
     } elseif ($role === 'hrd') {
         return redirect()->route('hrd.dashboard');
-    } elseif ($role === 'head') {
+    } elseif ($role === 'head' || $role === 'eksekutif' || $role === 'it') {
         return redirect()->route('head.dashboard');
-    }elseif($role ==='eksekutif'){
-        return redirect()->route('head.dashboard');
-
     }
 
     return redirect('/login');
@@ -208,6 +206,14 @@ Route::middleware('auth')->group(function () {
     // Dinas Luar
     Route::get('/dinas-luar/pengajuan', [DinasLuarController::class, 'pengajuan'])->name('dinas-luar.pengajuan');
     Route::get('/dinas-luar/pencatatan', [DinasLuarController::class, 'pencatatan'])->name('dinas-luar.pencatatan');
+
+    // Inventaris (Khusus Eksekutif & IT)
+    Route::middleware('inventaris')->group(function () {
+        Route::get('/inventaris', [InventarisController::class, 'index'])->name('inventaris.index');
+        Route::post('/inventaris', [InventarisController::class, 'store'])->name('inventaris.store');
+        Route::put('/inventaris/{id}', [InventarisController::class, 'update'])->name('inventaris.update');
+        Route::delete('/inventaris/{id}', [InventarisController::class, 'destroy'])->name('inventaris.destroy');
+    });
 
 });
 

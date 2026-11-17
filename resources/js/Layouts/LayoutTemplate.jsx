@@ -5,7 +5,8 @@ import {
   Menu, X, Home, ChevronRight, ChevronDown, Activity, BarChart3, FileText,
   List, ClipboardCheck, XCircle, FolderOpen, Calendar1, LogOutIcon, Clock,Thermometer,CalendarClock,MapPin, Cpu,
   Umbrella,
-  UmbrellaIcon
+  UmbrellaIcon,
+  Package
 } from 'lucide-react';
 import { ToastContainer } from 'react-toastify';
 
@@ -126,16 +127,27 @@ useEffect(() => {
     ];
 
     // Return menu based on user role
-    if (userRole === 'pegawai' || userRole === 'karyawan' || userRole === 'employee') {
-      return pegawaiMenu;
-    } else if (userRole === 'hrd') {
-      return hrdMenu;
-    } else if (userRole === 'atasan' || userRole === 'head') {
-      return headMenu;
+    const normalizedRole = userRole?.toLowerCase();
+    let baseMenu = hrdMenu;
+    if (normalizedRole === 'pegawai' || normalizedRole === 'karyawan' || normalizedRole === 'employee' || normalizedRole === 'site') {
+      baseMenu = pegawaiMenu;
+    } else if (normalizedRole === 'hrd') {
+      baseMenu = hrdMenu;
+    } else if (normalizedRole === 'atasan' || normalizedRole === 'head') {
+      baseMenu = headMenu;
+    } else if (normalizedRole === 'eksekutif' || normalizedRole === 'it') {
+      baseMenu = headMenu;
     }
-  
-    // Default fallback to HRD menu
-    return hrdMenu;
+
+    // Fitur Inventaris hanya untuk Eksekutif dan IT
+    if (normalizedRole === 'eksekutif' || normalizedRole === 'it') {
+      const inventarisMenu = { icon: Package, label: 'Inventaris', href: '/inventaris' };
+      if (!baseMenu.some(item => item.href === '/inventaris')) {
+        return [...baseMenu, inventarisMenu];
+      }
+    }
+
+    return baseMenu;
   };
 
   const menuItems = getMenuItems();
@@ -191,6 +203,8 @@ useEffect(() => {
       'hrd': 'from-purple-500 to-purple-600',
       'head': 'from-blue-500 to-blue-600',
       'atasan': 'from-blue-500 to-blue-600',
+      'eksekutif': 'from-indigo-600 to-purple-600',
+      'it': 'from-cyan-600 to-blue-600',
       'admin': 'from-red-500 to-red-600',
       'pegawai': 'from-green-500 to-green-600',
       'karyawan': 'from-green-500 to-green-600',

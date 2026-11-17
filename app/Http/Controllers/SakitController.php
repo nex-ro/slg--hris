@@ -10,6 +10,10 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Kehadiran;
 use Carbon\Carbon;
+use App\Mail\SakitDiajukan;
+use App\Mail\StatusSakitDiupdate;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
 
 class SakitController extends Controller
 {
@@ -67,7 +71,7 @@ class SakitController extends Controller
             $buktiPath = $file->storeAs('bukti_sakit', $fileName, 'public');
         }
 
-        Sakit::create([
+        $sakit = Sakit::create([
             'uid' => Auth::id(),
             'tanggal_mulai' => $request->tanggal_mulai,
             'tanggal_selesai' => $request->tanggal_selesai,
@@ -76,10 +80,77 @@ class SakitController extends Controller
             'status' => 'Diproses',
         ]);
 
+        // Kirim email notifikasi secara asynchronous ke seluruh user HRD
+        $this->queueSakitNotification($sakit);
+
         return redirect()->route('sakit.index')
             ->with('flash', [
                 'success' => 'Pengajuan izin sakit berhasil diajukan'
             ]);
+    }
+
+    /**
+     * Kirim email pemberitahuan izin sakit ke seluruh user HRD secara asynchronous (Queue)
+     */
+    private function queueSakitNotification(Sakit $sakit): void
+    {
+        try {
+            $hrdEmails = User::where('role', 'hrd')
+                ->where('active', 1)
+                ->whereNull('tanggal_keluar')
+                ->whereNotNull('email')
+                ->where('email', '!=', '')
+                ->pluck('email')
+                ->filter()
+                ->unique()
+                ->values();
+
+            if ($hrdEmails->isEmpty()) {
+                Log::warning('Tidak ada user HRD dengan email valid untuk pengiriman notifikasi sakit.', [
+                    'sakit_id' => $sakit->id,
+                ]);
+                return;
+            }
+
+            foreach ($hrdEmails as $email) {
+                Mail::to($email)->queue(
+                    (new SakitDiajukan($sakit))->onConnection('database')
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::error('Gagal mengantrekan email notifikasi izin sakit ke HRD.', [
+                'sakit_id' => $sakit->id,
+                'exception' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Kirim email pemberitahuan status izin sakit (Disetujui / Ditolak) ke pegawai pemohon secara asynchronous (Queue)
+     */
+    private function queueStatusNotificationToPegawai(Sakit $sakit): void
+    {
+        try {
+            $sakit->loadMissing('user');
+            $user = $sakit->user;
+
+            if (!$user || empty($user->email)) {
+                Log::warning('User pemohon izin sakit tidak memiliki email valid untuk pengiriman update status.', [
+                    'sakit_id' => $sakit->id,
+                    'uid' => $sakit->uid,
+                ]);
+                return;
+            }
+
+            Mail::to($user->email)->queue(
+                (new StatusSakitDiupdate($sakit))->onConnection('database')
+            );
+        } catch (\Throwable $e) {
+            Log::error('Gagal mengantrekan email notifikasi status izin sakit ke pegawai.', [
+                'sakit_id' => $sakit->id,
+                'exception' => $e->getMessage(),
+            ]);
+        }
     }
 
     /**
@@ -255,6 +326,11 @@ public function adminStore(Request $request)
         $this->updateKehadiranSakit($sakit);
     }
 
+    // Kirim notifikasi email ke pegawai pemohon saat status Disetujui atau Ditolak
+    if (in_array($request->status, ['Disetujui', 'Ditolak']) && $oldStatus !== $request->status) {
+        $this->queueStatusNotificationToPegawai($sakit);
+    }
+
     return redirect()->route('sakit.admin')
         ->with('flash', [
             'success' => 'Status izin sakit berhasil diupdate menjadi ' . $request->status
@@ -359,6 +435,11 @@ public function adminUpdate(Request $request, $id)
     // Jika status berubah menjadi Disetujui, buat/update kehadiran
     if ($newStatus === 'Disetujui' && $oldStatus !== 'Disetujui') {
         $this->updateKehadiranSakit($sakit);
+    }
+
+    // Kirim notifikasi email ke pegawai pemohon saat status Disetujui atau Ditolak
+    if (in_array($newStatus, ['Disetujui', 'Ditolak']) && $oldStatus !== $newStatus) {
+        $this->queueStatusNotificationToPegawai($sakit);
     }
 
     return redirect()->route('sakit.admin')

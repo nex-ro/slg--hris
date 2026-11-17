@@ -20,7 +20,8 @@ class Hrd
             return redirect('/');
         }
 
-        if (Auth::user()->role != 'hrd' && Auth::user()->role != 'head' && Auth::user()->role != 'eksekutif') {
+        $role = strtolower(Auth::user()->role ?? '');
+        if (!in_array($role, ['hrd', 'head', 'eksekutif', 'it'], true)) {
             return redirect('/');
         }
         return $next($request);

@@ -375,30 +375,10 @@ const handleSubmitEditStatus = () => {
 const handleSearchJatah = (value) => {
   setSearchJatah(value);
   setCurrentPageJatah(1);
-  
-  // ✅ TAMBAHKAN: Reload data dari backend
-  router.get(route('perizinan.cuti'), { 
-    search: value,
-    page: 1
-  }, { 
-    preserveState: true,
-    preserveScroll: true,        
-    only: ['jatahCuti']         
-  });
 };
+
 const handlePageChangeJatah = (page) => {
   setCurrentPageJatah(page);
-  
-  // ✅ TAMBAHKAN: Reload data dari backend
-  router.get(route('perizinan.cuti'), { 
-    search: searchJatah,
-    page: page
-  }, { 
-    preserveState: true,
-    preserveScroll: true,        
-    only: ['jatahCuti']         
-  });
-  
   window.scrollTo({ top: 0, behavior: 'smooth' });
 };
 

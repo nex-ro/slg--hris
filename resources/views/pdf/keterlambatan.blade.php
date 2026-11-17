@@ -300,7 +300,7 @@
             <p>Email ini dikirim secara otomatis oleh sistem kehadiran.</p>
             <p>Mohon tidak membalas email ini.</p>
             <p style="margin-top: 15px; color: #495057;">
-                &copy; {{ date('Y') }} Sawit Lestari Group - My SLG HRIS System
+                &copy; {{ date('Y') }} Sawit Lestari Group - My SLG  System
             </p>
         </div>
     </div>

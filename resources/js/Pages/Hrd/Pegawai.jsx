@@ -773,6 +773,7 @@ useEffect(() => {
                         <option value="head">Head</option>
                         <option value="Site">Site</option>
                         <option value="eksekutif">Eksekutif</option>
+                        <option value="it">IT</option>
                       </select>
                     </div>
 

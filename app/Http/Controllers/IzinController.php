@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use Inertia\Inertia;
 use Illuminate\Http\Request;
 use App\Mail\PerizinanDiajukan;
+use App\Mail\PerizinanDiketahuiHrd;
+use App\Mail\StatusPerizinanDiupdate;
 use App\Models\Perizinan;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
@@ -23,10 +25,7 @@ public function index()
     $heads = User::select('id', 'name', 'jabatan', 'email', 'role')
         ->where('id', '!=', Auth::id())
         ->where('active', true)
-        ->where(function($query) {
-            $query->whereNull('tanggal_keluar')
-                  ->orWhereDate('tanggal_keluar', '<', now());
-        })
+        ->whereNull('tanggal_keluar')
         ->orderBy('name')
         ->get();
         
@@ -63,6 +62,8 @@ public function index()
 public function getHeads()
 {
     $heads = User::select('id', 'name', 'email', 'jabatan', 'role')
+        ->where('active', 1)
+        ->whereNull('tanggal_keluar')
         ->orderBy('name')
         ->get();
     
@@ -449,6 +450,8 @@ public function approve(Request $request, $id)
             }
             $perizinan->save();
             
+            // Kirim notifikasi async ke seluruh HRD bahwa atasan telah menyetujui izin keluar kantor
+            $this->queueNotificationToAllHrd($perizinan);
         }
         // PRIORITAS 2: Jika user adalah HRD DAN bukan sedang approve sebagai target
         // DAN status_disetujui masih null DAN status_diketahui sudah disetujui
@@ -477,9 +480,10 @@ public function approve(Request $request, $id)
         // Refresh lagi setelah update status untuk mendapatkan data terbaru
         $perizinan->refresh();
         
-        // Jika status berubah menjadi Disetujui, update kehadiran
+        // Jika status berubah menjadi Disetujui, update kehadiran & kirim email notifikasi ke pemohon
         if ($perizinan->status === 'Disetujui' && $oldStatus !== 'Disetujui') {
             $this->updateKehadiranIzin($perizinan);
+            $this->queueStatusNotificationToPegawai($perizinan);
         }
 
         return back()->with('success', "Perizinan berhasil disetujui!");
@@ -610,6 +614,8 @@ public function reject(Request $request, $id)
             return back()->with('error', 'Anda tidak memiliki akses untuk menolak perizinan ini');
         }
 
+        $oldStatus = $perizinan->status;
+
         // Target user menolak
         if ($isTargetUser && $perizinan->status_diketahui === null) {
             $perizinan->status_diketahui = 'Ditolak';
@@ -629,6 +635,12 @@ public function reject(Request $request, $id)
         $this->updateOverallStatus($perizinan);
 
         $perizinan->refresh();
+
+        // Jika status berubah menjadi Ditolak, kirim email notifikasi ke pemohon
+        if ($perizinan->status === 'Ditolak' && $oldStatus !== 'Ditolak') {
+            $this->queueStatusNotificationToPegawai($perizinan);
+        }
+
         return back()->with('success', "Perizinan berhasil ditolak");
         
     } catch (\Exception $e) {
@@ -672,6 +684,60 @@ private function updateOverallStatus($perizinan)
     } catch (\Exception $e) {
         \Log::error('Error updating overall status: ' . $e->getMessage());
         throw $e;
+    }
+}
+
+/**
+ * Kirim email notifikasi status perizinan ke pegawai pemohon secara async via Queue
+ */
+private function queueStatusNotificationToPegawai(Perizinan $perizinan): void
+{
+    try {
+        $perizinan->loadMissing('user');
+
+        if (!empty($perizinan->user?->email)) {
+            Mail::to($perizinan->user->email)->queue(
+                (new StatusPerizinanDiupdate($perizinan))->onConnection('database')
+            );
+        }
+    } catch (\Exception $e) {
+        Log::error('Gagal mengirim queue email status perizinan ke pemohon: ' . $e->getMessage());
+    }
+}
+
+/**
+ * Kirim email pemberitahuan ke semua HRD ketika izin telah disetujui oleh atasan (diketahui)
+ */
+private function queueNotificationToAllHrd(Perizinan $perizinan): void
+{
+    try {
+        $hrdEmails = User::where('role', 'hrd')
+            ->where('active', 1)
+            ->whereNull('tanggal_keluar')
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
+            ->pluck('email')
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($hrdEmails->isEmpty()) {
+            Log::warning('Tidak ada user HRD aktif dengan email valid untuk pengiriman notifikasi izin keluar kantor.', [
+                'perizinan_id' => $perizinan->id,
+            ]);
+            return;
+        }
+
+        foreach ($hrdEmails as $email) {
+            Mail::to($email)->queue(
+                (new PerizinanDiketahuiHrd($perizinan))->onConnection('database')
+            );
+        }
+    } catch (\Throwable $e) {
+        Log::error('Gagal mengantrekan email notifikasi izin keluar kantor ke HRD.', [
+            'perizinan_id' => $perizinan->id,
+            'exception' => $e->getMessage(),
+        ]);
     }
 }
 
@@ -818,6 +884,8 @@ private function queuePerizinanNotification(Perizinan $perizinan): void
     public function getUsers()
     {
         $users = User::select('id', 'name', 'email', 'jabatan')
+            ->where('active', 1)
+            ->whereNull('tanggal_keluar')
             ->orderBy('name')
             ->get();
         

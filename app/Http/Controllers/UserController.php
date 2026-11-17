@@ -151,6 +151,7 @@ class UserController extends Controller
     public function getUsers()
     {
         $users = User::where('active', 1)
+            ->whereNull('tanggal_keluar')
             ->select('id', 'name', 'email', 'divisi', 'jabatan')
             ->orderBy('name', 'asc')
             ->get();
@@ -413,7 +414,7 @@ public function getPimpinan()
         ->where('id', '!=', $user->id)
         ->where(function($query) {
             $query->whereIn('jabatan', ['head', 'direksi', 'ceo', 'cfo', 'coo', 'cto'])
-                  ->orWhereIn('role', ['eksekutif', 'head']);  // ✅ Pakai whereIn untuk array
+                  ->orWhereIn('role', ['eksekutif', 'head', 'it']);  // ✅ Pakai whereIn untuk array
         })
         ->select('id', 'name', 'jabatan', 'divisi')
         ->orderBy('name')

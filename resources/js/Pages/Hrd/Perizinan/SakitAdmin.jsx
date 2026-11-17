@@ -234,45 +234,110 @@ const showToast = (message, type) => {
 
 const handleUpdateStatus = (id, newStatus) => {
   const statusText = newStatus === 'Disetujui' ? 'menyetujui' : 'menolak';
-  if (window.confirm(`Apakah Anda yakin ingin ${statusText} izin sakit ini?`)) {
-    setProcessing(true);
-    setLoadingOverlay(true); // ← TAMBAH INI
-    
-    router.put(`/admin/sakit/${id}/status`, 
-      { status: newStatus },
-      {
-        onSuccess: () => {
-          setProcessing(false);
-          setLoadingOverlay(false); // ← TAMBAH INI
-          showToast(`Izin sakit berhasil ${newStatus.toLowerCase()}!`, 'success'); // ← TAMBAH INI
-          router.reload({ only: ['sakits'], preserveScroll: true });
-        },
-        onError: (errors) => {
-          console.error(errors);
-          showToast('Terjadi kesalahan saat mengupdate status', 'error'); // ← UBAH INI
-          setProcessing(false);
-          setLoadingOverlay(false); // ← TAMBAH INI
-        }
-      }
-    );
-  }
+  const isApprove = newStatus === 'Disetujui';
+
+  toast.info(
+    ({ closeToast }) => (
+      <div className="space-y-3">
+        <p className="text-sm font-semibold text-gray-800">
+          Apakah Anda yakin ingin <span className={isApprove ? 'text-green-600 font-bold' : 'text-red-600 font-bold'}>{statusText}</span> izin sakit ini?
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={closeToast}
+            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition"
+          >
+            Batal
+          </button>
+          <button
+            onClick={() => {
+              closeToast();
+              setProcessing(true);
+              setLoadingOverlay(true);
+              
+              router.put(`/admin/sakit/${id}/status`, 
+                { status: newStatus },
+                {
+                  onSuccess: () => {
+                    setProcessing(false);
+                    setLoadingOverlay(false);
+                    showToast(`Izin sakit berhasil ${newStatus.toLowerCase()}!`, 'success');
+                    router.reload({ only: ['sakits'], preserveScroll: true });
+                  },
+                  onError: (errors) => {
+                    console.error(errors);
+                    showToast('Terjadi kesalahan saat mengupdate status', 'error');
+                    setProcessing(false);
+                    setLoadingOverlay(false);
+                  }
+                }
+              );
+            }}
+            className={`px-3 py-1.5 text-xs font-semibold text-white rounded-md transition shadow-sm ${
+              isApprove ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'
+            }`}
+          >
+            Ya, {newStatus}
+          </button>
+        </div>
+      </div>
+    ),
+    {
+      position: "top-center",
+      autoClose: false,
+      closeOnClick: false,
+      draggable: false,
+      closeButton: false,
+    }
+  );
 };
+
 const handleDelete = (id) => {
-  if (window.confirm("Apakah Anda yakin ingin menghapus data ini?")) {
-    setLoadingOverlay(true); // ← TAMBAH INI
-    router.delete(`/admin/sakit/${id}`, {
-      onSuccess: () => {
-        setLoadingOverlay(false); // ← TAMBAH INI
-        showToast("Data berhasil dihapus!", 'success'); // ← UBAH INI
-        router.reload({ only: ['sakits'], preserveScroll: true });
-      },
-      onError: (errors) => {
-        console.error(errors);
-        setLoadingOverlay(false); // ← TAMBAH INI
-        showToast('Terjadi kesalahan saat menghapus data', 'error'); // ← UBAH INI
-      }
-    });
-  }
+  toast.warn(
+    ({ closeToast }) => (
+      <div className="space-y-3">
+        <p className="text-sm font-semibold text-gray-800">
+          Apakah Anda yakin ingin menghapus data izin sakit ini?
+        </p>
+        <div className="flex justify-end gap-2">
+          <button
+            onClick={closeToast}
+            className="px-3 py-1.5 text-xs font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition"
+          >
+            Batal
+          </button>
+          <button
+            onClick={() => {
+              closeToast();
+              setLoadingOverlay(true);
+              router.delete(`/admin/sakit/${id}`, {
+                onSuccess: () => {
+                  setLoadingOverlay(false);
+                  showToast("Data berhasil dihapus!", 'success');
+                  router.reload({ only: ['sakits'], preserveScroll: true });
+                },
+                onError: (errors) => {
+                  console.error(errors);
+                  setLoadingOverlay(false);
+                  showToast('Terjadi kesalahan saat menghapus data', 'error');
+                }
+              });
+            }}
+            className="px-3 py-1.5 text-xs font-semibold text-white bg-red-600 hover:bg-red-700 rounded-md transition shadow-sm"
+          >
+            Ya, Hapus
+          </button>
+        </div>
+      </div>
+    ),
+    {
+      position: "top-center",
+      autoClose: false,
+      closeOnClick: false,
+      draggable: false,
+      closeButton: false,
+    }
+  );
 };
 
   const handleViewBukti = (buktiPath) => {

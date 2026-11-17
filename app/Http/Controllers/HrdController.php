@@ -555,7 +555,7 @@ private function getYearlyTableData($year, $tower, $divisi)
          
         // ✅ PERBAIKAN LENGKAP: Filter berdasarkan TMK dan Tanggal Keluar
         $users = User::where('active', true) 
-            ->where('role', '!=', 'eksekutif') 
+            ->whereNotIn('role', ['eksekutif', 'it']) 
             // ✅ FILTER TMK: Hanya user yang SUDAH MULAI KERJA pada tanggal yang dipilih
             ->where(function ($query) use ($tanggal) {
                 $query->where('tmk', '<=', $tanggal)  // TMK harus <= tanggal (sudah mulai kerja)
@@ -784,7 +784,7 @@ public function getByDateAndDivisi(Request $request): JsonResponse
         $isHoliday = $isSaturdayOrSunday || $isNationalHoliday; 
          
         $users = User::where('active', true) 
-            ->where('role', '!=', 'eksekutif')
+            ->whereNotIn('role', ['eksekutif', 'it'])
             ->where('divisi', $divisi) // Filter berdasarkan divisi
             ->where(function ($query) use ($tanggal) {
                 $query->where('tmk', '<=', $tanggal)

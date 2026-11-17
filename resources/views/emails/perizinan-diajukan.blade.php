@@ -35,6 +35,6 @@
         </tr>
     </table>
 
-    <p>Silakan masuk ke aplikasi HRIS untuk meninjau pengajuan ini.</p>
+    <p>Silakan masuk ke Website MY-SLG untuk meninjau pengajuan ini.</p>
 </body>
 </html>

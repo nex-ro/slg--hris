@@ -983,7 +983,7 @@ export default function ZkAccessLogs({
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200 text-amber-900 text-xs flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
                 <span>
-                  Pastikan komputer HRIS ini berada dalam satu jaringan LAN / WiFi dengan IP mesin yang dimasukkan agar status mesin berwarna hijau (ONLINE).
+                  Pastikan komputer ini berada dalam satu jaringan LAN / WiFi dengan IP mesin yang dimasukkan agar status mesin berwarna hijau (ONLINE).
                 </span>
               </div>
 
