@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Head, usePage, router, Link } from '@inertiajs/react';
 import LayoutTemplate from '@/Layouts/LayoutTemplate';
-import { 
+import {
   Check, ArrowLeft, LogIn, PhoneCall, HelpCircle,
   AlertCircle, ChevronDown, CheckCircle2, RotateCcw
 } from 'lucide-react';
@@ -141,12 +141,12 @@ export default function CreatePengajuan({ approvers = [] }) {
 
   const FormContent = (
     <div className="max-w-[640px] mx-auto space-y-3 sm:space-y-4 font-sans text-[#202124]">
-      
+
       {/* Top Header Card (Google Forms Style) */}
       <div className="bg-white rounded-lg border border-[#dadce0] overflow-hidden shadow-sm">
         {/* Google Form Accent Header Bar */}
         <div className="h-2.5 bg-[#673ab7] w-full" />
-        
+
         <div className="p-6 sm:p-7 space-y-4">
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -179,7 +179,13 @@ export default function CreatePengajuan({ approvers = [] }) {
               Form ini khusus digunakan oleh karyawan HO Sawit Lestari Group, untuk keperluan pengajuan surat perjalanan dinas.
             </p>
             <p>
-              Karyawan yang hendak melakukan perjalanan dinas, wajib mengisi form pada link <strong className="text-[#1a73e8]">https://bit.ly/SPD-2025</strong>
+              Karyawan yang hendak melakukan perjalanan dinas, wajib mengisi form pada link{' '}
+              <a
+                href="https://my.sawitlestarigroup.co.id/spd"
+                className="font-bold text-[#1a73e8] hover:underline"
+              >
+                https://my.sawitlestarigroup.co.id/spd
+              </a>
             </p>
             <p>
               Isi form sesuai pertanyaan atau sesuai contoh pengisian.
@@ -189,13 +195,13 @@ export default function CreatePengajuan({ approvers = [] }) {
             </p>
             <p className="bg-[#f8f9fa] p-3 rounded border border-[#e0e0e0] text-[#3c4043]">
               Karyawan yang telah mengisi surat perjalanan dinas, segera menghubungi HRD atau melalui WhatsApp{' '}
-              <a 
-                href="https://wa.me/6285773331335?text=Halo%20HRD%20Sawit%20Lestari%20Group,%20saya%20ingin%20meminta%20nomor%20Surat%20Perjalanan%20Dinas%20(SPD)%202025" 
-                target="_blank" 
+              <a
+                href="https://wa.me/6285891851186?text=Halo%20HRD%20Sawit%20Lestari%20Group,%20saya%20ingin%20meminta%20nomor%20Surat%20Perjalanan%20Dinas%20(SPD)%202025"
+                target="_blank"
                 rel="noreferrer"
                 className="font-bold text-[#1a73e8] hover:underline inline-flex items-center gap-1"
               >
-                <PhoneCall className="w-3 h-3 text-[#1e8e3e]" /> (0857-7333-1335)
+                <PhoneCall className="w-3 h-3 text-[#1e8e3e]" /> 0858-9185-1186
               </a>{' '}
               untuk mendapatkan nomor surat dan selanjutnya dapat diajukan otorisasi ke pihak terkait.
             </p>
@@ -266,7 +272,7 @@ export default function CreatePengajuan({ approvers = [] }) {
       ) : (
         /* Form Utama */
         <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
-          
+
           {/* Card: Email */}
           <div className="bg-white rounded-lg border border-[#dadce0] p-6 shadow-sm space-y-3 transition-colors focus-within:border-[#673ab7]">
             <label className="block text-sm sm:text-base font-normal text-[#202124]">
@@ -306,7 +312,7 @@ export default function CreatePengajuan({ approvers = [] }) {
                 Nomor Surat (harap hubungin HRD) <span className="text-[#d93025]">*</span>
               </label>
               <p className="text-xs text-[#5f6368] mt-1">
-                Contoh Pengisian : 015/SLG-HO/SPD/XI/2025 &bull; Hubungi WA HRD (0857-7333-1335)
+                Contoh Pengisian : 015/SLG-HO/SPD/XI/2025 &bull; Hubungi WA HRD (0858-9185-1186)
               </p>
             </div>
             <input
@@ -333,7 +339,7 @@ export default function CreatePengajuan({ approvers = [] }) {
 
             <div className="space-y-3 pt-1">
               {['Staff', 'Manager', 'Head'].map((opt) => (
-                <label 
+                <label
                   key={opt}
                   className="flex items-center gap-3 cursor-pointer group select-none"
                 >

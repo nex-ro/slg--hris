@@ -14,6 +14,9 @@ use Carbon\Carbon;
 use App\Models\Perizinan;
 use App\Models\Sakit;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Password;
+use App\Mail\UndanganBergabungPegawai;
 
 class UserController extends Controller
 {
@@ -422,6 +425,41 @@ public function getPimpinan()
     
     return response()->json($pimpinan);
 }
+
+    /**
+     * Kirim email undangan bergabung & buat password baru
+     */
+    public function sendInvitation($id)
+    {
+        $user = User::findOrFail($id);
+
+        if (empty($user->email)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Pegawai ini belum memiliki alamat email.'
+            ], 422);
+        }
+
+        try {
+            // Generate password reset token menggunakan Password Broker Laravel
+            $token = Password::broker()->createToken($user);
+
+            // Antrekan email undangan
+            Mail::to($user->email)->queue(
+                (new UndanganBergabungPegawai($user, $token))->onConnection('database')
+            );
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Link undangan aktivasi berhasil dikirim ke email ' . $user->email
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Gagal mengirim email undangan: ' . $e->getMessage()
+            ], 500);
+        }
+    }
 
 
     

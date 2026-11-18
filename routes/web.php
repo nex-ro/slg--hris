@@ -94,6 +94,7 @@ Route::middleware('hrd')->group(function () {
     Route::get('/HRD/dashboard', [HrdController::class, 'index'])->middleware(['auth', 'verified'])->name('hrd.dashboard');
     Route::get('/pegawai/list', [UserController::class, 'pegawai'])->middleware(['auth', 'verified'])->name('pegawai');
     Route::post('/pegawai', [UserController::class, 'store'])->name('pegawai.store');
+    Route::post('/pegawai/{id}/invite', [UserController::class, 'sendInvitation'])->name('pegawai.invite');
     Route::put('/pegawai/{id}', [UserController::class, 'update'])->name('pegawai.update');
     Route::delete('/pegawai/{id}', [UserController::class, 'destroy'])->name('pegawai.destroy');
     Route::get('/absensi/list', [AbsensiController::class, 'absensi'])->name('absensi');

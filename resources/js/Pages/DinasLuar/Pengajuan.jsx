@@ -19,6 +19,26 @@ export default function Pengajuan({ pengajuanList = [] }) {
   const [statusModal, setStatusModal] = useState(null);
   const [statusForm, setStatusForm] = useState({ status: 'Disetujui', catatan: '' });
 
+  const formatDate = (dateStr) => {
+    if (!dateStr) return '-';
+    try {
+      // Ambil bagian tanggal jika ada format ISO timestamp (misal: 2026-11-20T00:00:00.000000Z)
+      const cleanDate = dateStr.includes('T') ? dateStr.split('T')[0] : dateStr;
+      const parts = cleanDate.split('-');
+      if (parts.length === 3) {
+        const d = new Date(parts[0], parts[1] - 1, parts[2]);
+        return d.toLocaleDateString('id-ID', {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric'
+        });
+      }
+      return cleanDate;
+    } catch {
+      return dateStr;
+    }
+  };
+
   const handleUpdateStatusSubmit = (e) => {
     e.preventDefault();
     if (!statusModal) return;
@@ -212,9 +232,9 @@ export default function Pengajuan({ pengajuanList = [] }) {
                         {item.tujuan}
                       </td>
                       <td className="py-3.5 px-4 whitespace-nowrap text-xs">
-                        <div>{item.tanggal_berangkat}</div>
+                        <div className="font-medium text-gray-800">{formatDate(item.tanggal_berangkat)}</div>
                         <div className="text-gray-400 text-[11px]">
-                          s/d {item.tanggal_kembali || (item.keterangan_kembali || 'Selesai')}
+                          s/d {item.tanggal_kembali ? formatDate(item.tanggal_kembali) : (item.keterangan_kembali || 'Selesai')}
                         </div>
                       </td>
                       <td className="py-3.5 px-4">
@@ -342,7 +362,7 @@ export default function Pengajuan({ pengajuanList = [] }) {
                 <div>
                   <span className="text-[11px] text-gray-500 block">Waktu Penugasan</span>
                   <span className="font-semibold text-gray-900">
-                    {detailModal.tanggal_berangkat} s/d {detailModal.tanggal_kembali || (detailModal.keterangan_kembali || 'Selesai')}
+                    {formatDate(detailModal.tanggal_berangkat)} s/d {detailModal.tanggal_kembali ? formatDate(detailModal.tanggal_kembali) : (detailModal.keterangan_kembali || 'Selesai')}
                   </span>
                 </div>
               </div>

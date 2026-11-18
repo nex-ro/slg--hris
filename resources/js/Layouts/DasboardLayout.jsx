@@ -101,15 +101,6 @@ const DashboardLayouts = ({ children }) => {
       { icon: Thermometer, label: 'Sakit', href: '/pegawai/sakit' },
       { icon: CalendarClock, label: 'Izin Keluar Kantor', href: '/pegawai/izin' },
       { icon: UmbrellaIcon, label: 'Izin Cuti', href: '/pegawai/cuti' },
-      {
-        icon: MapPin,
-        label: 'Dinas Luar',
-        href: '/dinas-luar',
-        subItems: [
-          { icon: ClipboardCheck, label: 'Pencatatan', href: '/dinas-luar/pencatatan' },
-          { icon: FileText, label: 'Pengajuan Dinas Luar', href: '/dinas-luar/pengajuan' },
-        ],
-      },
     ];
 
     // Return menu based on user role
@@ -215,10 +206,11 @@ const DashboardLayouts = ({ children }) => {
         <div className="fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden" onClick={() => setSidebarOpen(false)} />
       )}
 
-      <div className={`fixed lg:static inset-y-0 left-0 z-30 h-screen bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 transform transition-all duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
-        } ${sidebarCollapsed ? 'lg:w-20' : 'lg:w-72'} w-72`}>
-        <div className="flex flex-col h-full">
-          <div className="flex items-center justify-between p-6 border-b border-gray-700/50">
+      <div className={`fixed lg:static inset-y-0 left-0 z-30 h-screen h-[100dvh] max-h-[100dvh] bg-gradient-to-b from-gray-900 via-gray-800 to-gray-900 transform transition-all duration-300 ${
+        sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      } ${sidebarCollapsed ? 'lg:w-20' : 'lg:w-72'} w-72`}>
+        <div className="flex flex-col h-full min-h-0">
+          <div className="flex items-center justify-between p-6 border-b border-gray-700/50 shrink-0">
             <div className={`flex items-center space-x-3 ${sidebarCollapsed ? 'lg:justify-center lg:w-full' : ''}`}>
               <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-md">
                 <img src="/asset/logo.png" alt="Logo" className="w-12 h-12 object-contain" />
@@ -242,7 +234,7 @@ const DashboardLayouts = ({ children }) => {
           </div>
 
           {auth?.user && !sidebarCollapsed && (
-            <div className="mx-4 mt-4 p-4 bg-gray-800/50 rounded-xl border border-gray-700/50">
+            <div className="mx-4 mt-4 p-4 bg-gray-800/50 rounded-xl border border-gray-700/50 shrink-0">
               <div className="flex items-center space-x-3">
                 <div className="w-10 h-10 bg-gradient-to-r from-emerald-400 to-cyan-400 rounded-full flex items-center justify-center">
                   <span className="text-gray-900 font-semibold text-sm">
@@ -262,7 +254,7 @@ const DashboardLayouts = ({ children }) => {
             </div>
           )}
 
-          <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
+          <nav className="flex-1 min-h-0 px-4 py-4 space-y-1 overflow-y-auto overscroll-contain">
             {menuItems.map((item, index) => {
               const Icon = item.icon;
               const active = isActive(item.href);
@@ -316,7 +308,7 @@ const DashboardLayouts = ({ children }) => {
             })}
           </nav>
 
-          <div className="p-4 border-t border-gray-700/50">
+          <div className="p-4 pb-6 sm:pb-4 border-t border-gray-700/50 shrink-0 bg-gray-900/90 z-10">
             {auth?.user ? (
               <Link href={route('logout')} method="post" as="button"
                 className={`w-full flex items-center rounded-xl bg-gradient-to-r from-red-500 to-pink-600 hover:from-red-600 hover:to-pink-700 text-white shadow-lg transition-all ${sidebarCollapsed ? 'justify-center px-4 py-3' : 'justify-center space-x-3 px-4 py-3'}`}>

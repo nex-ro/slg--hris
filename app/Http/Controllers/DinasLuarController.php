@@ -21,14 +21,32 @@ class DinasLuarController extends Controller
     public function pengajuan(Request $request)
     {
         $user = Auth::user();
+        $userRole = strtolower($user->role ?? '');
+
+        // Hak akses menu riwayat hanya untuk HRD, Admin, dan Head / Atasan
+        if (!in_array($userRole, ['admin', 'hrd', 'head', 'atasan'])) {
+            return redirect('/dashboard')->with('error', 'Anda tidak memiliki hak akses ke menu Dinas Luar.');
+        }
 
         // Ambil riwayat pengajuan surat dinas
         $query = SuratDinas::with('user');
 
-        // Jika bukan admin / hrd, hanya tampilkan milik sendiri
-        if (!in_array($user->role, ['admin', 'hrd'])) {
-            $query->where('uid', $user->id);
+        // Jika Head / Atasan: tampilkan seluruh pengajuan dari divisinya (serta pengajuan miliknya sendiri)
+        if (in_array($userRole, ['head', 'atasan'])) {
+            $divisi = $user->divisi;
+            $query->where(function ($q) use ($user, $divisi) {
+                // Pengajuan milik user sendiri
+                $q->where('uid', $user->id);
+                
+                // Atau pengajuan yang user pemiliknya berada di divisi yang sama
+                if (!empty($divisi)) {
+                    $q->orWhereHas('user', function ($sub) use ($divisi) {
+                        $sub->where('divisi', $divisi);
+                    });
+                }
+            });
         }
+        // Jika HRD / Admin: tampilkan seluruh pengajuan tanpa batasan
 
         $pengajuanList = $query->orderBy('created_at', 'desc')->get();
 
@@ -133,7 +151,10 @@ class DinasLuarController extends Controller
         $this->queueNotificationToAllHrd($suratDinas);
 
         if (Auth::check()) {
-            return redirect()->route('dinas-luar.pengajuan')->with('success', 'Pengajuan Surat Perjalanan Dinas berhasil dikirim!');
+            $userRole = strtolower($user->role ?? '');
+            if (in_array($userRole, ['admin', 'hrd', 'head', 'atasan'])) {
+                return redirect()->route('dinas-luar.pengajuan')->with('success', 'Pengajuan Surat Perjalanan Dinas berhasil dikirim!');
+            }
         }
 
         return redirect()->back()->with('success', 'Pengajuan Surat Perjalanan Dinas Anda telah berhasil dikirim! Silakan konfirmasi ke HRD.');

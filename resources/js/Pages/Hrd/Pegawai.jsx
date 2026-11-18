@@ -20,6 +20,7 @@
     UserX,
     Eye,
     EyeOff,
+    Send,
   } from 'lucide-react';
   import { flexRender, getCoreRowModel, useReactTable } from '@tanstack/react-table';
   import { toast } from 'react-toastify';
@@ -110,6 +111,44 @@ useEffect(() => {
     return () => clearTimeout(timer);
   }, [searchTerm, selectedDivisi, selectedJabatan, selectedTower]);
 
+
+  const [invitingId, setInvitingId] = useState(null);
+
+  const handleSendInvite = async (user) => {
+    if (!user.email) {
+      toast.warning('Pegawai ini tidak memiliki alamat email!');
+      return;
+    }
+
+    if (!confirm(`Kirim link undangan aktivasi akun & buat password ke email ${user.email} (${user.name})?`)) {
+      return;
+    }
+
+    setInvitingId(user.id);
+    try {
+      const response = await fetch(`/pegawai/${user.id}/invite`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+          'X-Requested-With': 'XMLHttpRequest',
+          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || ''
+        }
+      });
+
+      const result = await response.json();
+      if (response.ok && result.success) {
+        toast.success(result.message || 'Link undangan berhasil dikirim!');
+      } else {
+        toast.error(result.message || 'Gagal mengirim email undangan');
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error('Terjadi kesalahan saat mengirim undangan.');
+    } finally {
+      setInvitingId(null);
+    }
+  };
 
   const resetFilters = () => {
     setSearchTerm('');
@@ -565,6 +604,18 @@ useEffect(() => {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => handleSendInvite(user)}
+                            disabled={invitingId === user.id || !user.email}
+                            className={`p-1.5 rounded-lg transition ${
+                              invitingId === user.id
+                                ? 'bg-amber-100 text-amber-600 animate-pulse'
+                                : 'text-emerald-600 hover:text-emerald-800 hover:bg-emerald-50'
+                            } disabled:opacity-40 disabled:cursor-not-allowed`}
+                            title={user.email ? `Kirim Link Undangan (${user.email})` : 'Email tidak tersedia'}
+                          >
+                            <Send size={17} className={invitingId === user.id ? 'animate-spin' : ''} />
+                          </button>
                           <button
                             onClick={() => openEditModal(user)}
                             className="p-1.5 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition"

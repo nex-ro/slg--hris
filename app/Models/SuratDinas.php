@@ -35,8 +35,8 @@ class SuratDinas extends Model
     ];
 
     protected $casts = [
-        'tanggal_berangkat' => 'date',
-        'tanggal_kembali' => 'date',
+        'tanggal_berangkat' => 'date:Y-m-d',
+        'tanggal_kembali' => 'date:Y-m-d',
         'ajukan_advance' => 'boolean',
     ];
 
