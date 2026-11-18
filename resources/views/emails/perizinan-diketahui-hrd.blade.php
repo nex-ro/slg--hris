@@ -50,7 +50,7 @@
 
     <p style="margin-top: 20px;">
         Terima kasih,<br>
-        <strong>Sistem HRIS MY-SLG</strong>
+        <strong>Website MY-SLG</strong>
     </p>
 </body>
 </html>

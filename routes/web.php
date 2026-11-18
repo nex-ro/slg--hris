@@ -27,6 +27,11 @@ Route::get('/tes', function () {
 });
     Route::post('/dokumen/file-resign/{id}', [PegawaiController::class, 'filestore']);
 
+// Pengajuan Surat Perjalanan Dinas (Dapat diakses Publik / Tanpa Login atau dengan Login)
+Route::get('/dinas-luar/pengajuan/tambah', [DinasLuarController::class, 'create'])->name('dinas-luar.create');
+Route::post('/dinas-luar/pengajuan', [DinasLuarController::class, 'store'])->name('dinas-luar.store');
+Route::get('/spd', [DinasLuarController::class, 'create'])->name('spd.form'); // alias short URL seperti bit.ly/SPD-2025
+
 Route::get('/', function () {
     if (!Auth::check()) {
         return redirect('/login');
@@ -205,6 +210,9 @@ Route::middleware('auth')->group(function () {
 
     // Dinas Luar
     Route::get('/dinas-luar/pengajuan', [DinasLuarController::class, 'pengajuan'])->name('dinas-luar.pengajuan');
+    Route::put('/dinas-luar/pengajuan/{id}/status', [DinasLuarController::class, 'updateStatus'])->name('dinas-luar.update-status');
+    Route::delete('/dinas-luar/pengajuan/{id}', [DinasLuarController::class, 'destroy'])->name('dinas-luar.destroy');
+    Route::get('/dinas-luar/pengajuan/{id}/pdf', [DinasLuarController::class, 'downloadPdf'])->name('dinas-luar.pdf');
     Route::get('/dinas-luar/pencatatan', [DinasLuarController::class, 'pencatatan'])->name('dinas-luar.pencatatan');
 
     // Inventaris (Khusus Eksekutif & IT)

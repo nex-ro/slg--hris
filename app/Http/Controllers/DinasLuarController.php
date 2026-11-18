@@ -2,73 +2,35 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\SuratDinas;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Log;
+use Barryvdh\DomPDF\Facade\Pdf;
+use App\Mail\SuratDinasDiajukan;
 
 class DinasLuarController extends Controller
 {
     /**
-     * Halaman Pengajuan Dinas Luar
+     * Halaman Pengajuan Dinas Luar (Daftar Riwayat)
      */
     public function pengajuan(Request $request)
     {
         $user = Auth::user();
 
-        // Sample data for initial setup / preview
-        $pengajuanList = [
-            [
-                'id' => 1,
-                'no_surat' => 'DL/2026/02/001',
-                'nama' => $user ? $user->name : 'Budi Santoso',
-                'divisi' => $user ? ($user->divisi ?? 'IT Support') : 'IT Support',
-                'tujuan' => 'PT Mitra Solusi Surabaya',
-                'lokasi' => 'Surabaya, Jawa Timur',
-                'tanggal_mulai' => '2026-02-15',
-                'tanggal_selesai' => '2026-02-17',
-                'durasi' => 3,
-                'keperluan' => 'Implementasi Sistem HRIS dan Pelatihan User',
-                'transportasi' => 'Pesawat Terbang',
-                'estimasi_biaya' => 4500000,
-                'status' => 'approved', // pending, approved, rejected, completed
-                'keterangan' => 'Disetujui oleh Head Divisi',
-                'created_at' => '2026-02-05',
-            ],
-            [
-                'id' => 2,
-                'no_surat' => 'DL/2026/02/002',
-                'nama' => $user ? $user->name : 'Siti Rahma',
-                'divisi' => $user ? ($user->divisi ?? 'Operasional') : 'Operasional',
-                'tujuan' => 'Kantor Cabang Bandung',
-                'lokasi' => 'Bandung, Jawa Barat',
-                'tanggal_mulai' => '2026-02-22',
-                'tanggal_selesai' => '2026-02-24',
-                'durasi' => 3,
-                'keperluan' => 'Audit Operasional Lapangan Triwulan I',
-                'transportasi' => 'Kereta Api (Whoosh)',
-                'estimasi_biaya' => 2800000,
-                'status' => 'pending',
-                'keterangan' => 'Menunggu verifikasi Head',
-                'created_at' => '2026-02-09',
-            ],
-            [
-                'id' => 3,
-                'no_surat' => 'DL/2026/01/014',
-                'nama' => $user ? $user->name : 'Ahmad Fauzi',
-                'divisi' => $user ? ($user->divisi ?? 'Marketing') : 'Marketing',
-                'tujuan' => 'Jakarta Convention Center (JCC)',
-                'lokasi' => 'Jakarta Pusat',
-                'tanggal_mulai' => '2026-01-20',
-                'tanggal_selesai' => '2026-01-21',
-                'durasi' => 2,
-                'keperluan' => 'Menghadiri Expo Franchise Indonesia',
-                'transportasi' => 'Kendaraan Operasional Kantor',
-                'estimasi_biaya' => 1200000,
-                'status' => 'completed',
-                'keterangan' => 'Selesai & Biaya telah dilaporkan',
-                'created_at' => '2026-01-15',
-            ],
-        ];
+        // Ambil riwayat pengajuan surat dinas
+        $query = SuratDinas::with('user');
+
+        // Jika bukan admin / hrd, hanya tampilkan milik sendiri
+        if (!in_array($user->role, ['admin', 'hrd'])) {
+            $query->where('uid', $user->id);
+        }
+
+        $pengajuanList = $query->orderBy('created_at', 'desc')->get();
 
         return Inertia::render('DinasLuar/Pengajuan', [
             'pengajuanList' => $pengajuanList,
@@ -76,6 +38,161 @@ class DinasLuarController extends Controller
                 'user' => $user,
             ],
         ]);
+    }
+
+    /**
+     * Halaman Tambah Pengajuan Surat Perjalanan Dinas Baru
+     */
+    public function create()
+    {
+        $user = Auth::user();
+
+        // Daftar atasan / user aktif untuk pilihan pemberi tugas
+        $approvers = User::select('id', 'name', 'jabatan', 'email')
+            ->where('active', 1)
+            ->whereNull('tanggal_keluar')
+            ->orderBy('name')
+            ->get();
+
+        return Inertia::render('DinasLuar/Create', [
+            'approvers' => $approvers,
+            'auth' => [
+                'user' => $user,
+            ],
+        ]);
+    }
+
+    /**
+     * Simpan Pengajuan Surat Perjalanan Dinas
+     */
+    public function store(Request $request)
+    {
+        $user = Auth::user();
+
+        $validator = Validator::make($request->all(), [
+            'email' => 'required|email|max:255',
+            'nama_lengkap' => 'required|string|max:255',
+            'nomor_surat' => 'required|string|max:255',
+            'jabatan' => 'required|string|in:Staff,Manager,Head,staff,manager,head',
+            'pemberi_tugas' => 'nullable|string|max:255',
+            'tanggal_berangkat' => 'required|date',
+            'tanggal_kembali' => 'nullable|date',
+            'keterangan_kembali' => 'nullable|string|max:255',
+            'tujuan' => 'required|string|max:255',
+            'keperluan' => 'required|string|max:1000',
+            'transportasi' => 'required|string|max:255',
+            'ajukan_advance' => 'boolean',
+            'panjar_nominal' => 'nullable|string|max:255',
+            'panjar_terbilang' => 'nullable|string|max:255',
+            'nama_rekening' => 'nullable|string|max:255',
+            'nomor_rekening' => 'nullable|string|max:255',
+            'nama_bank' => 'nullable|string|max:255',
+        ], [
+            'email.required' => 'Email wajib diisi',
+            'nama_lengkap.required' => 'Nama lengkap wajib diisi',
+            'nomor_surat.required' => 'Nomor surat wajib diisi (harap hubungi HRD)',
+            'jabatan.required' => 'Jabatan wajib dipilih (Staff, Manager, atau Head)',
+            'jabatan.in' => 'Jabatan harus salah satu dari: Staff, Manager, atau Head',
+            'tanggal_berangkat.required' => 'Tanggal berangkat wajib diisi',
+            'tujuan.required' => 'Tujuan perjalanan dinas wajib diisi',
+            'keperluan.required' => 'Keperluan perjalanan dinas wajib diisi',
+            'transportasi.required' => 'Moda transportasi wajib diisi',
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput();
+        }
+
+        $validated = $validator->validated();
+
+        $ajukanAdvance = $request->boolean('ajukan_advance');
+
+        $suratDinas = SuratDinas::create([
+            'uid' => $user ? $user->id : null,
+            'email' => $validated['email'],
+            'nama_lengkap' => $validated['nama_lengkap'],
+            'nomor_surat' => $validated['nomor_surat'],
+            'jabatan' => ucfirst(strtolower($validated['jabatan'] ?? ($user ? $user->jabatan : 'Staff'))),
+            'pemberi_tugas' => $validated['pemberi_tugas'] ?? '-',
+            'tanggal_berangkat' => $validated['tanggal_berangkat'],
+            'tanggal_kembali' => $validated['tanggal_kembali'] ?? null,
+            'keterangan_kembali' => $validated['keterangan_kembali'] ?? null,
+            'tujuan' => $validated['tujuan'],
+            'keperluan' => $validated['keperluan'],
+            'transportasi' => $validated['transportasi'],
+            'ajukan_advance' => $ajukanAdvance,
+            'panjar_nominal' => $ajukanAdvance ? ($validated['panjar_nominal'] ?: '-') : '-',
+            'panjar_terbilang' => $ajukanAdvance ? ($validated['panjar_terbilang'] ?: '-') : '-',
+            'nama_rekening' => $ajukanAdvance ? ($validated['nama_rekening'] ?: '-') : '-',
+            'nomor_rekening' => $ajukanAdvance ? ($validated['nomor_rekening'] ?: '-') : '-',
+            'nama_bank' => $ajukanAdvance ? ($validated['nama_bank'] ?: '-') : '-',
+            'status' => 'Diajukan',
+        ]);
+
+        // Kirim email notifikasi ke seluruh HRD yang aktif
+        $this->queueNotificationToAllHrd($suratDinas);
+
+        if (Auth::check()) {
+            return redirect()->route('dinas-luar.pengajuan')->with('success', 'Pengajuan Surat Perjalanan Dinas berhasil dikirim!');
+        }
+
+        return redirect()->back()->with('success', 'Pengajuan Surat Perjalanan Dinas Anda telah berhasil dikirim! Silakan konfirmasi ke HRD.');
+    }
+
+    /**
+     * Update status pengajuan oleh HRD / Admin
+     */
+    public function updateStatus(Request $request, $id)
+    {
+        $user = Auth::user();
+        if (!in_array($user->role, ['admin', 'hrd'])) {
+            return back()->withErrors(['error' => 'Anda tidak memiliki hak untuk mengubah status pengajuan ini']);
+        }
+
+        $validated = $request->validate([
+            'status' => 'required|in:Diajukan,Diproses,Disetujui,Ditolak',
+            'catatan' => 'nullable|string|max:500',
+        ]);
+
+        $suratDinas = SuratDinas::findOrFail($id);
+        $suratDinas->status = $validated['status'];
+        if ($request->has('catatan')) {
+            $suratDinas->catatan = $validated['catatan'];
+        }
+        $suratDinas->save();
+
+        return redirect()->back()->with('success', 'Status pengajuan berhasil diperbarui!');
+    }
+
+    /**
+     * Hapus pengajuan surat dinas
+     */
+    public function destroy($id)
+    {
+        $user = Auth::user();
+        $suratDinas = SuratDinas::findOrFail($id);
+
+        if ($suratDinas->uid !== $user->id && !in_array($user->role, ['admin', 'hrd'])) {
+            return back()->withErrors(['error' => 'Anda tidak memiliki akses untuk menghapus pengajuan ini']);
+        }
+
+        $suratDinas->delete();
+        return redirect()->back()->with('success', 'Pengajuan Surat Perjalanan Dinas berhasil dihapus!');
+    }
+
+    /**
+     * Download Formulir PDF Surat Perjalanan Dinas
+     */
+    public function downloadPdf($id)
+    {
+        $suratDinas = SuratDinas::with('user')->findOrFail($id);
+
+        $pdf = Pdf::loadView('pdf.surat-dinas', [
+            'surat' => $suratDinas,
+        ])->setPaper('a4', 'portrait');
+
+        $filename = 'SPD_' . str_replace(['/', '\\'], '_', $suratDinas->nomor_surat) . '.pdf';
+        return $pdf->stream($filename);
     }
 
     /**
@@ -96,8 +213,8 @@ class DinasLuarController extends Controller
                 'tanggal_dinas' => '2026-01-20 s/d 2026-01-21',
                 'estimasi_biaya' => 1200000,
                 'realisasi_biaya' => 1150000,
-                'selisih' => -50000, // surplus / pengembalian dana
-                'status_verifikasi' => 'verified', // pending, verified, rejected
+                'selisih' => -50000,
+                'status_verifikasi' => 'verified',
                 'file_excel' => 'realisasi_biaya_DL_2026_01_014.xlsx',
                 'tanggal_upload' => '2026-01-23',
                 'rincian' => [
@@ -115,7 +232,7 @@ class DinasLuarController extends Controller
                 'tanggal_dinas' => '2026-02-15 s/d 2026-02-17',
                 'estimasi_biaya' => 4500000,
                 'realisasi_biaya' => 4620000,
-                'selisih' => 120000, // reimbursement
+                'selisih' => 120000,
                 'status_verifikasi' => 'pending',
                 'file_excel' => 'realisasi_biaya_DL_2026_02_001.xlsx',
                 'tanggal_upload' => '2026-02-18',
@@ -135,5 +252,40 @@ class DinasLuarController extends Controller
             ],
         ]);
     }
-}
 
+    /**
+     * Kirim email notifikasi ke semua user ber-role HRD yang aktif
+     */
+    private function queueNotificationToAllHrd(SuratDinas $suratDinas): void
+    {
+        try {
+            $hrdEmails = User::where('role', 'hrd')
+                ->where('active', 1)
+                ->whereNull('tanggal_keluar')
+                ->whereNotNull('email')
+                ->where('email', '!=', '')
+                ->pluck('email')
+                ->filter()
+                ->unique()
+                ->values();
+
+            if ($hrdEmails->isEmpty()) {
+                Log::warning('Tidak ada user HRD aktif dengan email valid untuk pengiriman notifikasi pengajuan surat perjalanan dinas.', [
+                    'surat_dinas_id' => $suratDinas->id,
+                ]);
+                return;
+            }
+
+            foreach ($hrdEmails as $email) {
+                Mail::to($email)->queue(
+                    (new SuratDinasDiajukan($suratDinas))->onConnection('database')
+                );
+            }
+        } catch (\Throwable $e) {
+            Log::error('Gagal mengantrekan email notifikasi pengajuan surat dinas ke HRD.', [
+                'surat_dinas_id' => $suratDinas->id,
+                'exception' => $e->getMessage(),
+            ]);
+        }
+    }
+}

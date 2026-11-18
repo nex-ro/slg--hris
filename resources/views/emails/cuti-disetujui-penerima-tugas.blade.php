@@ -43,7 +43,7 @@
 
     <p style="margin-top: 20px;">
         Terima kasih atas kerja samanya,<br>
-        <strong>Sistem HRIS MY-SLG</strong>
+        <strong>Website MY-SLG</strong>
     </p>
 </body>
 </html>
