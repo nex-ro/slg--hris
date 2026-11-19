@@ -62,8 +62,8 @@ const DashboardLayouts = ({ children }) => {
         label: 'Dinas Luar',
         href: '/dinas-luar',
         subItems: [
+          { icon: ClipboardCheck, label: 'Claim Dinas', href: '/dinas-luar/pencatatan' },
           { icon: FileText, label: 'Pengajuan Dinas Luar', href: '/dinas-luar/pengajuan' },
-          { icon: ClipboardCheck, label: 'Pencatatan', href: '/dinas-luar/pencatatan' },
         ],
       },
     ];
@@ -87,7 +87,7 @@ const DashboardLayouts = ({ children }) => {
         label: 'Dinas Luar',
         href: '/dinas-luar',
         subItems: [
-          { icon: ClipboardCheck, label: 'Pencatatan', href: '/dinas-luar/pencatatan' },
+          { icon: ClipboardCheck, label: 'Claim Dinas', href: '/dinas-luar/pencatatan' },
           { icon: FileText, label: 'Pengajuan Dinas Luar', href: '/dinas-luar/pengajuan' },
         ],
       },

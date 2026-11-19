@@ -32,6 +32,13 @@ Route::get('/dinas-luar/pengajuan/tambah', [DinasLuarController::class, 'create'
 Route::post('/dinas-luar/pengajuan', [DinasLuarController::class, 'store'])->name('dinas-luar.store');
 Route::get('/spd', [DinasLuarController::class, 'create'])->name('spd.form'); // alias short URL seperti bit.ly/SPD-2025
 
+// Pengajuan Claim Dinas Realisasi Biaya (Dapat diakses Publik / Tanpa Login atau dengan Login)
+Route::get('/dinas-luar/claim/tambah', [DinasLuarController::class, 'createKlaim'])->name('dinas-luar.claim.create');
+Route::post('/dinas-luar/claim', [DinasLuarController::class, 'storeKlaim'])->name('dinas-luar.claim.store');
+Route::post('/dinas-luar/claim/parse-excel', [DinasLuarController::class, 'parseKlaimExcel'])->name('dinas-luar.claim.parse-excel');
+Route::get('/claim-dinas', [DinasLuarController::class, 'createKlaim'])->name('claim-dinas.form'); // alias short URL publik
+Route::get('/dinas-luar/claim/template/download', [DinasLuarController::class, 'downloadBlankTemplate'])->name('dinas-luar.claim.template');
+
 Route::get('/', function () {
     if (!Auth::check()) {
         return redirect('/login');
@@ -215,6 +222,11 @@ Route::middleware('auth')->group(function () {
     Route::delete('/dinas-luar/pengajuan/{id}', [DinasLuarController::class, 'destroy'])->name('dinas-luar.destroy');
     Route::get('/dinas-luar/pengajuan/{id}/pdf', [DinasLuarController::class, 'downloadPdf'])->name('dinas-luar.pdf');
     Route::get('/dinas-luar/pencatatan', [DinasLuarController::class, 'pencatatan'])->name('dinas-luar.pencatatan');
+    Route::get('/dinas-luar/claim', [DinasLuarController::class, 'pencatatan'])->name('dinas-luar.claim'); // alias nama menu Claim Dinas
+    Route::put('/dinas-luar/claim/{id}/status', [DinasLuarController::class, 'updateStatusKlaim'])->name('dinas-luar.claim.update-status');
+    Route::delete('/dinas-luar/claim/{id}', [DinasLuarController::class, 'destroyKlaim'])->name('dinas-luar.claim.destroy');
+    Route::get('/dinas-luar/claim/{id}/excel', [DinasLuarController::class, 'downloadKlaimExcel'])->name('dinas-luar.claim.excel');
+    Route::get('/dinas-luar/claim/{id}/pdf', [DinasLuarController::class, 'downloadKlaimPdf'])->name('dinas-luar.claim.pdf');
 
     // Inventaris (Khusus Eksekutif & IT)
     Route::middleware('inventaris')->group(function () {
