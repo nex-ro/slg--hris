@@ -37,6 +37,8 @@ Route::get('/dinas-luar/claim/tambah', [DinasLuarController::class, 'createKlaim
 Route::post('/dinas-luar/claim', [DinasLuarController::class, 'storeKlaim'])->name('dinas-luar.claim.store');
 Route::post('/dinas-luar/claim/parse-excel', [DinasLuarController::class, 'parseKlaimExcel'])->name('dinas-luar.claim.parse-excel');
 Route::get('/claim-dinas', [DinasLuarController::class, 'createKlaim'])->name('claim-dinas.form'); // alias short URL publik
+Route::get('/claim', [DinasLuarController::class, 'createKlaim'])->name('claim.short'); // shortcut super singkat
+Route::get('/klaim', [DinasLuarController::class, 'createKlaim'])->name('klaim.short'); // shortcut super singkat
 Route::get('/dinas-luar/claim/template/download', [DinasLuarController::class, 'downloadBlankTemplate'])->name('dinas-luar.claim.template');
 
 Route::get('/', function () {
@@ -227,6 +229,7 @@ Route::middleware('auth')->group(function () {
     Route::delete('/dinas-luar/claim/{id}', [DinasLuarController::class, 'destroyKlaim'])->name('dinas-luar.claim.destroy');
     Route::get('/dinas-luar/claim/{id}/excel', [DinasLuarController::class, 'downloadKlaimExcel'])->name('dinas-luar.claim.excel');
     Route::get('/dinas-luar/claim/{id}/pdf', [DinasLuarController::class, 'downloadKlaimPdf'])->name('dinas-luar.claim.pdf');
+    Route::get('/dinas-luar/claim/{id}/nota', [DinasLuarController::class, 'downloadNotaPdf'])->name('dinas-luar.claim.nota');
 
     // Inventaris (Khusus Eksekutif & IT)
     Route::middleware('inventaris')->group(function () {

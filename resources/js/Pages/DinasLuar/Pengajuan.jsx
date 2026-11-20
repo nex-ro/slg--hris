@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Head, usePage, router, Link } from '@inertiajs/react';
 import LayoutTemplate from '@/Layouts/LayoutTemplate';
 import {
   Plus, CheckCircle, XCircle, Search,
-  FileText, Eye, X, Building2, CreditCard, Printer, Trash2
+  FileText, Eye, X, Building2, CreditCard, Printer, Trash2,
+  ArrowUpDown, ArrowUp, ArrowDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight,
+  UserCheck, AlertTriangle
 } from 'lucide-react';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -15,9 +17,19 @@ export default function Pengajuan({ pengajuanList = [] }) {
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+  
+  // State Sortir Kolom (Default berdasarkan Nomor Surat secara menurun / terbaru)
+  const [sortField, setSortField] = useState('nomor_surat');
+  const [sortDirection, setSortDirection] = useState('desc'); // 'asc' atau 'desc'
+
+  // State Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10); // 10, 25, 50, 100
+
   const [detailModal, setDetailModal] = useState(null);
   const [statusModal, setStatusModal] = useState(null);
-  const [statusForm, setStatusForm] = useState({ status: 'Disetujui', catatan: '' });
+  const [statusForm, setStatusForm] = useState({ status: 'Disetujui', nomor_surat: '', catatan: '' });
+  const [statusError, setStatusError] = useState('');
 
   const formatDate = (dateStr) => {
     if (!dateStr) return '-';
@@ -43,16 +55,32 @@ export default function Pengajuan({ pengajuanList = [] }) {
     e.preventDefault();
     if (!statusModal) return;
 
+    if (statusForm.status === 'Ditolak' && !statusForm.catatan.trim()) {
+      setStatusError('Catatan alasan penolakan wajib diisi jika status Ditolak.');
+      return;
+    }
+    setStatusError('');
+
     router.put(route('dinas-luar.update-status', statusModal.id), statusForm, {
       onSuccess: () => {
-        toast.success('Status pengajuan surat dinas berhasil diperbarui!');
+        toast.success(`Pengajuan SPD berhasil ${statusForm.status === 'Disetujui' ? 'disetujui' : statusForm.status === 'Ditolak' ? 'ditolak' : 'diperbarui'}!`);
         setStatusModal(null);
         if (detailModal && detailModal.id === statusModal.id) {
-          setDetailModal(prev => ({ ...prev, status: statusForm.status, catatan: statusForm.catatan }));
+          setDetailModal(prev => ({
+            ...prev,
+            status: statusForm.status,
+            catatan: statusForm.catatan,
+            nomor_surat: statusForm.nomor_surat || prev.nomor_surat,
+            disetujui_oleh_nama: currentUser.name || prev.disetujui_oleh_nama,
+            disetujui_oleh_jabatan: currentUser.jabatan || 'Head Of IAD & HRD',
+            disetujui_pada: new Date().toISOString()
+          }));
         }
       },
-      onError: () => {
-        toast.error('Gagal memperbarui status!');
+      onError: (err) => {
+        const msg = err?.catatan || err?.error || 'Gagal memperbarui status!';
+        setStatusError(msg);
+        toast.error(msg);
       }
     });
   };
@@ -71,15 +99,83 @@ export default function Pengajuan({ pengajuanList = [] }) {
     }
   };
 
-  const filteredList = pengajuanList.filter(item => {
-    const matchSearch =
-      (item.tujuan || '').toLowerCase().includes(search.toLowerCase()) ||
-      (item.nama_lengkap || '').toLowerCase().includes(search.toLowerCase()) ||
-      (item.nomor_surat || '').toLowerCase().includes(search.toLowerCase()) ||
-      (item.keperluan || '').toLowerCase().includes(search.toLowerCase());
-    const matchStatus = filterStatus === 'all' || item.status === filterStatus;
-    return matchSearch && matchStatus;
-  });
+  const filteredList = useMemo(() => {
+    return pengajuanList.filter(item => {
+      const matchSearch =
+        (item.tujuan || '').toLowerCase().includes(search.toLowerCase()) ||
+        (item.nama_lengkap || '').toLowerCase().includes(search.toLowerCase()) ||
+        (item.nomor_surat || '').toLowerCase().includes(search.toLowerCase()) ||
+        (item.keperluan || '').toLowerCase().includes(search.toLowerCase());
+      const matchStatus = filterStatus === 'all' || item.status === filterStatus;
+      return matchSearch && matchStatus;
+    });
+  }, [pengajuanList, search, filterStatus]);
+
+  // Fungsi Toggle Sortir
+  const handleSort = (field) => {
+    if (sortField === field) {
+      setSortDirection(prev => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+    setCurrentPage(1); // Reset ke halaman 1 saat ubah sortir
+  };
+
+  // List yang sudah disortir
+  const sortedList = useMemo(() => {
+    const list = [...filteredList];
+    if (!sortField) return list;
+
+    return list.sort((a, b) => {
+      let aVal = a[sortField];
+      let bVal = b[sortField];
+
+      // Penanganan nilai null/undefined
+      if (aVal === null || aVal === undefined) aVal = '';
+      if (bVal === null || bVal === undefined) bVal = '';
+
+      // Sortir numerik untuk panjar_nominal
+      if (sortField === 'panjar_nominal') {
+        const aNum = parseFloat(String(aVal).replace(/[^0-9.-]+/g, '')) || 0;
+        const bNum = parseFloat(String(bVal).replace(/[^0-9.-]+/g, '')) || 0;
+        return sortDirection === 'asc' ? aNum - bNum : bNum - aNum;
+      }
+
+      // Sortir tanggal
+      if (sortField === 'tanggal_berangkat' || sortField === 'created_at') {
+        const aTime = new Date(aVal).getTime() || 0;
+        const bTime = new Date(bVal).getTime() || 0;
+        return sortDirection === 'asc' ? aTime - bTime : bTime - aTime;
+      }
+
+      // Sortir string umum
+      const comparison = String(aVal).localeCompare(String(bVal), 'id', { numeric: true, sensitivity: 'base' });
+      return sortDirection === 'asc' ? comparison : -comparison;
+    });
+  }, [filteredList, sortField, sortDirection]);
+
+  // Pagination logic
+  const totalItems = sortedList.length;
+  const totalPages = Math.ceil(totalItems / pageSize) || 1;
+  const safeCurrentPage = Math.min(Math.max(currentPage, 1), totalPages);
+
+  const paginatedList = useMemo(() => {
+    const startIndex = (safeCurrentPage - 1) * pageSize;
+    return sortedList.slice(startIndex, startIndex + pageSize);
+  }, [sortedList, safeCurrentPage, pageSize]);
+
+  // Helper Ikon Sortir di Header Tabel
+  const renderSortIcon = (field) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="w-3.5 h-3.5 text-gray-400 opacity-60 inline-block ml-1" />;
+    }
+    return sortDirection === 'asc' ? (
+      <ArrowUp className="w-3.5 h-3.5 text-blue-600 inline-block ml-1" />
+    ) : (
+      <ArrowDown className="w-3.5 h-3.5 text-blue-600 inline-block ml-1" />
+    );
+  };
 
   const getStatusBadge = (status) => {
     switch (status) {
@@ -199,19 +295,75 @@ export default function Pengajuan({ pengajuanList = [] }) {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs sm:text-sm border-collapse">
               <thead>
-                <tr className="bg-gray-50/80 text-gray-600 border-b border-gray-200 uppercase text-[11px] tracking-wider font-semibold">
-                  <th className="py-3.5 px-4">No. Surat</th>
-                  <th className="py-3.5 px-4">Pegawai</th>
-                  <th className="py-3.5 px-4">Tujuan</th>
-                  <th className="py-3.5 px-4">Tgl Berangkat - Kembali</th>
-                  <th className="py-3.5 px-4">Transportasi</th>
-                  <th className="py-3.5 px-4">Cash Advance</th>
-                  <th className="py-3.5 px-4">Status</th>
+                <tr className="bg-gray-50/80 text-gray-600 border-b border-gray-200 uppercase text-[11px] tracking-wider font-semibold select-none">
+                  <th 
+                    onClick={() => handleSort('nomor_surat')} 
+                    className="py-3.5 px-4 cursor-pointer hover:bg-gray-100/80 transition-colors"
+                  >
+                    <div className="flex items-center">
+                      <span>No. Surat</span>
+                      {renderSortIcon('nomor_surat')}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleSort('nama_lengkap')} 
+                    className="py-3.5 px-4 cursor-pointer hover:bg-gray-100/80 transition-colors"
+                  >
+                    <div className="flex items-center">
+                      <span>Pegawai</span>
+                      {renderSortIcon('nama_lengkap')}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleSort('tujuan')} 
+                    className="py-3.5 px-4 cursor-pointer hover:bg-gray-100/80 transition-colors"
+                  >
+                    <div className="flex items-center">
+                      <span>Tujuan</span>
+                      {renderSortIcon('tujuan')}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleSort('tanggal_berangkat')} 
+                    className="py-3.5 px-4 cursor-pointer hover:bg-gray-100/80 transition-colors"
+                  >
+                    <div className="flex items-center">
+                      <span>Tgl Berangkat - Kembali</span>
+                      {renderSortIcon('tanggal_berangkat')}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleSort('transportasi')} 
+                    className="py-3.5 px-4 cursor-pointer hover:bg-gray-100/80 transition-colors"
+                  >
+                    <div className="flex items-center">
+                      <span>Transportasi</span>
+                      {renderSortIcon('transportasi')}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleSort('panjar_nominal')} 
+                    className="py-3.5 px-4 cursor-pointer hover:bg-gray-100/80 transition-colors"
+                  >
+                    <div className="flex items-center">
+                      <span>Cash Advance</span>
+                      {renderSortIcon('panjar_nominal')}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleSort('status')} 
+                    className="py-3.5 px-4 cursor-pointer hover:bg-gray-100/80 transition-colors"
+                  >
+                    <div className="flex items-center">
+                      <span>Status</span>
+                      {renderSortIcon('status')}
+                    </div>
+                  </th>
                   <th className="py-3.5 px-4 text-center">Aksi</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 text-gray-700">
-                {filteredList.length === 0 ? (
+                {paginatedList.length === 0 ? (
                   <tr>
                     <td colSpan="8" className="py-12 text-center text-gray-400">
                       <FileText className="w-12 h-12 mx-auto mb-2 text-gray-300 stroke-1" />
@@ -219,10 +371,16 @@ export default function Pengajuan({ pengajuanList = [] }) {
                     </td>
                   </tr>
                 ) : (
-                  filteredList.map((item) => (
+                  paginatedList.map((item) => (
                     <tr key={item.id} className="hover:bg-blue-50/40 transition-colors">
-                      <td className="py-3.5 px-4 font-mono font-bold text-blue-900 whitespace-nowrap">
-                        {item.nomor_surat}
+                      <td className="py-3.5 px-4 font-mono font-bold whitespace-nowrap">
+                        {item.nomor_surat && item.nomor_surat !== 'Menunggu Penetapan HRD' ? (
+                          <span className="text-blue-900">{item.nomor_surat}</span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-sans font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                            Menunggu HRD
+                          </span>
+                        )}
                       </td>
                       <td className="py-3.5 px-4">
                         <div className="font-semibold text-gray-900">{item.nama_lengkap}</div>
@@ -264,26 +422,43 @@ export default function Pengajuan({ pengajuanList = [] }) {
                             <Eye className="w-4 h-4" />
                           </button>
 
-                          <a
-                            href={route('dinas-luar.pdf', item.id)}
-                            target="_blank"
-                            rel="noreferrer"
-                            title="Cetak PDF Formulir SPD"
-                            className="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
-                          >
-                            <Printer className="w-4 h-4" />
-                          </a>
+                          {/* Cetak PDF hanya jika disetujui / diproses, atau user HRD/Admin */}
+                          {(isHrdOrAdmin || ['Disetujui', 'Diproses'].includes(item.status)) ? (
+                            <a
+                              href={route('dinas-luar.pdf', item.id)}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="Cetak PDF Formulir SPD"
+                              className="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </a>
+                          ) : (
+                            <button
+                              disabled
+                              title="PDF baru dapat dicetak setelah disetujui HRD"
+                              className="p-1.5 text-gray-300 cursor-not-allowed rounded-lg"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
+                          )}
 
                           {isHrdOrAdmin && (
                             <button
                               onClick={() => {
                                 setStatusModal(item);
-                                setStatusForm({ status: item.status, catatan: item.catatan || '' });
+                                setStatusForm({
+                                  status: item.status === 'Diajukan' ? 'Disetujui' : item.status,
+                                  nomor_surat: item.nomor_surat || '',
+                                  catatan: item.catatan || ''
+                                });
+                                setStatusError('');
                               }}
-                              title="Ubah Status (HRD)"
-                              className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              title="Pemeriksaan & Persetujuan HRD"
+                              className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold rounded-lg bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800 transition-colors"
                             >
-                              <CheckCircle className="w-4 h-4" />
+                              <UserCheck className="w-3.5 h-3.5" />
+                              <span>Approval</span>
                             </button>
                           )}
 
@@ -304,6 +479,93 @@ export default function Pengajuan({ pengajuanList = [] }) {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {totalItems > 0 && (
+            <div className="p-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-gray-600">
+              <div className="flex items-center gap-2">
+                <span>Menampilkan</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="text-xs border border-gray-200 rounded-lg px-2 py-1 bg-white focus:ring-1 focus:ring-blue-500"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                </select>
+                <span>dari <strong>{totalItems}</strong> data (Halaman {safeCurrentPage} dari {totalPages})</span>
+              </div>
+
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  disabled={safeCurrentPage <= 1}
+                  onClick={() => setCurrentPage(1)}
+                  title="Halaman Pertama"
+                  className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronsLeft className="w-4 h-4 text-gray-600" />
+                </button>
+                <button
+                  type="button"
+                  disabled={safeCurrentPage <= 1}
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  title="Halaman Sebelumnya"
+                  className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronLeft className="w-4 h-4 text-gray-600" />
+                </button>
+
+                {/* Nomor-nomor halaman terdekat */}
+                {Array.from({ length: totalPages }, (_, i) => i + 1)
+                  .filter(page => page === 1 || page === totalPages || Math.abs(page - safeCurrentPage) <= 1)
+                  .map((page, idx, arr) => {
+                    const prevPage = arr[idx - 1];
+                    const showEllipsis = prevPage && page - prevPage > 1;
+                    return (
+                      <React.Fragment key={page}>
+                        {showEllipsis && <span className="px-1 text-gray-400">...</span>}
+                        <button
+                          type="button"
+                          onClick={() => setCurrentPage(page)}
+                          className={`min-w-[28px] h-7 px-2 text-xs font-semibold rounded-lg transition-colors ${
+                            safeCurrentPage === page
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'border border-gray-200 hover:bg-gray-50 text-gray-700'
+                          }`}
+                        >
+                          {page}
+                        </button>
+                      </React.Fragment>
+                    );
+                  })}
+
+                <button
+                  type="button"
+                  disabled={safeCurrentPage >= totalPages}
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  title="Halaman Selanjutnya"
+                  className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronRight className="w-4 h-4 text-gray-600" />
+                </button>
+                <button
+                  type="button"
+                  disabled={safeCurrentPage >= totalPages}
+                  onClick={() => setCurrentPage(totalPages)}
+                  title="Halaman Terakhir"
+                  className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                >
+                  <ChevronsRight className="w-4 h-4 text-gray-600" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
       </div>
@@ -398,6 +660,22 @@ export default function Pengajuan({ pengajuanList = [] }) {
                 </div>
               </div>
 
+              {detailModal.disetujui_oleh_nama && (
+                <div className="p-3 bg-blue-50/70 rounded-xl text-xs text-blue-900 border border-blue-200 flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] text-blue-600 font-semibold block uppercase">Diperiksa / Disetujui Oleh:</span>
+                    <span className="font-bold text-gray-900">{detailModal.disetujui_oleh_nama}</span>
+                    <span className="text-[11px] text-gray-600 block">{detailModal.disetujui_oleh_jabatan || 'Head Of IAD & HRD'}</span>
+                  </div>
+                  {detailModal.disetujui_pada && (
+                    <div className="text-right">
+                      <span className="text-[10px] text-blue-600 font-semibold block uppercase">Tanggal Approval:</span>
+                      <span className="font-medium text-gray-700">{formatDate(detailModal.disetujui_pada)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {detailModal.catatan && (
                 <div className="p-3 bg-amber-50 rounded-xl text-xs text-amber-900 border border-amber-200">
                   <span className="font-bold block mb-0.5">Catatan Persetujuan:</span>
@@ -407,14 +685,20 @@ export default function Pengajuan({ pengajuanList = [] }) {
             </div>
 
             <div className="p-4 bg-gray-50 border-t border-gray-200 flex items-center justify-between">
-              <a
-                href={route('dinas-luar.pdf', detailModal.id)}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all"
-              >
-                <Printer className="w-3.5 h-3.5" /> Cetak PDF
-              </a>
+              {(isHrdOrAdmin || ['Disetujui', 'Diproses'].includes(detailModal.status)) ? (
+                <a
+                  href={route('dinas-luar.pdf', detailModal.id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold shadow-sm transition-all"
+                >
+                  <Printer className="w-3.5 h-3.5" /> Cetak PDF
+                </a>
+              ) : (
+                <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl font-medium">
+                  PDF baru dapat dicetak setelah disetujui / diproses HRD
+                </span>
+              )}
               <button
                 type="button"
                 onClick={() => setDetailModal(null)}
@@ -427,48 +711,114 @@ export default function Pengajuan({ pengajuanList = [] }) {
         </div>
       )}
 
-      {/* MODAL HRD UPDATE STATUS */}
+      {/* MODAL HRD VERIFIKASI / APPROVAL */}
       {statusModal && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            <div className="p-5 bg-indigo-900 text-white flex items-center justify-between">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden animate-in fade-in zoom-in-95 duration-150">
+            <div className="p-5 bg-gradient-to-r from-blue-900 via-indigo-900 to-indigo-950 text-white flex items-center justify-between">
               <div>
-                <span className="text-[10px] uppercase font-semibold text-indigo-300">Otorisasi HRD / Admin</span>
-                <h3 className="font-bold text-base">Ubah Status Pengajuan SPD</h3>
+                <span className="text-[10px] uppercase font-semibold text-blue-200 tracking-wider">Verifikasi & Approval HRD</span>
+                <h3 className="font-bold text-base mt-0.5">Persetujuan Surat Perjalanan Dinas</h3>
+                <p className="text-xs text-blue-200/80 mt-0.5">{statusModal.nama_lengkap} — {statusModal.nomor_surat}</p>
               </div>
               <button
                 type="button"
                 onClick={() => setStatusModal(null)}
-                className="text-indigo-300 hover:text-white p-1 rounded-lg"
+                className="text-white/70 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <form onSubmit={handleUpdateStatusSubmit} className="p-5 space-y-4 text-xs sm:text-sm">
+            <form onSubmit={handleUpdateStatusSubmit} className="p-6 space-y-4 text-xs sm:text-sm">
+              {statusError && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-xl flex items-center gap-2 text-red-700 text-xs">
+                  <AlertTriangle className="w-4 h-4 shrink-0 text-red-600" />
+                  <span>{statusError}</span>
+                </div>
+              )}
+
+              {/* Pilihan Keputusan Approval */}
               <div>
-                <label className="block font-semibold text-gray-700 mb-1">Status Pengajuan</label>
-                <select
-                  value={statusForm.status}
-                  onChange={(e) => setStatusForm(prev => ({ ...prev, status: e.target.value }))}
-                  className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-indigo-500 bg-white"
-                >
-                  <option value="Diajukan">Diajukan</option>
-                  <option value="Diproses">Diproses</option>
-                  <option value="Disetujui">Disetujui</option>
-                  <option value="Ditolak">Ditolak</option>
-                </select>
+                <label className="block font-semibold text-gray-700 mb-2">Keputusan HRD / Approval</label>
+                <div className="grid grid-cols-3 gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => setStatusForm(prev => ({ ...prev, status: 'Disetujui' }))}
+                    className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1.5 font-semibold text-xs transition-all ${
+                      statusForm.status === 'Disetujui'
+                        ? 'bg-emerald-50 border-emerald-500 text-emerald-700 ring-2 ring-emerald-500/20'
+                        : 'border-gray-200 hover:bg-gray-50 text-gray-600'
+                    }`}
+                  >
+                    <CheckCircle className={`w-5 h-5 ${statusForm.status === 'Disetujui' ? 'text-emerald-600' : 'text-gray-400'}`} />
+                    <span>Setujui</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStatusForm(prev => ({ ...prev, status: 'Diproses' }))}
+                    className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1.5 font-semibold text-xs transition-all ${
+                      statusForm.status === 'Diproses'
+                        ? 'bg-blue-50 border-blue-500 text-blue-700 ring-2 ring-blue-500/20'
+                        : 'border-gray-200 hover:bg-gray-50 text-gray-600'
+                    }`}
+                  >
+                    <FileText className={`w-5 h-5 ${statusForm.status === 'Diproses' ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <span>Diproses</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setStatusForm(prev => ({ ...prev, status: 'Ditolak' }))}
+                    className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1.5 font-semibold text-xs transition-all ${
+                      statusForm.status === 'Ditolak'
+                        ? 'bg-rose-50 border-rose-500 text-rose-700 ring-2 ring-rose-500/20'
+                        : 'border-gray-200 hover:bg-gray-50 text-gray-600'
+                    }`}
+                  >
+                    <XCircle className={`w-5 h-5 ${statusForm.status === 'Ditolak' ? 'text-rose-600' : 'text-gray-400'}`} />
+                    <span>Tolak</span>
+                  </button>
+                </div>
               </div>
 
+              {/* Koreksi Nomor Surat Resmi */}
               <div>
-                <label className="block font-semibold text-gray-700 mb-1">Catatan Persetujuan (Opsional)</label>
+                <label className="block font-semibold text-gray-700 mb-1">
+                  Nomor Surat Dinas Resmi
+                </label>
+                <input
+                  type="text"
+                  value={statusForm.nomor_surat}
+                  onChange={(e) => setStatusForm(prev => ({ ...prev, nomor_surat: e.target.value }))}
+                  placeholder="Contoh: 001/SPD-HRD/HO/XI/2026"
+                  className="w-full border border-gray-300 rounded-xl px-3.5 py-2 font-mono text-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+                />
+                <p className="text-[11px] text-gray-500 mt-1">HRD dapat memperbarui nomor surat resmi sebelum dokumen dicetak pemohon.</p>
+              </div>
+
+              {/* Catatan / Alasan */}
+              <div>
+                <label className="block font-semibold text-gray-700 mb-1">
+                  Catatan HRD {statusForm.status === 'Ditolak' ? <span className="text-rose-600">* (Wajib diisi jika ditolak)</span> : <span className="text-gray-400 font-normal">(Opsional)</span>}
+                </label>
                 <textarea
                   rows="3"
                   value={statusForm.catatan}
                   onChange={(e) => setStatusForm(prev => ({ ...prev, catatan: e.target.value }))}
-                  placeholder="Tambahkan catatan jika diperlukan..."
-                  className="w-full border border-gray-300 rounded-xl px-3.5 py-2.5 focus:ring-2 focus:ring-indigo-500"
+                  placeholder={statusForm.status === 'Ditolak' ? 'Tuliskan alasan penolakan agar pemohon mengetahuinya...' : 'Catatan persetujuan atau arahan khusus untuk penugasan ini...'}
+                  className="w-full border border-gray-300 rounded-xl px-3.5 py-2 text-xs focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                 ></textarea>
+              </div>
+
+              {/* Info Approval By */}
+              <div className="p-3 bg-gray-50 rounded-xl border border-gray-200/80 flex items-center justify-between text-xs text-gray-600">
+                <span className="flex items-center gap-1.5 font-medium">
+                  <UserCheck className="w-4 h-4 text-indigo-600" />
+                  Pemeriksa: <strong>{currentUser.name || 'HRD Admin'}</strong>
+                </span>
+                <span className="text-[11px] text-gray-500">Jabatan: {currentUser.jabatan || 'Head Of IAD & HRD'}</span>
               </div>
 
               <div className="pt-3 border-t border-gray-200 flex items-center justify-end gap-2.5">
@@ -481,9 +831,15 @@ export default function Pengajuan({ pengajuanList = [] }) {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-md transition-all"
+                  className={`px-5 py-2 text-xs font-semibold text-white rounded-xl shadow-md transition-all ${
+                    statusForm.status === 'Ditolak'
+                      ? 'bg-rose-600 hover:bg-rose-700'
+                      : statusForm.status === 'Disetujui'
+                      ? 'bg-emerald-600 hover:bg-emerald-700'
+                      : 'bg-indigo-600 hover:bg-indigo-700'
+                  }`}
                 >
-                  Simpan Status
+                  Konfirmasi {statusForm.status}
                 </button>
               </div>
             </form>

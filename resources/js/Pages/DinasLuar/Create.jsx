@@ -20,12 +20,10 @@ export default function CreatePengajuan({ approvers = [] }) {
   const [formData, setFormData] = useState({
     email: currentUser?.email || '',
     nama_lengkap: currentUser?.name || '',
-    nomor_surat: '',
     jabatan: defaultJabatan,
     pemberi_tugas: '',
     tanggal_berangkat: '',
     tanggal_kembali: '',
-    is_selesai_kembali: false,
     tujuan: '',
     keperluan: '',
     transportasi: '',
@@ -70,15 +68,23 @@ export default function CreatePengajuan({ approvers = [] }) {
     }
   };
 
+  const handleKeyDown = (e) => {
+    // Pada mobile / desktop: jika tombol Enter ditekan pada input teks, tutup keyboard dan jangan submit form
+    if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+      e.preventDefault();
+      e.target.blur(); // Menyembunyikan keyboard di perangkat mobile (selesai)
+    }
+  };
+
   const handleSubmit = (e) => {
     e.preventDefault();
 
-    if (!formData.nomor_surat.trim()) {
-      toast.warning('Nomor surat wajib diisi! Harap hubungi HRD terlebih dahulu untuk mendapatkan nomor surat.');
-      return;
-    }
     if (!formData.tanggal_berangkat) {
       toast.warning('Tanggal berangkat wajib diisi!');
+      return;
+    }
+    if (!formData.tanggal_kembali) {
+      toast.warning('Tanggal kembali wajib diisi!');
       return;
     }
     if (!formData.tujuan.trim()) {
@@ -98,8 +104,8 @@ export default function CreatePengajuan({ approvers = [] }) {
 
     router.post(route('dinas-luar.store'), {
       ...formData,
-      tanggal_kembali: formData.is_selesai_kembali ? null : (formData.tanggal_kembali || null),
-      keterangan_kembali: formData.is_selesai_kembali ? 'Selesai' : null,
+      tanggal_kembali: formData.tanggal_kembali,
+      keterangan_kembali: null,
     }, {
       onSuccess: () => {
         setIsSubmitting(false);
@@ -120,12 +126,10 @@ export default function CreatePengajuan({ approvers = [] }) {
     setFormData({
       email: currentUser?.email || '',
       nama_lengkap: currentUser?.name || '',
-      nomor_surat: '',
       jabatan: defaultJabatan,
       pemberi_tugas: '',
       tanggal_berangkat: '',
       tanggal_kembali: '',
-      is_selesai_kembali: false,
       tujuan: '',
       keperluan: '',
       transportasi: '',
@@ -141,6 +145,22 @@ export default function CreatePengajuan({ approvers = [] }) {
 
   const FormContent = (
     <div className="max-w-[640px] mx-auto space-y-3 sm:space-y-4 font-sans text-[#202124]">
+
+      {/* Loading Overlay Menutup Halaman Saat Mengirim */}
+      {isSubmitting && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-purple-200 rounded-full"></div>
+              <div className="w-16 h-16 border-4 border-[#673ab7] rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-gray-900">Mengirim Pengajuan SPD...</h3>
+              <p className="text-xs text-gray-500 mt-1">Mohon tunggu sebentar, sistem sedang memproses pengajuan Anda ke HRD.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Top Header Card (Google Forms Style) */}
       <div className="bg-white rounded-lg border border-[#dadce0] overflow-hidden shadow-sm">
@@ -239,12 +259,11 @@ export default function CreatePengajuan({ approvers = [] }) {
             PENGAJUAN SURAT PERJALANAN DINAS 2025
           </h2>
           <p className="text-sm text-[#202124] leading-relaxed">
-            Tanggapan Anda telah berhasil direkam. Segera hubungi HRD atau konfirmasi via WhatsApp untuk otorisasi nomor surat dan pemrosesan selanjutnya.
+            Tanggapan Anda telah berhasil direkam. Pengajuan Anda sedang menunggu verifikasi dan penetapan nomor surat resmi dari HRD.
           </p>
 
           <div className="pt-4 border-t border-[#e0e0e0] space-y-2 text-xs text-[#5f6368]">
             <p><strong>Nama:</strong> {formData.nama_lengkap}</p>
-            <p><strong>Nomor Surat:</strong> {formData.nomor_surat}</p>
             <p><strong>Tujuan:</strong> {formData.tujuan}</p>
             <p><strong>Tanggal Berangkat:</strong> {formData.tanggal_berangkat}</p>
           </div>
@@ -271,7 +290,7 @@ export default function CreatePengajuan({ approvers = [] }) {
         </div>
       ) : (
         /* Form Utama */
-        <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+        <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-3 sm:space-y-4">
 
           {/* Card: Email */}
           <div className="bg-white rounded-lg border border-[#dadce0] p-6 shadow-sm space-y-3 transition-colors focus-within:border-[#673ab7]">
@@ -302,27 +321,6 @@ export default function CreatePengajuan({ approvers = [] }) {
               onChange={handleInputChange}
               placeholder="Jawaban Anda"
               className="w-full text-sm border-0 border-b border-[#dadce0] pb-2 px-0 text-[#202124] placeholder-[#70757a] focus:ring-0 focus:border-[#673ab7] transition-all bg-transparent"
-            />
-          </div>
-
-          {/* Card: Nomor Surat */}
-          <div className="bg-white rounded-lg border border-[#dadce0] p-6 shadow-sm space-y-3 transition-colors focus-within:border-[#673ab7]">
-            <div>
-              <label className="block text-sm sm:text-base font-normal text-[#202124]">
-                Nomor Surat (harap hubungin HRD) <span className="text-[#d93025]">*</span>
-              </label>
-              <p className="text-xs text-[#5f6368] mt-1">
-                Contoh Pengisian : 015/SLG-HO/SPD/XI/2025 &bull; Hubungi WA HRD (0858-9185-1186)
-              </p>
-            </div>
-            <input
-              type="text"
-              name="nomor_surat"
-              required
-              value={formData.nomor_surat}
-              onChange={handleInputChange}
-              placeholder="Jawaban Anda"
-              className="w-full text-sm border-0 border-b border-[#dadce0] pb-2 px-0 text-[#202124] font-medium placeholder-[#70757a] focus:ring-0 focus:border-[#673ab7] transition-all bg-transparent"
             />
           </div>
 
@@ -408,42 +406,18 @@ export default function CreatePengajuan({ approvers = [] }) {
                 Tanggal Kembali ( Return Date ) <span className="text-[#d93025]">*</span>
               </label>
               <p className="text-xs text-[#5f6368] mt-1">
-                Contoh Pengisian : 05 Januari 2025 / Selesai
+                Contoh Pengisian : 05 Januari 2025
               </p>
             </div>
-
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 cursor-pointer select-none">
-                <input
-                  type="checkbox"
-                  checked={formData.is_selesai_kembali}
-                  onChange={(e) => {
-                    const checked = e.target.checked;
-                    setFormData(prev => ({
-                      ...prev,
-                      is_selesai_kembali: checked,
-                      tanggal_kembali: checked ? '' : prev.tanggal_kembali
-                    }));
-                  }}
-                  className="rounded text-[#673ab7] focus:ring-[#673ab7] border-[#70757a]"
-                />
-                <span className="text-xs text-[#5f6368]">
-                  Kembali ketika tugas <strong>Selesai</strong> (tanpa tanggal pasti)
-                </span>
-              </label>
-
-              {!formData.is_selesai_kembali && (
-                <div className="sm:max-w-xs">
-                  <input
-                    type="date"
-                    name="tanggal_kembali"
-                    required={!formData.is_selesai_kembali}
-                    value={formData.tanggal_kembali}
-                    onChange={handleInputChange}
-                    className="w-full text-sm border-0 border-b border-[#dadce0] pb-2 px-0 text-[#202124] focus:ring-0 focus:border-[#673ab7] transition-all bg-transparent"
-                  />
-                </div>
-              )}
+            <div className="sm:max-w-xs">
+              <input
+                type="date"
+                name="tanggal_kembali"
+                required
+                value={formData.tanggal_kembali}
+                onChange={handleInputChange}
+                className="w-full text-sm border-0 border-b border-[#dadce0] pb-2 px-0 text-[#202124] focus:ring-0 focus:border-[#673ab7] transition-all bg-transparent"
+              />
             </div>
           </div>
 

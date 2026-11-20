@@ -331,13 +331,13 @@
                 <tr>
                     <td class="sig-name">{{ $surat->nama_lengkap }}</td>
                     <td class="sig-name">{{ $surat->pemberi_tugas ?: '( .................... )' }}</td>
-                    <td class="sig-name">Jupiter</td>
+                    <td class="sig-name">{{ $surat->disetujui_oleh_nama ?: 'Jupiter' }}</td>
                     <td class="sig-name">Wagimin</td>
                 </tr>
                 <tr>
                     <td class="sig-role">User</td>
                     <td class="sig-role">Head Divisi</td>
-                    <td class="sig-role">Head Of IAD &amp; HRD</td>
+                    <td class="sig-role">{{ $surat->disetujui_oleh_jabatan ?: 'Head Of IAD & HRD' }}</td>
                     <td class="sig-role">Head Of Finance,<br>Accounting &amp; Tax</td>
                 </tr>
             @else
@@ -349,13 +349,13 @@
                 </tr>
                 <tr>
                     <td class="sig-name">{{ $surat->nama_lengkap }}</td>
-                    <td class="sig-name">Jupiter</td>
+                    <td class="sig-name">{{ $surat->disetujui_oleh_nama ?: 'Jupiter' }}</td>
                     <td class="sig-name">Wagimin</td>
                     <td class="sig-name">Holy</td>
                 </tr>
                 <tr>
                     <td class="sig-role">User/Head Divisi</td>
-                    <td class="sig-role">Head Of IAD &amp; HRD</td>
+                    <td class="sig-role">{{ $surat->disetujui_oleh_jabatan ?: 'Head Of IAD & HRD' }}</td>
                     <td class="sig-role">Head Of Finance,<br>Accounting &amp; Tax</td>
                     <td class="sig-role">Direksi</td>
                 </tr>

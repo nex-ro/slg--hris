@@ -31,16 +31,15 @@ class DinasLuarController extends Controller
         $user = Auth::user();
         $userRole = strtolower($user->role ?? '');
 
-        // Hak akses menu riwayat hanya untuk HRD, Admin, dan Head / Atasan
-        if (!in_array($userRole, ['admin', 'hrd', 'head', 'atasan'])) {
-            return redirect('/dashboard')->with('error', 'Anda tidak memiliki hak akses ke menu Dinas Luar.');
+        // Ambil riwayat pengajuan surat dinas dengan relasi user dan approver
+        $query = SuratDinas::with(['user', 'approver']);
+
+        // Jika Pegawai: hanya tampilkan pengajuan miliknya sendiri
+        if (in_array($userRole, ['pegawai', 'karyawan', 'employee', 'site'])) {
+            $query->where('uid', $user->id);
         }
-
-        // Ambil riwayat pengajuan surat dinas
-        $query = SuratDinas::with('user');
-
         // Jika Head / Atasan: tampilkan seluruh pengajuan dari divisinya (serta pengajuan miliknya sendiri)
-        if (in_array($userRole, ['head', 'atasan'])) {
+        elseif (in_array($userRole, ['head', 'atasan'])) {
             $divisi = $user->divisi;
             $query->where(function ($q) use ($user, $divisi) {
                 // Pengajuan milik user sendiri
@@ -98,7 +97,7 @@ class DinasLuarController extends Controller
         $validator = Validator::make($request->all(), [
             'email' => 'required|email|max:255',
             'nama_lengkap' => 'required|string|max:255',
-            'nomor_surat' => 'required|string|max:255',
+            'nomor_surat' => 'nullable|string|max:255',
             'jabatan' => 'required|string|in:Staff,Manager,Head,staff,manager,head',
             'pemberi_tugas' => 'nullable|string|max:255',
             'tanggal_berangkat' => 'required|date',
@@ -116,7 +115,6 @@ class DinasLuarController extends Controller
         ], [
             'email.required' => 'Email wajib diisi',
             'nama_lengkap.required' => 'Nama lengkap wajib diisi',
-            'nomor_surat.required' => 'Nomor surat wajib diisi (harap hubungi HRD)',
             'jabatan.required' => 'Jabatan wajib dipilih (Staff, Manager, atau Head)',
             'jabatan.in' => 'Jabatan harus salah satu dari: Staff, Manager, atau Head',
             'tanggal_berangkat.required' => 'Tanggal berangkat wajib diisi',
@@ -133,11 +131,14 @@ class DinasLuarController extends Controller
 
         $ajukanAdvance = $request->boolean('ajukan_advance');
 
+        // Jika nomor surat tidak diisi oleh pemohon, berikan nomor sementara (Draft)
+        $nomorSurat = !empty(trim($validated['nomor_surat'] ?? '')) ? trim($validated['nomor_surat']) : 'Menunggu Penetapan HRD';
+
         $suratDinas = SuratDinas::create([
             'uid' => $user ? $user->id : null,
             'email' => $validated['email'],
             'nama_lengkap' => $validated['nama_lengkap'],
-            'nomor_surat' => $validated['nomor_surat'],
+            'nomor_surat' => $nomorSurat,
             'jabatan' => ucfirst(strtolower($validated['jabatan'] ?? ($user ? $user->jabatan : 'Staff'))),
             'pemberi_tugas' => $validated['pemberi_tugas'] ?? '-',
             'tanggal_berangkat' => $validated['tanggal_berangkat'],
@@ -159,17 +160,14 @@ class DinasLuarController extends Controller
         $this->queueNotificationToAllHrd($suratDinas);
 
         if (Auth::check()) {
-            $userRole = strtolower($user->role ?? '');
-            if (in_array($userRole, ['admin', 'hrd', 'head', 'atasan'])) {
-                return redirect()->route('dinas-luar.pengajuan')->with('success', 'Pengajuan Surat Perjalanan Dinas berhasil dikirim!');
-            }
+            return redirect()->route('dinas-luar.pengajuan')->with('success', 'Pengajuan Surat Perjalanan Dinas berhasil dikirim!');
         }
 
         return redirect()->back()->with('success', 'Pengajuan Surat Perjalanan Dinas Anda telah berhasil dikirim! Silakan konfirmasi ke HRD.');
     }
 
     /**
-     * Update status pengajuan oleh HRD / Admin
+     * Update status & verifikasi pengajuan oleh HRD / Admin
      */
     public function updateStatus(Request $request, $id)
     {
@@ -181,13 +179,32 @@ class DinasLuarController extends Controller
         $validated = $request->validate([
             'status' => 'required|in:Diajukan,Diproses,Disetujui,Ditolak',
             'catatan' => 'nullable|string|max:500',
+            'nomor_surat' => 'nullable|string|max:255',
         ]);
+
+        if ($validated['status'] === 'Ditolak' && empty(trim($validated['catatan'] ?? ''))) {
+            return back()->withErrors(['catatan' => 'Catatan alasan penolakan wajib diisi jika status Ditolak.']);
+        }
 
         $suratDinas = SuratDinas::findOrFail($id);
         $suratDinas->status = $validated['status'];
+
+        if (!empty($validated['nomor_surat'])) {
+            $suratDinas->nomor_surat = $validated['nomor_surat'];
+        }
+
         if ($request->has('catatan')) {
             $suratDinas->catatan = $validated['catatan'];
         }
+
+        // Ketika status diterima / diproses / disetujui, catat user HRD pemeriksa
+        if (in_array($validated['status'], ['Disetujui', 'Diproses'])) {
+            $suratDinas->disetujui_oleh_id = $user->id;
+            $suratDinas->disetujui_oleh_nama = $user->name;
+            $suratDinas->disetujui_oleh_jabatan = $user->jabatan ?: 'Head Of IAD & HRD';
+            $suratDinas->disetujui_pada = now();
+        }
+
         $suratDinas->save();
 
         // Kirim email notifikasi ke pemohon jika status disetujui atau ditolak
@@ -195,7 +212,7 @@ class DinasLuarController extends Controller
             $this->queueNotificationSuratDinasToApplicant($suratDinas);
         }
 
-        return redirect()->back()->with('success', 'Status pengajuan berhasil diperbarui!');
+        return redirect()->back()->with('success', "Status pengajuan berhasil diperbarui menjadi {$validated['status']}!");
     }
 
     /**
@@ -219,7 +236,15 @@ class DinasLuarController extends Controller
      */
     public function downloadPdf($id)
     {
+        $user = Auth::user();
         $suratDinas = SuratDinas::with('user')->findOrFail($id);
+
+        $isHrdOrAdmin = $user && in_array($user->role, ['admin', 'hrd']);
+
+        // Jika bukan HRD/Admin, dokumen hanya bisa diunduh/dicetak jika status sudah Diproses atau Disetujui
+        if (!$isHrdOrAdmin && !in_array($suratDinas->status, ['Diproses', 'Disetujui'])) {
+            return back()->withErrors(['error' => 'Dokumen PDF SPD baru dapat diunduh setelah disetujui atau diproses oleh HRD.']);
+        }
 
         $pdf = Pdf::loadView('pdf.surat-dinas', [
             'surat' => $suratDinas,
@@ -237,15 +262,14 @@ class DinasLuarController extends Controller
         $user = Auth::user();
         $userRole = strtolower($user->role ?? '');
 
-        // Hak akses menu riwayat hanya untuk HRD, Admin, dan Head / Atasan
-        if (!in_array($userRole, ['admin', 'hrd', 'head', 'atasan'])) {
-            return redirect('/dashboard')->with('error', 'Anda tidak memiliki hak akses ke menu Claim Dinas.');
-        }
-
         $query = KlaimDinas::with(['items', 'user', 'pemeriksa']);
 
+        // Jika Pegawai: hanya tampilkan klaim dinas miliknya sendiri
+        if (in_array($userRole, ['pegawai', 'karyawan', 'employee', 'site'])) {
+            $query->where('uid', $user->id);
+        }
         // Jika Head / Atasan: tampilkan klaim dari divisinya atau miliknya sendiri
-        if (in_array($userRole, ['head', 'atasan'])) {
+        elseif (in_array($userRole, ['head', 'atasan'])) {
             $divisi = $user->divisi;
             $query->where(function ($q) use ($user, $divisi) {
                 $q->where('uid', $user->id);
@@ -434,10 +458,7 @@ class DinasLuarController extends Controller
         $this->queueNotificationKlaimToAllHrd($klaim);
 
         if (Auth::check()) {
-            $userRole = strtolower($user->role ?? '');
-            if (in_array($userRole, ['admin', 'hrd', 'head', 'atasan'])) {
-                return redirect()->route('dinas-luar.pencatatan')->with('success', "Pengajuan Claim Dinas ({$nomorKlaim}) berhasil dikirim!");
-            }
+            return redirect()->route('dinas-luar.pencatatan')->with('success', "Pengajuan Claim Dinas ({$nomorKlaim}) berhasil dikirim!");
         }
 
         return redirect()->back()->with('success', "Pengajuan Claim Dinas ({$nomorKlaim}) telah berhasil dikirim! Silakan konfirmasi ke bagian HRD.");
@@ -500,7 +521,15 @@ class DinasLuarController extends Controller
      */
     public function downloadKlaimPdf($id)
     {
+        $user = Auth::user();
         $klaim = KlaimDinas::with(['items', 'pemeriksa'])->findOrFail($id);
+
+        $isHrdOrAdmin = $user && in_array($user->role, ['admin', 'hrd']);
+
+        // Jika bukan HRD/Admin, dokumen klaim baru bisa dicetak jika status Diproses atau Disetujui
+        if (!$isHrdOrAdmin && !in_array($klaim->status, ['Diproses', 'Disetujui'])) {
+            return back()->withErrors(['error' => 'Formulir PDF Klaim Dinas baru dapat diunduh setelah disetujui atau diproses oleh HRD.']);
+        }
 
         $pdf = Pdf::loadView('pdf.klaim-dinas', [
             'klaim' => $klaim,
@@ -508,6 +537,30 @@ class DinasLuarController extends Controller
 
         $filename = 'Klaim_Dinas_' . str_replace(['/', '\\'], '_', $klaim->nomor_klaim) . '.pdf';
         return $pdf->stream($filename);
+    }
+
+    /**
+     * Download / Lihat Berkas Bukti Nota PDF Klaim Dinas
+     */
+    public function downloadNotaPdf($id)
+    {
+        $user = Auth::user();
+        $klaim = KlaimDinas::findOrFail($id);
+
+        // Otorisasi: pemilik klaim atau HRD / Admin
+        if ($klaim->uid !== $user->id && !in_array($user->role, ['admin', 'hrd', 'head', 'atasan'])) {
+            abort(403, 'Anda tidak memiliki hak akses untuk melihat berkas nota ini.');
+        }
+
+        if (empty($klaim->file_nota_pdf) || !Storage::disk('public')->exists($klaim->file_nota_pdf)) {
+            abort(404, 'Berkas bukti nota tidak ditemukan.');
+        }
+
+        $path = Storage::disk('public')->path($klaim->file_nota_pdf);
+        return response()->file($path, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="' . basename($klaim->file_nota_pdf) . '"',
+        ]);
     }
 
     /**

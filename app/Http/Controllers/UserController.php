@@ -12,6 +12,8 @@ use App\Models\JatahCuti;
 use App\Models\Kehadiran;
 use Carbon\Carbon;
 use App\Models\Perizinan;
+use App\Models\SuratDinas;
+use App\Models\KlaimDinas;
 use App\Models\Sakit;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
@@ -380,6 +382,12 @@ class UserController extends Controller
             ->count(),
         'sakit' => Sakit::where('uid', $userId)
             ->where('status', 'Diproses')
+            ->count(),
+        'dinas_luar' => SuratDinas::where('uid', $userId)
+            ->whereIn('status', ['Diajukan', 'Diproses'])
+            ->count(),
+        'claim_dinas' => KlaimDinas::where('uid', $userId)
+            ->whereIn('status', ['Diajukan', 'Diproses'])
             ->count(),
     ];
 

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Head, usePage, router, Link } from '@inertiajs/react';
 import LayoutTemplate from '@/Layouts/LayoutTemplate';
-import { 
-  FileSpreadsheet, Upload, Download, Search, Filter, CheckCircle, Clock, 
+import {
+  FileSpreadsheet, Upload, Download, Search, Filter, CheckCircle, Clock,
   AlertCircle, FileText, DollarSign, Calendar, Eye, X, Check, ArrowUpRight,
   ArrowDownRight, User, MapPin, Info, Trash2, Plus, Paperclip, CheckCircle2, XCircle
 } from 'lucide-react';
@@ -16,6 +16,10 @@ export default function ClaimDinas({ klaimList = [] }) {
 
   const [search, setSearch] = useState('');
   const [filterStatus, setFilterStatus] = useState('all');
+
+  // Default filter bulan berjalan (contoh: "2026-11")
+  const currentYearMonth = new Date().toISOString().slice(0, 7);
+  const [filterMonth, setFilterMonth] = useState(currentYearMonth);
   const [detailModal, setDetailModal] = useState(null);
   const [statusModal, setStatusModal] = useState(null);
   const [statusForm, setStatusForm] = useState({ status: 'Disetujui', catatan_hrd: '' });
@@ -49,14 +53,22 @@ export default function ClaimDinas({ klaimList = [] }) {
 
   // Filter List
   const filteredList = klaimList.filter(item => {
-    const matchSearch = 
+    const matchSearch =
       (item.nomor_klaim || '').toLowerCase().includes(search.toLowerCase()) ||
       (item.nama_lengkap || '').toLowerCase().includes(search.toLowerCase()) ||
       (item.kegiatan || '').toLowerCase().includes(search.toLowerCase()) ||
       (item.nomor_surat_dinas || '').toLowerCase().includes(search.toLowerCase());
-    
+
     const matchStatus = filterStatus === 'all' || item.status === filterStatus;
-    return matchSearch && matchStatus;
+
+    // Filter berdasarkan bulan (menggunakan tanggal_pengajuan atau created_at)
+    let matchMonth = true;
+    if (filterMonth) {
+      const itemDateStr = item.tanggal_pengajuan || item.created_at || '';
+      matchMonth = itemDateStr.startsWith(filterMonth);
+    }
+
+    return matchSearch && matchStatus && matchMonth;
   });
 
   // Statistics
@@ -75,9 +87,9 @@ export default function ClaimDinas({ klaimList = [] }) {
         toast.success('Status klaim dinas berhasil diperbarui!');
         setStatusModal(null);
         if (detailModal && detailModal.id === statusModal.id) {
-          setDetailModal(prev => ({ 
-            ...prev, 
-            status: statusForm.status, 
+          setDetailModal(prev => ({
+            ...prev,
+            status: statusForm.status,
             catatan_hrd: statusForm.catatan_hrd,
             diperiksa_oleh_nama: user.name,
             diperiksa_oleh_jabatan: user.jabatan || 'Head Of HRD'
@@ -139,7 +151,7 @@ export default function ClaimDinas({ klaimList = [] }) {
       <ToastContainer position="top-right" autoClose={3000} />
 
       <div className="p-4 sm:p-6 lg:p-8 space-y-6 max-w-7xl mx-auto">
-        
+
         {/* Header Title & Actions */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
@@ -174,56 +186,9 @@ export default function ClaimDinas({ klaimList = [] }) {
           </div>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 font-medium">Total Klaim Masuk</p>
-              <h3 className="text-2xl font-black text-gray-900 mt-1">{totalLaporan}</h3>
-              <p className="text-[11px] text-gray-400 mt-0.5">{verifiedCount} telah disetujui</p>
-            </div>
-            <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
-              <FileText className="w-6 h-6" />
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 font-medium">Total Realisasi</p>
-              <h3 className="text-xl font-black text-gray-900 mt-1">{formatRupiah(totalRealisasi)}</h3>
-              <p className="text-[11px] text-emerald-600 font-medium mt-0.5">Pengeluaran riil dinas</p>
-            </div>
-            <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-              <DollarSign className="w-6 h-6" />
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 font-medium">Total Sisa Kurang</p>
-              <h3 className="text-xl font-black text-blue-700 mt-1">{formatRupiah(totalSisaKurang)}</h3>
-              <p className="text-[11px] text-gray-400 mt-0.5">Realisasi - Panjar</p>
-            </div>
-            <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
-              <ArrowUpRight className="w-6 h-6" />
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between">
-            <div>
-              <p className="text-xs text-gray-500 font-medium">Menunggu Verifikasi</p>
-              <h3 className="text-2xl font-black text-amber-600 mt-1">{pendingCount}</h3>
-              <p className="text-[11px] text-amber-600/90 font-medium mt-0.5">Perlu pemeriksaan HRD</p>
-            </div>
-            <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
-              <Clock className="w-6 h-6" />
-            </div>
-          </div>
-        </div>
-
         {/* Filter & Search Bar */}
-        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="relative w-full sm:w-80">
+        <div className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex flex-col md:flex-row items-center justify-between gap-3">
+          <div className="relative w-full md:w-80">
             <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
@@ -234,19 +199,44 @@ export default function ClaimDinas({ klaimList = [] }) {
             />
           </div>
 
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Filter className="w-4 h-4 text-gray-400" />
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="text-xs border border-gray-200 rounded-xl px-3 py-2 bg-slate-50/50 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium"
-            >
-              <option value="all">Semua Status</option>
-              <option value="Diajukan">Diajukan</option>
-              <option value="Diproses">Diproses</option>
-              <option value="Disetujui">Disetujui</option>
-              <option value="Ditolak">Ditolak</option>
-            </select>
+          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+            {/* Filter Bulan */}
+            <div className="flex items-center gap-1.5 bg-slate-50/70 border border-gray-200 rounded-xl px-2.5 py-1.5">
+              <Calendar className="w-3.5 h-3.5 text-gray-500" />
+              <input
+                type="month"
+                value={filterMonth}
+                onChange={(e) => setFilterMonth(e.target.value)}
+                className="text-xs bg-transparent border-0 p-0 focus:ring-0 text-gray-700 font-medium cursor-pointer"
+                title="Filter berdasarkan bulan"
+              />
+              {filterMonth && (
+                <button
+                  type="button"
+                  onClick={() => setFilterMonth('')}
+                  className="text-gray-400 hover:text-gray-600 p-0.5 rounded-full hover:bg-gray-200"
+                  title="Hapus filter bulan"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+
+            {/* Filter Status */}
+            <div className="flex items-center gap-1.5">
+              <Filter className="w-3.5 h-3.5 text-gray-400" />
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="text-xs border border-gray-200 rounded-xl px-3 py-2 bg-slate-50/50 focus:ring-2 focus:ring-blue-500 focus:border-transparent font-medium"
+              >
+                <option value="all">Semua Status</option>
+                <option value="Diajukan">Diajukan</option>
+                <option value="Diproses">Diproses</option>
+                <option value="Disetujui">Disetujui</option>
+                <option value="Ditolak">Ditolak</option>
+              </select>
+            </div>
           </div>
         </div>
 
@@ -345,15 +335,26 @@ export default function ClaimDinas({ klaimList = [] }) {
                             <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
                           </a>
 
-                          <a
-                            href={route('dinas-luar.claim.pdf', item.id)}
-                            target="_blank"
-                            rel="noreferrer"
-                            title="Cetak Formulir PDF"
-                            className="p-1.5 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                          >
-                            <FileText className="w-4 h-4 text-rose-600" />
-                          </a>
+                          {/* PDF Klaim hanya bisa dicetak jika status Diproses / Disetujui atau akun HRD/Admin */}
+                          {(isHrdOrAdmin || ['Disetujui', 'Diproses'].includes(item.status)) ? (
+                            <a
+                              href={route('dinas-luar.claim.pdf', item.id)}
+                              target="_blank"
+                              rel="noreferrer"
+                              title="Cetak Formulir PDF"
+                              className="p-1.5 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                            >
+                              <FileText className="w-4 h-4 text-rose-600" />
+                            </a>
+                          ) : (
+                            <button
+                              disabled
+                              title="PDF formulir baru dapat dicetak setelah disetujui HRD"
+                              className="p-1.5 text-gray-300 cursor-not-allowed rounded-lg"
+                            >
+                              <FileText className="w-4 h-4 text-gray-300" />
+                            </button>
+                          )}
 
                           {isHrdOrAdmin && (
                             <button
@@ -478,7 +479,7 @@ export default function ClaimDinas({ klaimList = [] }) {
                   {detailModal.metode_nota === 'pdf' ? (
                     detailModal.file_nota_pdf ? (
                       <a
-                        href={`/storage/${detailModal.file_nota_pdf}`}
+                        href={route('dinas-luar.claim.nota', detailModal.id)}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1.5 mt-1 text-xs text-blue-700 font-bold hover:underline"
@@ -497,21 +498,27 @@ export default function ClaimDinas({ klaimList = [] }) {
               </div>
             </div>
 
-            <div className="p-4 bg-gray-50 border-t flex justify-end gap-2">
+            <div className="p-4 bg-gray-50 border-t flex items-center justify-end gap-2">
               <a
                 href={route('dinas-luar.claim.excel', detailModal.id)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all"
               >
                 <FileSpreadsheet className="w-4 h-4" /> Download Excel
               </a>
-              <a
-                href={route('dinas-luar.claim.pdf', detailModal.id)}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all"
-              >
-                <FileText className="w-4 h-4" /> Cetak PDF
-              </a>
+              {(isHrdOrAdmin || ['Disetujui', 'Diproses'].includes(detailModal.status)) ? (
+                <a
+                  href={route('dinas-luar.claim.pdf', detailModal.id)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all"
+                >
+                  <FileText className="w-4 h-4" /> Cetak PDF
+                </a>
+              ) : (
+                <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1.5 rounded-xl font-medium">
+                  PDF dapat dicetak setelah disetujui HRD
+                </span>
+              )}
               <button
                 onClick={() => setDetailModal(null)}
                 className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-700 rounded-xl text-xs font-semibold transition-all"

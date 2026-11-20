@@ -76,8 +76,8 @@ useEffect(() => {
         label: 'Dinas Luar',
         href: '/dinas-luar',
         subItems: [
-          { icon: ClipboardCheck, label: 'Claim Dinas', href: '/dinas-luar/pencatatan' },
           { icon: FileText, label: 'Pengajuan Dinas Luar', href: '/dinas-luar/pengajuan' },
+          { icon: ClipboardCheck, label: 'Claim Dinas', href: '/dinas-luar/pencatatan' },
         ],
       },
       // { icon: BarChart3, label: 'Laporan', href: '/reports/index' },
@@ -101,8 +101,8 @@ useEffect(() => {
         label: 'Dinas Luar',
         href: '/dinas-luar',
         subItems: [
-          { icon: ClipboardCheck, label: 'Claim Dinas', href: '/dinas-luar/pencatatan' },
           { icon: FileText, label: 'Pengajuan Dinas Luar', href: '/dinas-luar/pengajuan' },
+          { icon: ClipboardCheck, label: 'Claim Dinas', href: '/dinas-luar/pencatatan' },
         ],
       },
       // { icon: BarChart3, label: 'Laporan', href: '/reports/index' },
@@ -110,11 +110,20 @@ useEffect(() => {
 
     const pegawaiMenu = [
       { icon: LayoutDashboard, label: 'Dashboard', href: '/dashboard' },
-      { icon: Calendar,label: 'Absen Saya', href: `/pegawai/absensi/${userId}` },
+      { icon: Calendar, label: 'Absen Saya', href: `/pegawai/absensi/${userId}` },
       // { icon: FileText, label: 'Dokumen', href: '/dokumen' },
       { icon: Thermometer, label: 'Sakit', href: '/pegawai/sakit' },
       { icon: CalendarClock, label: 'Izin Keluar Kantor', href: '/pegawai/izin' },
       { icon: UmbrellaIcon, label: 'Izin Cuti', href: '/pegawai/cuti' },
+      {
+        icon: MapPin,
+        label: 'Dinas Luar',
+        href: '/dinas-luar',
+        subItems: [
+          { icon: FileText, label: 'Pengajuan Dinas Luar', href: '/dinas-luar/pengajuan' },
+          { icon: ClipboardCheck, label: 'Claim Dinas', href: '/dinas-luar/pencatatan' },
+        ],
+      },
     ];
 
     // Return menu based on user role

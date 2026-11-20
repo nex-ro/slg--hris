@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import DashboardLayouts from "@/Layouts/DasboardLayout";
-import { Calendar, Clock, Users, FileText, TrendingUp, AlertCircle, CheckCircle, XCircle } from 'lucide-react';
+import { Calendar, Clock, Users, FileText, TrendingUp, AlertCircle, CheckCircle, XCircle, MapPin, ClipboardCheck } from 'lucide-react';
 import { Head, router, usePage } from '@inertiajs/react';
 
 function Dashboard({  jatahCuti, statistik, pengajuanMenunggu, bulanTahun }) {
@@ -40,16 +40,18 @@ const user = auth.user;
 
       <div className="">
         {/* Pengajuan Menunggu Approval */}
-        {(pengajuanMenunggu?.cuti > 0 || pengajuanMenunggu?.izin > 0 || pengajuanMenunggu?.sakit > 0) && (
+        {(pengajuanMenunggu?.cuti > 0 || pengajuanMenunggu?.izin > 0 || pengajuanMenunggu?.sakit > 0 || pengajuanMenunggu?.dinas_luar > 0 || pengajuanMenunggu?.claim_dinas > 0) && (
           <div className="mb-6 bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg">
             <div className="flex items-start">
-              <Clock className="w-5 h-5 text-yellow-600 mt-0.5 mr-3" />
+              <Clock className="w-5 h-5 text-yellow-600 mt-0.5 mr-3 shrink-0" />
               <div className="flex-1">
                 <h3 className="text-sm font-medium text-yellow-800">Pengajuan Menunggu Persetujuan</h3>
-                <div className="mt-2 text-sm text-yellow-700 space-x-4">
-                  {pengajuanMenunggu.cuti > 0 && <span>Cuti: {pengajuanMenunggu.cuti}</span>}
-                  {pengajuanMenunggu.izin > 0 && <span>Izin: {pengajuanMenunggu.izin}</span>}
-                  {pengajuanMenunggu.sakit > 0 && <span>Sakit: {pengajuanMenunggu.sakit}</span>}
+                <div className="mt-2 text-sm text-yellow-700 flex flex-wrap gap-x-4 gap-y-1">
+                  {pengajuanMenunggu.cuti > 0 && <span>Cuti: <strong>{pengajuanMenunggu.cuti}</strong></span>}
+                  {pengajuanMenunggu.izin > 0 && <span>Izin: <strong>{pengajuanMenunggu.izin}</strong></span>}
+                  {pengajuanMenunggu.sakit > 0 && <span>Sakit: <strong>{pengajuanMenunggu.sakit}</strong></span>}
+                  {pengajuanMenunggu.dinas_luar > 0 && <span>Dinas Luar: <strong>{pengajuanMenunggu.dinas_luar}</strong></span>}
+                  {pengajuanMenunggu.claim_dinas > 0 && <span>Claim Dinas: <strong>{pengajuanMenunggu.claim_dinas}</strong></span>}
                 </div>
               </div>
             </div>
@@ -271,8 +273,8 @@ const user = auth.user;
         {/* Quick Actions */}
         <div className="mt-6 bg-gradient-to-r from-blue-500 to-blue-600 rounded-lg shadow-md p-6 text-white">
           <h2 className="text-xl font-semibold mb-4">Aksi Cepat</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <button onClick={() => router.visit(route("pegawai.cuti"))}  className="bg-white bg-opacity-20 hover:bg-opacity-30 transition-all duration-200 rounded-lg p-4 text-left">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <button onClick={() => router.visit(route("pegawai.cuti"))} className="bg-white bg-opacity-20 hover:bg-opacity-30 transition-all duration-200 rounded-lg p-4 text-left">
               <Calendar className="w-6 h-6 mb-2" />
               <p className="font-medium">Ajukan Cuti</p>
               <p className="text-sm opacity-90">Buat pengajuan cuti baru</p>
@@ -286,10 +288,16 @@ const user = auth.user;
               <p className="text-sm opacity-90">Lihat detail kehadiran</p>
             </button>
 
-            <button onClick={() => router.visit(route("pegawai.cuti"))}  className="bg-white bg-opacity-20 hover:bg-opacity-30 transition-all duration-200 rounded-lg p-4 text-left">
-              <FileText className="w-6 h-6 mb-2" />
-              <p className="font-medium">Ajukan Izin</p>
-              <p className="text-sm opacity-90">Buat pengajuan izin</p>
+            <button onClick={() => router.visit(route("dinas-luar.create"))} className="bg-white bg-opacity-20 hover:bg-opacity-30 transition-all duration-200 rounded-lg p-4 text-left">
+              <MapPin className="w-6 h-6 mb-2" />
+              <p className="font-medium">Pengajuan Dinas Luar</p>
+              <p className="text-sm opacity-90">Buat surat dinas luar (SPD)</p>
+            </button>
+
+            <button onClick={() => router.visit(route("dinas-luar.claim.create"))} className="bg-white bg-opacity-20 hover:bg-opacity-30 transition-all duration-200 rounded-lg p-4 text-left">
+              <ClipboardCheck className="w-6 h-6 mb-2" />
+              <p className="font-medium">Claim Dinas</p>
+              <p className="text-sm opacity-90">Klaim realisasi biaya dinas</p>
             </button>
           </div>
         </div>

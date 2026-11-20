@@ -96,15 +96,28 @@ export default function CreateKlaim({ spdList = [] }) {
     formDataUpload.append('excel_file', file);
 
     try {
-      // Ambil CSRF token dari cookie/meta
-      const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      // Ambil CSRF token dari meta tag atau cookie XSRF-TOKEN
+      const metaToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+      const getCookie = (name) => {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return decodeURIComponent(parts.pop().split(';').shift());
+        return null;
+      };
+      const xsrfToken = getCookie('XSRF-TOKEN');
+      const csrfToken = metaToken || xsrfToken || '';
+
+      const headers = {
+        'Accept': 'application/json',
+      };
+      if (csrfToken) {
+        headers['X-CSRF-TOKEN'] = csrfToken;
+        headers['X-XSRF-TOKEN'] = csrfToken;
+      }
 
       const res = await fetch(route('dinas-luar.claim.parse-excel'), {
         method: 'POST',
-        headers: {
-          'X-CSRF-TOKEN': csrfToken || '',
-          'Accept': 'application/json',
-        },
+        headers,
         body: formDataUpload,
       });
 
@@ -147,6 +160,14 @@ export default function CreateKlaim({ spdList = [] }) {
       toast.error('Terjadi kesalahan saat memproses file Excel.');
     } finally {
       setIsParsingExcel(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    // Pada mobile / desktop: jika tombol Enter ditekan pada input teks, tutup keyboard dan jangan submit form
+    if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+      e.preventDefault();
+      e.target.blur(); // Menyembunyikan keyboard di perangkat mobile (selesai)
     }
   };
 
@@ -230,6 +251,22 @@ export default function CreateKlaim({ spdList = [] }) {
   const FormContent = (
     <div className="max-w-[760px] mx-auto space-y-4 font-sans text-[#202124]">
       
+      {/* Loading Overlay Menutup Halaman Saat Mengirim */}
+      {isSubmitting && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-sm w-full shadow-2xl flex flex-col items-center text-center space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="relative">
+              <div className="w-16 h-16 border-4 border-blue-200 rounded-full"></div>
+              <div className="w-16 h-16 border-4 border-blue-600 rounded-full border-t-transparent animate-spin absolute top-0 left-0"></div>
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-gray-900">Mengirim Claim Dinas...</h3>
+              <p className="text-xs text-gray-500 mt-1">Mohon tunggu, dokumen realisasi dan bukti nota sedang diunggah ke sistem.</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Top Header Card */}
       <div className="bg-white rounded-2xl border border-[#dadce0] overflow-hidden shadow-sm">
         <div className="h-3 bg-[#1e3a8a] w-full" />
@@ -342,7 +379,7 @@ export default function CreateKlaim({ spdList = [] }) {
         </div>
       ) : (
         /* Form Utama */
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="space-y-4">
           
           {/* Section 1: Identitas Pemohon */}
           <div className="bg-white rounded-2xl border border-[#dadce0] p-6 shadow-sm space-y-4">

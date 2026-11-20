@@ -15,6 +15,9 @@ return Application::configure(basePath: dirname(__DIR__))
             \App\Http\Middleware\HandleInertiaRequests::class,
             \Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets::class,
         ]);
+        $middleware->validateCsrfTokens(except: [
+            'dinas-luar/claim/parse-excel',
+        ]);
          $middleware->alias([
             'hrd'=>\App\Http\Middleware\Hrd::class,
             'head'=>\App\Http\Middleware\Atasan::class,

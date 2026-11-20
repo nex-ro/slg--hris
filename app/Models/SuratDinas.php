@@ -32,16 +32,26 @@ class SuratDinas extends Model
         'nama_bank',
         'status',
         'catatan',
+        'disetujui_oleh_id',
+        'disetujui_oleh_nama',
+        'disetujui_oleh_jabatan',
+        'disetujui_pada',
     ];
 
     protected $casts = [
         'tanggal_berangkat' => 'date:Y-m-d',
         'tanggal_kembali' => 'date:Y-m-d',
+        'disetujui_pada' => 'datetime',
         'ajukan_advance' => 'boolean',
     ];
 
     public function user()
     {
         return $this->belongsTo(User::class, 'uid');
+    }
+
+    public function approver()
+    {
+        return $this->belongsTo(User::class, 'disetujui_oleh_id');
     }
 }
