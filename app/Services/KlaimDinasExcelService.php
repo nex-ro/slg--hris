@@ -122,7 +122,7 @@ class KlaimDinasExcelService
         $sheet->setCellValue('B' . $titleRow, $klaim->jabatan ?: ($klaim->divisi ?: 'Pegawai'));
 
         // Nama & Jabatan HRD yang memeriksa
-        // Jika sudah disetujui / diproses HRD, nama pemeriksa terisi, jika belum tertulis ( .................... )
+        // Jika sudah disetujui / diproses HRD, nama pemeriksa terisi, jika belum tertulis Jupiter
         $pemeriksaNama = $klaim->diperiksa_oleh_nama ?: (in_array($klaim->status, ['Disetujui', 'Diproses']) ? 'Jupiter' : 'Jupiter ');
         $pemeriksaJabatan = $klaim->diperiksa_oleh_jabatan ?: 'Head Of HRD';
         $sheet->setCellValue('D' . $signSpace, $pemeriksaNama);

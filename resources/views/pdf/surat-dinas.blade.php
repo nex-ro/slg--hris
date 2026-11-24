@@ -386,10 +386,6 @@
             </tr>
         </table>
 
-        @if($isHead)
-            <div class="doc-code-right">FormHR55/OTL/VI/2025</div>
-        @endif
-
         {{-- Footer Address --}}
         <div class="footer-address">
             Gold Coast Office Tower Eiffel Lantai 19 MNP
