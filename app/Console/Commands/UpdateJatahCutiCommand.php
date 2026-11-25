@@ -17,8 +17,9 @@ class UpdateJatahCutiCommand extends Command
     {
         $this->info("Memulai pengecekan jatah cuti...");
         
-        // Ambil semua user yang aktif dan memiliki TMK
+        // Ambil semua user yang aktif, memiliki TMK, dan belum keluar (tanggal_keluar kosong)
         $users = User::where('active', true)
+            ->whereNull('tanggal_keluar')
             ->whereNotNull('tmk')
             ->get();
 

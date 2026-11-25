@@ -771,15 +771,20 @@ private function calculateActivePeriod($tmk)
 
    public function Admin(Request $request)
 {
-    // Query dasar dengan relasi
-    $query = JatahCuti::with(['user', 'pemakaian' => function($q) {
+    // Query dasar dengan relasi - Hanya user aktif dan tanggal_keluar kosong
+    $query = JatahCuti::whereHas('user', function ($q) {
+        $q->where('active', 1)
+          ->whereNull('tanggal_keluar');
+    })->with(['user', 'pemakaian' => function($q) {
         $q->where('status_final', 'disetujui')->orderBy('tanggal_mulai', 'asc');
     }]);
     
     // Filter berdasarkan pencarian nama user
     if ($request->has('search') && $request->search) {
         $query->whereHas('user', function ($q) use ($request) {
-            $q->where('name', 'like', '%' . $request->search . '%');
+            $q->where('name', 'like', '%' . $request->search . '%')
+              ->where('active', 1)
+              ->whereNull('tanggal_keluar');
         });
     }
 

@@ -13,7 +13,7 @@ return [
     |
     */
 
-    'name' => env('APP_NAME', 'HRIS - Sawit Lestari Group'),
+    'name' => env('APP_NAME', 'My-SLG - Sawit Lestari Group'),
 
     /*
     |--------------------------------------------------------------------------
